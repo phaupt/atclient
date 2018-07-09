@@ -6,6 +6,8 @@ package com.swisscom.atclient;
 
 import com.fazecast.jSerialComm.*;
 import java.io.*;
+import java.util.Arrays;
+
 import org.apache.log4j.*;
 
 /*
@@ -86,10 +88,8 @@ public class ATresponder extends Thread {
 
 		attachShutDownHook();
 		
-		SerialPort comPort = SerialPort.getCommPort(serialport);
-		
 		try {
-			initSerialPort(comPort);
+			initSerialPort();
 			processAtLoop();
 		} catch (UnsupportedEncodingException e) {
 			// TODO Auto-generated catch block
@@ -107,14 +107,22 @@ public class ATresponder extends Thread {
 		log.info("Exiting Application");
 	}
 
-	private void initSerialPort(SerialPort comPort) throws UnsupportedEncodingException, IOException {
+	private void initSerialPort() throws UnsupportedEncodingException, IOException {
+		log.info("Init Serial Port in progress.");
 		
-		comPort.openPort();
-		comPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 500, 500);
+		SerialPort[] ports = SerialPort.getCommPorts();
+		for (int i = 0; i < ports.length; i++){
+			log.info(ports[i].getDescriptivePortName());
+		}
+		
+		SerialPort comPort = SerialPort.getCommPort(serialport);
+		
+		log.info("Opened Port: " + comPort.openPort());
+		comPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 500, 0);
 		comPort.setComPortParameters(baudrate, databits, stopbits, parity);
 		
 		// LTE Modul set DTR to true
-		//comPort.setDTR();
+		log.info("Set DTR: " + comPort.setDTR());
 		
 		buffReader = new BufferedReader(new InputStreamReader(comPort.getInputStream(), "UTF-8"));
 		printStream = new PrintStream(comPort.getOutputStream(), true, "UTF-8");
