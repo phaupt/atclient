@@ -110,13 +110,12 @@ public class ATresponder extends Thread {
 	private void initSerialPort(SerialPort comPort) throws UnsupportedEncodingException, IOException {
 		
 		comPort.openPort();
-		comPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 100, 0);
-		
+		comPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 500, 500);
 		comPort.setComPortParameters(baudrate, databits, stopbits, parity);
 		
 		// LTE Modul set DTR to true
 		//comPort.setDTR();
-
+		
 		buffReader = new BufferedReader(new InputStreamReader(comPort.getInputStream(), "UTF-8"));
 		printStream = new PrintStream(comPort.getOutputStream(), true, "UTF-8");
 
@@ -150,7 +149,7 @@ public class ATresponder extends Thread {
 		log.info("### Send SHUTDOWN Command ###");
 		send("AT^SMSO", "^SHUTDOWN"); // Restart
 		
-		log.info("The HIT55 Module will now perform a reboot.");
+		log.info("The GSM Module will now perform a reboot.");
 		
 		isAlive = false; // will exit the while loop and terminate the application	
 	}
@@ -490,11 +489,21 @@ public class ATresponder extends Thread {
 	
 	public boolean send(String cmd, String expectedRsp, boolean logTx) {
 		send(cmd, logTx);
+		try {
+			Thread.sleep(250);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
 		return receive(expectedRsp);
 	}
 
 	public boolean send(String cmd, String expectedRsp) {
 		send(cmd, true);
+		try {
+			Thread.sleep(250);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
 		return receive(expectedRsp);
 	}
 	
@@ -504,7 +513,6 @@ public class ATresponder extends Thread {
 
 	public void send(String cmd, boolean logTx) {
 		try {
-			//TODO: DEBUG
 			if (!cmd.contains("SSTR?") && logTx){
 				log.debug("TX1: " + cmd.toUpperCase().trim());
 			}
@@ -535,6 +543,9 @@ public class ATresponder extends Thread {
 				}
 					
 				while (isAlive && buffReader.ready() && (rsp = buffReader.readLine()) != null) {
+					
+					// TODO: DEBUG!
+					log.info("<<< " + rsp);
 					
 					if (rsp != null && rsp.length() > 0 && !rsp.contains("OK") && !rsp.contains("^SSTR")) {
 						log.debug("RX2: " + rsp);
