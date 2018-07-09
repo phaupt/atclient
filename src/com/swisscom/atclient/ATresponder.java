@@ -1,7 +1,5 @@
 /**
- *
- * @author <a href="mailto:Philipp.Haupt@swisscom.com">Philipp Haupt</a>
- * 
+ * @author <a href="mailto:philipp.haupt@swisscom.com">Philipp Haupt</a>
  */
 
 package com.swisscom.atclient;
@@ -14,14 +12,29 @@ import gnu.io.UnsupportedCommOperationException;
 import java.io.*;
 import org.apache.log4j.*;
 
+/*
+ * send("AT+COPS?", "OK"); // Provider
+ * send("AT+CSQ", "OK"); // Signal Strength
+ * send("AT+WS46=?", "OK"); // Wireless Data Service (WDS)
+ *     12 GSM Digital Cellular Systems (GERAN only) --> 2G
+ *     22 UTRAN only --> 3G
+ *     25 3GPP Systems (GERAN, UTRAN and E-UTRAN) --> 4G/LTE
+ *     28 E-UTRAN only
+ *     29 GERAN and UTRAN
+ *     30 GERAN and E-UTRAN
+ *     31 UTRAN and E-UTRAN
+ * send("AT+WS46?", "OK"); // Selected Wireless Data Service (WDS)
+ * send("AT+WS46=12", "OK"); // Wireless Data Service (WDS)
+ * send("AT^SMSO", "^SHUTDOWN"); // Restart
+ * send("AT+WS46?", "OK"); // Selected Wireless Data Service (WDS)
+ * send("AT+CIMI", "OK"); // IMSI
+ * send("AT+CGSN", "OK"); // IMEI
+ */
+
 public class ATresponder extends Thread {
 	private Logger log = Logger.getLogger(ATresponder.class);
-	
-	private boolean dtrFlag = true;
-	private int pollSeconds = 0;
-	
-	private int sleepMillis = 500;
-	private int sleepAfterOk = 500;
+
+	private int sleepMillis = 100;
 	
 	private SerialPort serPort;
 	private BufferedReader buffReader;
@@ -34,9 +47,9 @@ public class ATresponder extends Thread {
 	private volatile static boolean stk_timeout;
 	private volatile static boolean reset;
 
+	private boolean dtrFlag = true;
 	private String serialport;
-	//private int baudrate = 230400; // Max possible speed 230400
-	private int baudrate = 128000; // Max possible speed 230400
+	private int baudrate = 230400; // Please check also your device settings
 	private int databits = 8;
 	private int stopbits = 1;
 	private int parity = 0;
@@ -78,9 +91,7 @@ public class ATresponder extends Thread {
 		log.info("Application started...");
 
 		attachShutDownHook();
-		
-		//PropertyConfigurator.configure("src" + File.separator + "log4j.properties");
-		
+
 		// WORKAROUND to avoid annoying Library Version output (of RXTX library) to System.out...
 		PrintStream out = System.out;
 		PrintStream silent = null;
@@ -134,8 +145,6 @@ public class ATresponder extends Thread {
 		serPort.enableReceiveTimeout(500); // milliseconds
 		
 		serPort.setDTR(dtrFlag);
-		//serPort.setFlowControlMode(SerialPort.FLOWCONTROL_RTSCTS_IN | SerialPort.FLOWCONTROL_RTSCTS_OUT);
-		//serPort.setRTS(true);
 
 		buffReader = new BufferedReader(new InputStreamReader(serPort.getInputStream(), "UTF-8"));
 		printStream = new PrintStream(serPort.getOutputStream(), true, "UTF-8");
@@ -152,7 +161,7 @@ public class ATresponder extends Thread {
 			// Switch on verbose error messages
 			log.info("### Switch On Verbose Error Messages ###");
 			send("AT+CMEE=2", "ok");
-
+			
 			if (arMode){
 				// Switch to Automatic Response (AR) and restart device
 				log.info("### Switch to Automatic Response (AR) ###");
@@ -189,54 +198,36 @@ public class ATresponder extends Thread {
 		int cmdType = 0;
 		boolean ackCmdRequired = false;
 		
-		// Check STATUS
-		//log.info("### GET STATUS ###");
-		//send("AT^SSTR?"); // The response will be caught by the receiver below
-		
 		log.info("### Set SMS text mode ###");
 		send("AT+CMGF=1", "OK");
 		
 		//log.info("### Activate the display of a URC on every received SMS ###");
-		send("AT+CNMI=1,1", "OK");
-
-		long startTime = System.currentTimeMillis();
-		long timeLeftSeconds;
+		send("AT+CNMI=1,1", "OK", false);
 		
+		send("AT+COPS?", "OK", false); // Provider
+		send("AT+CSQ", "OK", false); // Signal Strength
+		send("AT+WS46=?", "OK", false); // Wireless Data Service (WDS)
+		// * 12 GSM Digital Cellular Systems (GERAN only) --> 2G
+		// * 22 UTRAN only --> 3G
+		// * 25 3GPP Systems (GERAN, UTRAN and E-UTRAN) --> 4G/LTE
+		// * 28 E-UTRAN only
+		// * 29 GERAN and UTRAN
+		// * 30 GERAN and E-UTRAN
+		// * 31 UTRAN and E-UTRAN
+		send("AT+CIMI", "OK", false); // IMSI
+		send("AT+CGSN", "OK", false); // IMEI
+
 		// Start endless loop...
 		while (isAlive) {
-			// Set timeout of not getting any data, which will invoke a status command
-			// TODO: Change to 60 seconds for E2E Monitoring
-			timeLeftSeconds = pollSeconds - ((System.currentTimeMillis() - startTime) / 1000);
 			
-			// Check timeout on getting data
-			if (timeLeftSeconds <= 0){
-				// Reset timeout
-				startTime = System.currentTimeMillis();
-				
-				// TODO: Uncomment for E2E Monitoring
-				//log.trace("Didn't receive any data for 60s. Checking Status...");
+			Thread.sleep(sleepMillis);
 
-				// Create/Update the 'GsmClient-<device>.state' file every 60s
-				// TODO: Uncomment for E2E Monitoring
-				//updateStateFile();
-				
-				// Invoke a check STATUS command
-				//log.info("### GET STATUS ###");
-				Thread.sleep(sleepMillis);
-				send("AT^SSTR?");
-				Thread.sleep(sleepMillis);
-				 // The response will be caught by the receiver below
-				//getSimStatus();
-			}
-			
-			//log.trace("Listening... timeLeftSeconds=" + timeLeftSeconds);
+			send("AT^SSTR?");
 
 			// Listening for incoming notifications (SIM->ME)
 			try {
 				while (isAlive && buffReader.ready() && (rcvStr = buffReader.readLine()) != null) {
-					// Reset timeout
-					startTime = System.currentTimeMillis();
-					
+
 					if (rcvStr != null && rcvStr.length() > 0) {
 						
 						/*
@@ -252,9 +243,7 @@ public class ATresponder extends Thread {
 							getMeTextAscii(rcvStr); // may set the flag such as CANCEL
 						}
 					}	
-					
-					//log.debug("CANCEL: " + cancel + " | STKTIMEOUT: " + stk_timeout + " | RESET: " + reset);
-					
+	
 					if (rcvStr.toUpperCase().trim().startsWith("+CMTI: ")) {
 						cmdType = new Integer(rcvStr.substring(13, rcvStr.length())).intValue(); // +CMTI: "SM", 0
 						log.info("### SIM message storage ###");
@@ -263,7 +252,7 @@ public class ATresponder extends Thread {
 						send("AT+CMGR=" + cmdType, "ok");
 						
 						// To list all stored short messages use
-						//send("AT+CMGL=\"ALL\"");
+						//send("AT+CMGL=ALL");
 						
 						// To delete SMS after reading use
 						send("AT+CMGD=" + cmdType, "ok");
@@ -280,8 +269,6 @@ public class ATresponder extends Thread {
 						if (rcvStr.substring(7, 8).equals("3") || rcvStr.substring(7, 8).equals("4"))
 							ackCmdRequired = true;
 						
-						//log.debug("cmdType: " + cmdType);
-
 						// Check Proactive Command Type
 						switch (cmdType) {
 						case 0: // ^SSTR: 2,0
@@ -298,12 +285,7 @@ public class ATresponder extends Thread {
 								// SEND MESSAGE
 								log.info("### 19: SEND MESSAGE (Acknowledge) ###");
 								send("at^sstgi=" + cmdType, "ok"); // GetInfos		
-								Thread.sleep(sleepMillis);
 								send("at^sstr=" + cmdType + ",0", "ok"); // Confirm
-								//Thread.sleep(sleepMillis);
-								// Check STATUS
-								//log.info("### GET STATUS ###");
-								//send("AT^SSTR?"); // The response will be caught by the receiver below
 							}
 							ackCmdRequired = false;
 							break;
@@ -519,7 +501,6 @@ public class ATresponder extends Thread {
 						}
 					}			
 					
-					//Thread.sleep(250);
 				}
 			} catch (NumberFormatException e) {
 				// log.error("processAtLoop() NumberFormatException: ", e);
@@ -532,26 +513,28 @@ public class ATresponder extends Thread {
 				closingPort();
 				log.debug("Now re-initializing serial port");
 				initSerialPort(pID);
-				// Check STATUS
-				//log.info("### GET STATUS ###");
-				//send("AT^SSTR?");
 			}
-			//Thread.sleep(200);
-			Thread.yield();
 		}
 	}
-
-	public boolean send(String cmd, String expectedRsp) {
-		//TODO: DEBUG
-		//log.trace("Cmd='" + cmd + "' ExpectedRsp='" + expectedRsp.toUpperCase() + "'");
-		send(cmd);
+	
+	public boolean send(String cmd, String expectedRsp, boolean logTx) {
+		send(cmd, logTx);
 		return receive(expectedRsp);
 	}
 
+	public boolean send(String cmd, String expectedRsp) {
+		send(cmd, true);
+		return receive(expectedRsp);
+	}
+	
 	public void send(String cmd) {
+		send(cmd, true);
+	}
+
+	public void send(String cmd, boolean logTx) {
 		try {
 			//TODO: DEBUG
-			if (!cmd.contains("SSTR?")){
+			if (!cmd.contains("SSTR?") && logTx){
 				log.debug("TX1: " + cmd.toUpperCase().trim());
 			}
 			printStream.write(cmd.getBytes());
@@ -624,14 +607,12 @@ public class ATresponder extends Thread {
 					}
 					
 					else if (rsp.toUpperCase().trim().contains(compareStr) || rsp.toUpperCase().trim().contains("ERROR")) {
-						//log.trace("Got expected RX: '" + rsp.toUpperCase().trim() + "'");
-						Thread.sleep(sleepAfterOk);
+						if (rsp.toUpperCase().trim().contains("ERROR"))
+							log.trace("Got ERROR: '" + rsp.toUpperCase().trim() + "'");
+						Thread.sleep(sleepMillis);
 						return true; // GOT RESPONSE!
-					} 
-					
-					//Thread.sleep(250);
+					} 		
 				}	
-				//Thread.sleep(250);
 			}
 		} catch (IOException e) {
 			log.error("receive() IOException : ", e);
@@ -640,29 +621,6 @@ public class ATresponder extends Thread {
 		}
 		return false;
 	}
-	
-	private void getSimStatus() {		
-		// The results of the AT Commands below will be written to the state file:
-//		send("AT+COPS?", "OK"); // Provider
-//		send("AT+CSQ", "OK"); // Signal Strength
-//		send("AT+WS46=?", "OK"); // Wireless Data Service (WDS)
-//		12 GSM Digital Cellular Systems (GERAN only) --> 2G
-//		22 UTRAN only --> 3G
-//		25 3GPP Systems (GERAN, UTRAN and E-UTRAN) --> 4G/LTE
-//		28 E-UTRAN only
-//		29 GERAN and UTRAN
-//		30 GERAN and E-UTRAN
-//		31 UTRAN and E-UTRAN
-//		send("AT+WS46?", "OK"); // Selected Wireless Data Service (WDS)
-		//send("AT+WS46=12", "OK"); // Wireless Data Service (WDS)
-		//send("AT^SMSO", "^SHUTDOWN"); // Restart
-		//send("AT+WS46?", "OK"); // Selected Wireless Data Service (WDS)
-		//send("AT+CIMI", "OK"); // IMSI
-		//send("AT+CGSN", "OK"); // IMEI
-		
-		
-	}
-
 
 	private void getMeTextAscii(String rsp) throws UnsupportedEncodingException {
 		String textUcs2 = rsp;

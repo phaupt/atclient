@@ -1,10 +1,10 @@
 /**
- *
  * @author <a href="mailto:Philipp.Haupt@swisscom.com">Philipp Haupt</a>
- * 
  */
 
 package com.swisscom.atclient;
+
+import com.swisscom.atclient.ATresponder;
 
 public class GsmClient {
 
@@ -18,14 +18,6 @@ public class GsmClient {
 		 * 'STKTIMEOUT' : TerminalResponse '18' - No response from user
 		 * 
 		 * 'RESET'      : A reset of the GSM Module will be invoked (AT^SMSO), so the current STK interaction will not be answered at all
-		 * 
-		 */
-		
-		/*
-		 * 
-		 * MU Provisioning / Use 20.sd2 content for "..." below:
-		 * 
-		 * echo "..." | awk ' { print "mutk -activatesimcard -timsi " $2 " -msisdn " $1 "\nmutk -createmobileuser -msisdn " $1 " -customerid B2C_Customers -attrlist CertificateProfile http://mid.swisscom.ch/MID/v1/CertProfileAnonymous1 signatureprofiles http://mid.swisscom.ch/MID/v1/AuthProfile1"}'
 		 * 
 		 */
 		
