@@ -90,6 +90,7 @@ public class ATresponder extends Thread {
 		
 		try {
 			initSerialPort();
+			Thread.sleep(500);
 			processAtLoop();
 		} catch (UnsupportedEncodingException e) {
 			// TODO Auto-generated catch block
@@ -112,10 +113,12 @@ public class ATresponder extends Thread {
 		
 		SerialPort[] ports = SerialPort.getCommPorts();
 		for (int i = 0; i < ports.length; i++){
-			log.info(ports[i].getDescriptivePortName());
+			log.info("Index: " + i + "; " + ports[i].getSystemPortName() + "; " + ports[i].getPortDescription() + "; " + ports[i].getDescriptivePortName() );
 		}
 		
 		SerialPort comPort = SerialPort.getCommPort(serialport);
+		
+		log.info("Selected Port: " + comPort.getSystemPortName());
 		
 		log.info("Opened Port: " + comPort.openPort());
 		comPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 500, 0);
