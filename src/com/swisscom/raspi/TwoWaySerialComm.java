@@ -19,7 +19,7 @@ public class TwoWaySerialComm {
 	
 	public static void main(String[] args) {
 		try {
-			(new TwoWaySerialComm()).connect("COM12");
+			(new TwoWaySerialComm()).connect("COM22");
 		} catch (Exception e) {
 			e.printStackTrace();
 		}

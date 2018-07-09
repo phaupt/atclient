@@ -5,7 +5,7 @@
 	<classpathentry kind="lib" path="lib/log4j-1.2.17.jar"/>
 	<classpathentry kind="lib" path="lib/rxtx-2.2pre2/RXTXcomm.jar">
 		<attributes>
-			<attribute name="org.eclipse.jdt.launching.CLASSPATH_ATTR_LIBRARY_PATH_ENTRY" value="atclient/lib/rxtx-2.2pre2/win64"/>
+			<attribute name="org.eclipse.jdt.launching.CLASSPATH_ATTR_LIBRARY_PATH_ENTRY" value="atclient/lib/rxtx-2.2pre2/win32"/>
 		</attributes>
 	</classpathentry>
 	<classpathentry kind="output" path="bin"/>
