@@ -121,7 +121,7 @@ public class ATresponder extends Thread {
 		log.info("Selected Port: " + comPort.getSystemPortName());
 		
 		log.info("Opened Port: " + comPort.openPort());
-		comPort.setComPortTimeouts(SerialPort.TIMEOUT_NONBLOCKING, 500, 0);
+		comPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 500, 0);
 		comPort.setComPortParameters(baudrate, databits, stopbits, parity);
 		
 		// LTE Modul set DTR to true
