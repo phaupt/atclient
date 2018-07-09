@@ -548,10 +548,15 @@ public class ATresponder extends Thread {
 			String rsp;
 			//Endless loop until expected response is found, or timeout occurred
 			while (true) {
+				
+				Thread.sleep(sleepMillis);
+				
 				if ((System.currentTimeMillis() - startTime) >= 15000){
 					log.error("Timeout when waiting for expected response = '" + compareStr + "'");
 					return false;
 				}
+				
+				System.out.println("buffReader.ready(): " + buffReader.ready());
 					
 				while (isAlive && buffReader.ready() && (rsp = buffReader.readLine()) != null) {
 					
