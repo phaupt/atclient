@@ -116,7 +116,7 @@ public class ATresponder extends Thread {
 			log.info("Index: " + i + "; " + ports[i].getSystemPortName() + "; " + ports[i].getPortDescription() + "; " + ports[i].getDescriptivePortName() );
 		}
 		
-		SerialPort comPort = SerialPort.getCommPort(serialport);
+		SerialPort comPort = SerialPort.getCommPorts()[0];
 		
 		log.info("Selected Port: " + comPort.getSystemPortName());
 		
@@ -559,9 +559,6 @@ public class ATresponder extends Thread {
 				System.out.println("buffReader.ready(): " + buffReader.ready());
 					
 				while (isAlive && buffReader.ready() && (rsp = buffReader.readLine()) != null) {
-					
-					// TODO: DEBUG!
-					log.info("<<< " + rsp);
 					
 					if (rsp != null && rsp.length() > 0 && !rsp.contains("OK") && !rsp.contains("^SSTR")) {
 						log.debug("RX2: " + rsp);
