@@ -248,14 +248,14 @@ public class ATresponder extends Thread {
 						cmdType = new Integer(rcvStr.substring(13, rcvStr.length())).intValue(); // +CMTI: "SM", 0
 						log.info("### SIM message storage ###");
 						
-						// To read the SMS data use
+						// read the SMS data
 						send("AT+CMGR=" + cmdType, "ok");
 						
-						// To list all stored short messages use
-						//send("AT+CMGL=ALL");
+						// delete all stored short messages after reading
+						send("AT+CMGD=0,4", "ok");
 						
-						// To delete SMS after reading use
-						send("AT+CMGD=" + cmdType, "ok");
+						// delete specific SMS after reading
+						//send("AT+CMGD=" + cmdType, "ok");
 					}
 					
 					// Check if it is a Remote-SAT Response (SSTR)
