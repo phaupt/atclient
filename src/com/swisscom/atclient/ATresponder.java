@@ -555,10 +555,11 @@ public class ATresponder extends Thread {
 					log.error("Timeout when waiting for expected response = '" + compareStr + "'");
 					return false;
 				}
-				
-				System.out.println("buffReader.ready(): " + buffReader.ready());
-					
+		
 				while (isAlive && buffReader.ready() && (rsp = buffReader.readLine()) != null) {
+					
+					// TODO: DEBUG!
+					log.info("<<< " + rsp);
 					
 					if (rsp != null && rsp.length() > 0 && !rsp.contains("OK") && !rsp.contains("^SSTR")) {
 						log.debug("RX2: " + rsp);
