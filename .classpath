@@ -3,10 +3,6 @@
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
 	<classpathentry kind="src" path="src"/>
 	<classpathentry kind="lib" path="lib/log4j-1.2.17.jar"/>
-	<classpathentry kind="lib" path="lib/rxtx-2.2pre2/RXTXcomm.jar">
-		<attributes>
-			<attribute name="org.eclipse.jdt.launching.CLASSPATH_ATTR_LIBRARY_PATH_ENTRY" value="atclient/lib/rxtx-2.2pre2/win32"/>
-		</attributes>
-	</classpathentry>
+	<classpathentry kind="lib" path="lib/jSerialComm-2.0.2.jar" sourcepath="lib/Fazecast-jSerialComm-v2.0.2-1-g727604b.zip"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

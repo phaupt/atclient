@@ -4,11 +4,7 @@
 
 package com.swisscom.atclient;
 
-import gnu.io.CommPortIdentifier;
-import gnu.io.NoSuchPortException;
-import gnu.io.PortInUseException;
-import gnu.io.SerialPort;
-import gnu.io.UnsupportedCommOperationException;
+import com.fazecast.jSerialComm.*;
 import java.io.*;
 import org.apache.log4j.*;
 
@@ -36,7 +32,6 @@ public class ATresponder extends Thread {
 
 	private int sleepMillis = 100;
 	
-	private SerialPort serPort;
 	private BufferedReader buffReader;
 	private PrintStream printStream;
 	
@@ -47,7 +42,6 @@ public class ATresponder extends Thread {
 	private volatile static boolean stk_timeout;
 	private volatile static boolean reset;
 
-	private boolean dtrFlag = true;
 	private String serialport;
 	private int baudrate = 230400; // Please check also your device settings
 	private int databits = 8;
@@ -91,63 +85,40 @@ public class ATresponder extends Thread {
 		log.info("Application started...");
 
 		attachShutDownHook();
-
-		// WORKAROUND to avoid annoying Library Version output (of RXTX library) to System.out...
-		PrintStream out = System.out;
-		PrintStream silent = null;
-		try {
-			silent = new PrintStream(File.createTempFile("foo", "tmp"));
-		} catch (Exception e) {
-		} 
-		if (silent != null)
-			System.setOut(silent); // Silent System.out
-		CommPortIdentifier pID = null;
-		try {
-			pID = CommPortIdentifier.getPortIdentifier(serialport);
-			log.debug("Found Serial Port: " + pID.getName());
-		} catch (NoSuchPortException e) {
-			log.fatal("run() NoSuchPortException: ", e);
-		}
-		System.setOut(out); // Set output back to System.out
 		
-		if (pID != null){
-			log.info("Trying to connect to '" + pID.getName() + "' ...");
-			try {
-				initSerialPort(pID);
-				processAtLoop(pID);
-			} catch (UnsupportedEncodingException e) {
-				log.fatal("run() UnsupportedEncodingException: ", e);
-			} catch (IOException e) {
-				log.fatal("run() IOException: ", e);
-			} catch (InterruptedException e) {
-				log.fatal("run() InterruptedException: ", e);
-			} catch (PortInUseException e) {
-				log.fatal("run() PortInUseException: ", e);
-			} catch (UnsupportedCommOperationException e) {
-				log.fatal("run() UnsupportedCommOperationException: ", e);
-			}
-		} else {
-			log.fatal("Serial Port '" + serialport + "' not found. Please check your Serial Port configuration.");
+		SerialPort comPort = SerialPort.getCommPort(serialport);
+		
+		try {
+			initSerialPort(comPort);
+			processAtLoop();
+		} catch (UnsupportedEncodingException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (InterruptedException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
 		}
-
+		
+		// Loop exited. Let's close ports..
 		closingPort();
 		log.info("Exiting Application");
 	}
 
-	private void initSerialPort(CommPortIdentifier pID) throws PortInUseException, UnsupportedCommOperationException, UnsupportedEncodingException, IOException {
-		serPort = (SerialPort) pID.open(serialport, 0);
-		serPort.setSerialPortParams(baudrate, databits, stopbits, parity);
+	private void initSerialPort(SerialPort comPort) throws UnsupportedEncodingException, IOException {
 		
-		// Windows without received data returns if no data available.
-		// Linux waits in endless loop when no data, so ReceiveTimeout should be configured
-		// It works in Windows as well
-		// WARNING: Seems like short timeouts can lead to IOException (Underlying input stream returned zero bytes)
-		serPort.enableReceiveTimeout(500); // milliseconds
+		comPort.openPort();
+		comPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 100, 0);
 		
-		serPort.setDTR(dtrFlag);
+		comPort.setComPortParameters(baudrate, databits, stopbits, parity);
+		
+		// LTE Modul set DTR to true
+		//comPort.setDTR();
 
-		buffReader = new BufferedReader(new InputStreamReader(serPort.getInputStream(), "UTF-8"));
-		printStream = new PrintStream(serPort.getOutputStream(), true, "UTF-8");
+		buffReader = new BufferedReader(new InputStreamReader(comPort.getInputStream(), "UTF-8"));
+		printStream = new PrintStream(comPort.getOutputStream(), true, "UTF-8");
 
 		log.info("Connection successfully established.");
 	}
@@ -184,7 +155,7 @@ public class ATresponder extends Thread {
 		isAlive = false; // will exit the while loop and terminate the application	
 	}
 
-	private synchronized void processAtLoop(CommPortIdentifier pID) throws InterruptedException, UnsupportedEncodingException, PortInUseException, UnsupportedCommOperationException, IOException {
+	private synchronized void processAtLoop() throws InterruptedException, UnsupportedEncodingException, IOException {
 
 		if (mode == 1) {
 			initialize(false); // ER
@@ -511,8 +482,8 @@ public class ATresponder extends Thread {
 				Thread.sleep(20000); // Wait 20s for HIT55 to be back on...
 				log.debug("Now closing serial ports");
 				closingPort();
-				log.debug("Now re-initializing serial port");
-				initSerialPort(pID);
+				//log.debug("Now re-initializing serial port");
+				//initSerialPort(pID);
 			}
 		}
 	}
@@ -674,15 +645,6 @@ public class ATresponder extends Thread {
 			log.error("closingPort() Exception: ", e);
 		}
 
-		try {
-			if (serPort != null){
-				serPort.close();
-				serPort = null;
-				log.debug("SerialPort closed.");
-			}
-		} catch (Exception e) {
-			log.error("closingPort() Exception: ", e);
-		}
 	}
 
 	public byte[] hexToByte(String hexString) {
