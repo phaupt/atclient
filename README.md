@@ -3,7 +3,7 @@ MobileID ATClient for [Raspberry PI 3](https://www.raspberrypi.org/products/rasp
 
 ![Raspberry PI 3 B+](img/raspi.jpg?raw=true "Raspberry PI 3 B+") ![HCP HIT wireless terminal](img/hitu4.jpg?raw=true "HCP HIT wireless terminal")
 
-ATClient application can be used to respond to SIM Toolkit Requests from the Mobile ID application in a fully automated manner. It does not require any user interaction (e.g. input Mobile ID PIN). Very useful for automated e2e monitoring purpose.
+ATClient application can be used to respond to SIM Toolkit requests from the Mobile ID application in a fully automated manner. It does not require any user interaction (e.g. input Mobile ID PIN). Very useful for automated e2e monitoring purpose.
 
 ### What you will need (recommended)
 
