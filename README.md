@@ -1,7 +1,7 @@
 # atclient
 MobileID ATClient for Raspberry PI 3 (https://www.raspberrypi.org/products/raspberry-pi-3-model-b-plus/) + SIM based wireless terminal
 
-![./img/raspi.jpg] ![./img/hitu4.jpg]
+![Raspberry PI 3 B+](img/raspi.jpg?raw=true "Raspberry PI 3 B+") ![HCP HIT wireless terminal](img/hitu4.jpg?raw=true "HCP HIT wireless terminal")
 
 Responds to SIM Toolkit Requests from the Mobile ID application. Useful for automated e2e monitoring purpose.
 
