@@ -100,5 +100,15 @@ Jul 10 07:52:41 raspberrypi dhcpcd[383]: wwan0: adding address fe80::d657:4bf1:e
 Jul 10 07:52:41 raspberrypi dhcpcd[383]: wwan0: carrier lost
 Jul 10 07:52:41 raspberrypi dhcpcd[383]: wwan0: deleting address fe80::d657:4bf1:e078:19b2
 
+root@raspberrypi:~/atclient # modprobe -r ftdi_sio
+Jul 10 08:24:54 raspberrypi kernel: [ 2993.746436] usbserial: USB Serial deregistering driver FTDI USB Serial Device
+Jul 10 08:24:54 raspberrypi kernel: [ 2993.746574] usbcore: deregistering interface driver ftdi_sio
+
+root@raspberrypi:~/atclient # modprobe ftdi_sio vendor=0x0403 product=0xfac6
+Jul 10 08:25:32 raspberrypi kernel: [ 3031.399221] ftdi_sio: unknown parameter 'vendor' ignored
+Jul 10 08:25:32 raspberrypi kernel: [ 3031.399237] ftdi_sio: unknown parameter 'product' ignored
+Jul 10 08:25:32 raspberrypi kernel: [ 3031.402105] usbcore: registered new interface driver ftdi_sio
+Jul 10 08:25:32 raspberrypi kernel: [ 3031.403868] usbserial: USB Serial support registered for FTDI USB Serial Device
+
 sh -c 'echo "1e2d 0053" > /sys/bus/usb-serial/drivers/ftdi_sio/new_id'
 
