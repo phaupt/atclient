@@ -36,8 +36,6 @@ public class ATresponder extends Thread {
 	private BufferedReader buffReader;
 	private PrintStream printStream;
 	
-	private int pin;
-	
 	// User specific behaviour for automated testing
 	private volatile static boolean cancel;
 	private volatile static boolean stk_timeout;
@@ -56,12 +54,10 @@ public class ATresponder extends Thread {
 	
 	public volatile static boolean isAlive = true;
 
-	public ATresponder(String serialport, byte mode, int pin) {
+	public ATresponder(String serialport, byte mode) {
 		Thread.currentThread().setName("CLIENT"); // Client Thread
 		this.serialport = serialport;
 		this.mode = mode;
-		if (pin != 0)
-			this.pin = pin;
 	}
 	
 	public void attachShutDownHook() {
@@ -94,13 +90,10 @@ public class ATresponder extends Thread {
 			Thread.sleep(5000);
 			processAtLoop();
 		} catch (UnsupportedEncodingException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		} catch (InterruptedException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 		
@@ -114,19 +107,19 @@ public class ATresponder extends Thread {
 		
 		SerialPort[] ports = SerialPort.getCommPorts();
 		for (int i = 0; i < ports.length; i++){
-			log.info("Index: " + i + "; " + ports[i].getSystemPortName() + "; " + ports[i].getPortDescription() + "; " + ports[i].getDescriptivePortName() );
+			log.debug("Index: " + i + "; " + ports[i].getSystemPortName() + "; " + ports[i].getPortDescription() + "; " + ports[i].getDescriptivePortName() );
 		}
 		
 		SerialPort comPort = SerialPort.getCommPort(serialport);
 		
-		log.info("Selected Port: " + comPort.getSystemPortName());
+		log.debug("Selected Port: " + comPort.getSystemPortName());
 		
-		log.info("Opened Port: " + comPort.openPort());
-		comPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 500, 0);
+		log.debug("Opened Port: " + comPort.openPort());
+		comPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 100, 0);
 		comPort.setComPortParameters(baudrate, databits, stopbits, parity);
 		
 		// LTE Modul set DTR to true
-		log.info("Set DTR: " + comPort.setDTR());
+		log.debug("Set DTR: " + comPort.setDTR());
 		
 		buffReader = new BufferedReader(new InputStreamReader(comPort.getInputStream(), "UTF-8"));
 		printStream = new PrintStream(comPort.getOutputStream(), true, "UTF-8");
@@ -180,14 +173,19 @@ public class ATresponder extends Thread {
 		int cmdType = 0;
 		boolean ackCmdRequired = false;
 		
-		log.info("### Set SMS text mode ###");
+		log.debug("### Set SMS text mode ###");
 		send("AT+CMGF=1", "OK");
 		
-		//log.info("### Activate the display of a URC on every received SMS ###");
+		log.debug("### Activate the display of a URC on every received SMS ###");
 		send("AT+CNMI=1,1", "OK", false);
 		
+		log.debug("### Retrieve Provider Details ###");
 		send("AT+COPS?", "OK", false); // Provider
+		
+		log.debug("### Retrieve Signal Strength Details ###");
 		send("AT+CSQ", "OK", false); // Signal Strength
+		
+		log.debug("### Retrieve Wireless Data Service Details ###");
 		send("AT+WS46=?", "OK", false); // Wireless Data Service (WDS)
 		// * 12 GSM Digital Cellular Systems (GERAN only) --> 2G
 		// * 22 UTRAN only --> 3G
@@ -196,7 +194,11 @@ public class ATresponder extends Thread {
 		// * 29 GERAN and UTRAN
 		// * 30 GERAN and E-UTRAN
 		// * 31 UTRAN and E-UTRAN
+		
+		log.debug("### Retrieve IMSI ###");
 		send("AT+CIMI", "OK", false); // IMSI
+		
+		log.debug("### Retrieve IMEI ###");
 		send("AT+CGSN", "OK", false); // IMEI
 		
 		log.info("Ready to receive incoming data...");
@@ -230,15 +232,18 @@ public class ATresponder extends Thread {
 	
 					if (rcvStr.toUpperCase().trim().startsWith("+CMTI: ")) {
 						cmdType = new Integer(rcvStr.substring(13, rcvStr.length())).intValue(); // +CMTI: "SM", 0
-						log.info("### SIM message storage ###");
+						log.info("### Incoming Short Message ###");
 						
 						// read the SMS data
+						log.debug("### Read SMS Details ###");
 						send("AT+CMGR=" + cmdType, "ok");
 						
 						// delete all stored short messages after reading
+						log.debug("### Delete SMS storage ###");
 						send("AT+CMGD=0,4", "ok");
 						
 						// delete specific SMS after reading
+						//log.debug("### Delete SMS ###");
 						//send("AT+CMGD=" + cmdType, "ok");
 					}
 					
@@ -255,15 +260,6 @@ public class ATresponder extends Thread {
 						
 						// Check Proactive Command Type
 						switch (cmdType) {
-						case 0: // ^SSTR: 2,0
-							// Verify PIN is probably required in case of IDLE
-							if (pin != 0){
-								log.info("### Verify SIM PIN ###");
-								send("AT+CPIN=" + pin);
-							} else {
-								//log.fatal("SIM PIN unknown! Please check your application parameters.");
-							}
-							break;
 						case 19: // ^SSTR: 3,19
 							if (ackCmdRequired) {
 								// SEND MESSAGE
@@ -279,9 +275,6 @@ public class ATresponder extends Thread {
 								log.info("### 32: PLAY TONE (Acknowledge) ###");
 								send("at^sstgi=" + cmdType, "ok"); // GetInfos
 								send("at^sstr=" + cmdType + ",0", "ok"); // Confirm
-								// Check STATUS
-								//log.info("### GET STATUS ###");
-								//send("AT^SSTR?"); // The response will be caught by the receiver below
 							}
 							ackCmdRequired = false;
 							break;
@@ -316,9 +309,6 @@ public class ATresponder extends Thread {
 								}
 								
 								send("at^sstr=" + cmdType + "," + code, "ok"); // Confirm
-								// Check STATUS
-								//log.info("### GET STATUS ###");
-								//send("AT^SSTR?"); // The response will be caught by the receiver below
 							}
 							ackCmdRequired = false;
 							break;
@@ -353,11 +343,6 @@ public class ATresponder extends Thread {
 								} 
 
 								send("at^sstr=" + cmdType + "," + code); // Confirm
-								
-								//send("at^sstr=" + cmdType + ",0" + ",," + "003100320033003400350036", "ok"); // Confirm
-								// Check STATUS
-								//log.info("### GET STATUS ###");
-								//send("AT^SSTR?"); // The response will be caught by the receiver below
 							}
 							ackCmdRequired = false;
 							break;
@@ -367,14 +352,10 @@ public class ATresponder extends Thread {
 								log.info("### 37: SET UP MENU (Acknowledge) ###");
 								send("at^sstgi=" + cmdType, "ok"); // GetInfos
 								send("at^sstr=" + cmdType + ",0", "ok"); // Confirm
-								// Check STATUS
-								//log.info("### GET STATUS ###");
-								//send("AT^SSTR?"); // The response will be caught by the receiver below
 							}
 							ackCmdRequired = false;
 							break;
 						default:
-							//log.debug("### UNKNOWN MSG ###");
 							break;
 						}
 					}
@@ -385,12 +366,6 @@ public class ATresponder extends Thread {
 
 						// Check Proactive Command Type
 						switch (cmdType) {
-						case 19:
-							// SEND MESSAGE
-							//log.info("### 19: SEND MESSAGE ####");
-							//send("at^sstgi=19", "ok");
-							//send("at^sstr=19,0"); // TerminalResponse=0 (OK)
-							break;
 						case 32:
 							// PLAY TONE
 							log.info("### 32: PLAY TONE ####");
@@ -427,7 +402,6 @@ public class ATresponder extends Thread {
 							}
 
 							send("at^sstr=33," + code); // Confirm
-							//send("at^sstr=33,0"); // TerminalResponse=0 (OK)
 							break;
 						case 35:
 							// GET INPUT (Input=123456)
@@ -459,8 +433,6 @@ public class ATresponder extends Thread {
 							} 
 
 							send("at^sstr=" + cmdType + "," + code); // Confirm
-							
-							//send("at^sstr=35,0" + ",," + "003100320033003400350036"); // TerminalResponse=0 (OK)
 							break;
 						case 36:
 							// SELECT ITEM
@@ -475,28 +447,20 @@ public class ATresponder extends Thread {
 							break;
 						case 254:
 							log.info("### 254: SIM Applet returns to main menu ####");
-							//Below is a SHUTDOWN for testing purpose only (RESET event test)
-							//log.info("### Send SHUTDOWN Command ###");
-							//send("AT^SMSO", "^SHUTDOWN"); // Restart
 							break;
 						default:
-							//log.debug("### UNKNOWN MSG ###");
 							break;
 						}
 					}			
 					
 				}
-			} catch (NumberFormatException e) {
-				// log.error("processAtLoop() NumberFormatException: ", e);
 			} catch (IOException e) {
 				log.warn("processAtLoop() IOException: ", e);
-				// Possible REBOOT of HIT55 Module
-				log.debug("Waiting 20s for HIT55 Module to be back on...");
-				Thread.sleep(20000); // Wait 20s for HIT55 to be back on...
+				// Possible REBOOT
+				log.debug("Waiting 20s for GSM Module to be back on...");
+				Thread.sleep(20000); 
 				log.debug("Now closing serial ports");
 				closingPort();
-				//log.debug("Now re-initializing serial port");
-				//initSerialPort(pID);
 			}
 		}
 	}
@@ -538,7 +502,6 @@ public class ATresponder extends Thread {
 	}
 
 	private synchronized boolean receive(String expectedRsp) {
-		//log.trace("receive(expectedRsp) called");
 		try {
 			String compareStr;
 			if (expectedRsp == null)
@@ -624,7 +587,6 @@ public class ATresponder extends Thread {
 		if (!rsp.contains("+CMGR") && rsp.indexOf(",\"") != -1 && rsp.indexOf("\",") != -1 && rsp.charAt(rsp.indexOf(",\"") + 2) != '"') {
 			// Found some possible text content
 			try {
-				//log.info(">>> " + textUcs2);
 				textUcs2 = rsp.substring(rsp.indexOf(",\"") + 2, rsp.indexOf("\",", rsp.indexOf(",\"") + 2));
 				textUcs2 = new String(hexToByte(textUcs2), "UTF-16");
 				log.debug("UI Text=\"" + textUcs2 + "\"");
@@ -669,7 +631,6 @@ public class ATresponder extends Thread {
 		} catch (Exception e) {
 			log.error("closingPort() Exception: ", e);
 		}
-
 	}
 
 	public byte[] hexToByte(String hexString) {
