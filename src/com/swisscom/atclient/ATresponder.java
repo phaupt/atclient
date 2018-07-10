@@ -169,6 +169,7 @@ public class ATresponder extends Thread {
 			return; // exit
 		}
 
+		String code;
 		String rcvStr;
 		int cmdType = 0;
 		boolean ackCmdRequired = false;
@@ -213,6 +214,8 @@ public class ATresponder extends Thread {
 			// Listening for incoming notifications (SIM->ME)
 			try {
 				while (isAlive && buffReader.ready() && (rcvStr = buffReader.readLine()) != null) {
+					
+					log.trace("<<<" + rcvStr);
 
 					if (rcvStr != null && rcvStr.length() > 0) {
 						
@@ -248,8 +251,10 @@ public class ATresponder extends Thread {
 					}
 					
 					// Check if it is a Remote-SAT Response (SSTR)
-					if (rcvStr.toUpperCase().trim().startsWith("^SSTR: ")) {						
-						cmdType = new Integer(rcvStr.substring(9, rcvStr.length())).intValue(); // ^SSTR: ?,XX 
+					if (rcvStr.toUpperCase().trim().startsWith("^SSTR: ")) {	
+						// ^SSTR: 3,19
+						// ^SSTR: 19,0,"" --> ignore this one (NumberFormatException catched and ignored)
+						cmdType = new Integer(rcvStr.substring(9, rcvStr.length())).intValue(); // ^SSTR: ?,XX
 
 						// ^SSTR: 2,?? | ^SSTR: 3,?? | ^SSTR: 4,??
 						// ^SSTR: <state>,<cmdType>
@@ -265,7 +270,7 @@ public class ATresponder extends Thread {
 								// SEND MESSAGE
 								log.info("### 19: SEND MESSAGE (Acknowledge) ###");
 								send("at^sstgi=" + cmdType, "ok"); // GetInfos		
-								send("at^sstr=" + cmdType + ",0", "ok"); // Confirm
+								send("at^sstr=" + cmdType + ",0", "^SSTR: 19,0,\"\""); // Confirm
 							}
 							ackCmdRequired = false;
 							break;
@@ -286,7 +291,7 @@ public class ATresponder extends Thread {
 								getMeTextAscii(rcvStr); // may set the flag such as CANCEL
 								log.debug("CANCEL: " + cancel + " | STKTIMEOUT: " + stk_timeout + " | RESET: " + reset);
 								
-								String code = "0"; // OK
+								code = "0"; // OK
 								if (cancel){ 
 									log.debug("Reset CANCEL Flag...");
 									setCancel(false); // reset flag
@@ -320,7 +325,7 @@ public class ATresponder extends Thread {
 								getMeTextAscii(rcvStr); // may set the flag such as CANCEL
 								log.debug("CANCEL: " + cancel + " | STKTIMEOUT: " + stk_timeout + " | RESET: " + reset);
 																
-								String code = "0,,003100320033003400350036"; // OK
+								code = "0,,003100320033003400350036"; // OK
 								if (cancel){ 
 									log.debug("Reset CANCEL Flag...");
 									setCancel(false); // reset flag
@@ -366,6 +371,12 @@ public class ATresponder extends Thread {
 
 						// Check Proactive Command Type
 						switch (cmdType) {
+						case 19:
+							// SEND MESSAGE
+							log.info("### 19: SEND MESSAGE (Acknowledge) ###");
+							send("at^sstgi=" + cmdType, "ok"); // GetInfos		
+							send("at^sstr=" + cmdType + ",0", "^SSTR: 19,0,\"\""); // Confirm
+							break;
 						case 32:
 							// PLAY TONE
 							log.info("### 32: PLAY TONE ####");
@@ -379,7 +390,7 @@ public class ATresponder extends Thread {
 							getMeTextAscii(rcvStr); // may set the flag such as CANCEL
 							log.debug("CANCEL: " + cancel + " | STKTIMEOUT: " + stk_timeout + " | RESET: " + reset);
 							
-							String code = "0"; // OK
+							code = "0"; // OK
 							if (cancel){ 
 								log.debug("Reset CANCEL Flag...");
 								setCancel(false); // reset flag
@@ -454,6 +465,8 @@ public class ATresponder extends Thread {
 					}			
 					
 				}
+			} catch (NumberFormatException e) {
+				// Ignore the ^SSTR: 19,0,"" cases
 			} catch (IOException e) {
 				log.warn("processAtLoop() IOException: ", e);
 				// Possible REBOOT
@@ -494,8 +507,8 @@ public class ATresponder extends Thread {
 			if (!cmd.contains("SSTR?") && logTx){
 				log.debug("TX1: " + cmd.toUpperCase().trim());
 			}
-			printStream.write(cmd.getBytes());
-			printStream.write("\r\n".getBytes()); // append return
+			log.trace(">>>" + cmd);
+			printStream.write((cmd + "\r\n").getBytes());
 		} catch (IOException e) {
 			log.error("send() IOException : ", e);
 		}
@@ -512,6 +525,9 @@ public class ATresponder extends Thread {
 			long startTime = System.currentTimeMillis();
 
 			String rsp;
+			String operator;
+			String strength;
+			String list;
 			//Endless loop until expected response is found, or timeout occurred
 			while (true) {
 				
@@ -524,6 +540,8 @@ public class ATresponder extends Thread {
 		
 				while (isAlive && buffReader.ready() && (rsp = buffReader.readLine()) != null) {
 					
+					log.trace("<<<" + rsp);
+					
 					if (rsp != null && rsp.length() > 0 && !rsp.contains("OK") && !rsp.contains("^SSTR")) {
 						log.debug("RX2: " + rsp);
 						getMeTextAscii(rsp);
@@ -533,7 +551,7 @@ public class ATresponder extends Thread {
 					if (rsp.toUpperCase().trim().startsWith("+COPS: ")) {
 						// Check if COPS response contains valid operator information
 						if (rsp.trim().length() >= 13 && rsp.trim().substring(7,12).equals("0,0,\"")){
-							String operator = rsp.trim().substring(12, rsp.trim().indexOf("\"", 13));
+							operator = rsp.trim().substring(12, rsp.trim().indexOf("\"", 13));
 							//+COPS: 0,0,"Swisscom",2
 							log.info("Operator: " + operator);
 							stampString[1] = operator;
@@ -544,7 +562,7 @@ public class ATresponder extends Thread {
 						}
 					} else if (rsp.trim().startsWith("+CSQ: ")) {
 						if (rsp.trim().length() > 6){
-							String strength = rsp.toUpperCase().trim().substring(6);
+							strength = rsp.toUpperCase().trim().substring(6);
 							//+CSQ: 29,99
 							log.info("SignalStrength: " + strength);
 							stampString[2] = strength;
@@ -563,6 +581,12 @@ public class ATresponder extends Thread {
 							log.info("IMEI: " + rsp.toUpperCase().trim());
 							stampString[4] = rsp.toUpperCase().trim();
 						}
+					} else if (rsp.trim().startsWith("+WS46: ")) {
+						list = rsp.toUpperCase().trim().substring(6);
+						// +WS46: (12,22,25,28,29)
+						log.info("Wireless Service: " + list);
+						stampString[2] = list;
+
 					}
 					
 					else if (rsp.toUpperCase().trim().contains(compareStr) || rsp.toUpperCase().trim().contains("ERROR")) {
