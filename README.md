@@ -3,10 +3,9 @@ MobileID ATClient for Raspberry PI 3
 
 ### GSM device
 
-This application has been successfully tested on Raspberry PI 3 B+ using a GSM device from the list below.
-Baudrate set to default 9600.
-- HCP HIT U8 PHS8 (3G) 
-- HCP HIT U4 (LTE)
+This application has been successfully tested on Raspberry PI 3 B+ (raspbian) as well as Windows 10. A GSM device from the list below was used. Baudrate set to default 9600.
+- HCP HIT U8 PHS8 (3G) http://electronicshcp.com/product/hit-u8/
+- HCP HIT U4 (LTE) http://electronicshcp.com/product/hit-u4-lte/
 
 
 ### Port selection
@@ -18,19 +17,21 @@ Baudrate set to default 9600.
 
 You may also trace the syslog while connecting the device: ```sudo tail -f /var/log/syslog```
 
+Port descriptor must be something like "/dev/ttyS0" (Linux) or "COM3" (Windows).
+
 ### Compile and run the application
 
 ```
 pi@raspberypi:~ $ git clone https://github.com/phaupt/atclient.git
 pi@raspberypi:~ $ cd atclient
-pi@raspberypi:~ $ mkdir class
+pi@raspberypi:~/atclient $ mkdir class
 pi@raspberypi:~/atclient $ javac -d ./class -cp "./lib/*" ./src/com/swisscom/atclient/*.java
 pi@raspberypi:~/atclient $ java -Dlog4j.configuration=file:log4j.properties -cp "./class:./lib/*" com.swisscom.atclient.GsmClient /dev/ttyACM1 UE
 ```
 
 ### Log
 
-Edit the log4j.properties to configure a different log level.
+Edit the log4j.properties to configure a different log level, if needed. DEBUG level is default.
 If you set TRACE level, it will log the complete RX and TX traffic.
 
 ```
