@@ -8,7 +8,7 @@ Responds to SIM Toolkit Requests from the Mobile ID application. Useful for auto
 ### What you will need
 
 - [Mobile ID SIM card](https://mobileid.ch)
-- [Raspberry PI 3](https://www.raspberrypi.org/products/raspberry-pi-3-model-b-plus) ~ EUR 35.-
+- [Raspberry PI 3 B+](https://www.raspberrypi.org/products/raspberry-pi-3-model-b-plus) ~ EUR 35.-
 - [SIM based wireless terminal](http://electronicshcp.com/product/hit-u4-lte) ~ EUR 100.-
 
 ### Wireless terminal
