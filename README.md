@@ -1,12 +1,17 @@
 # atclient
-MobileID ATClient for Raspberry PI 3
+MobileID ATClient for Raspberry PI 3 (https://www.raspberrypi.org/products/raspberry-pi-3-model-b-plus/)
 
-### GSM device
+Responds to SIM Toolkit Requests from the Mobile ID application. Useful for automated e2e monitoring purpose.
 
-This application has been successfully tested on Raspberry PI 3 B+ (raspbian) as well as Windows 10. A GSM device from the list below was used. Baudrate set to default 9600.
-- HCP HIT U8 PHS8 (3G) http://electronicshcp.com/product/hit-u8/
-- HCP HIT U4 (LTE) http://electronicshcp.com/product/hit-u4-lte/
+### Mobile ID
 
+You will need a Mobile ID ready SIM card (www.mobileid.ch). SIM-PIN must be disabled.
+
+### Wireless terminal
+
+This application has been successfully tested on Raspberry PI 3 B+ (raspbian) as well as Windows 10. A wirelss terminal from the list below was used. Baudrate set to default 9600.
+- HCP HIT U8 PHS8 3G terminal (http://electronicshcp.com/product/hit-u8)
+- HCP HIT U4 LTE terminal (http://electronicshcp.com/product/hit-u4-lte)
 
 ### Port selection
 
@@ -17,9 +22,9 @@ This application has been successfully tested on Raspberry PI 3 B+ (raspbian) as
 
 You may also trace the syslog while connecting the device: ```sudo tail -f /var/log/syslog```
 
-Port descriptor must be something like "/dev/ttyS0" (Linux) or "COM3" (Windows).
+Port descriptor must be something like "/dev/ttyUSB0" (Linux) or "COM4" (Windows).
 
-### Compile and run the application
+### Clone GIT, compile and run
 
 ```
 pi@raspberypi:~ $ git clone https://github.com/phaupt/atclient.git
@@ -29,7 +34,7 @@ pi@raspberypi:~/atclient $ javac -d ./class -cp "./lib/*" ./src/com/swisscom/atc
 pi@raspberypi:~/atclient $ java -Dlog4j.configuration=file:log4j.properties -cp "./class:./lib/*" com.swisscom.atclient.GsmClient /dev/ttyACM1 UE
 ```
 
-### Log
+### Logfile
 
 Edit the log4j.properties to configure a different log level, if needed. DEBUG level is default.
 If you set TRACE level, it will log the complete RX and TX traffic.
@@ -38,7 +43,7 @@ If you set TRACE level, it will log the complete RX and TX traffic.
 pi@raspberypi:~/atclient $ tail -f GsmClient.log
 ```
 
-#### Example Log Output
+#### Example logfile output
 ```
 2018-07-10 14:31:34,316 [ATRESP] INFO  atclient.ATresponder - Application started...
 2018-07-10 14:31:34,332 [ATRESP] DEBUG atclient.ATresponder - Attached Shutdown Hook
