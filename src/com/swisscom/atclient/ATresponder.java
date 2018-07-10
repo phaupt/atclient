@@ -6,7 +6,6 @@ package com.swisscom.atclient;
 
 import com.fazecast.jSerialComm.*;
 import java.io.*;
-import java.util.Arrays;
 
 import org.apache.log4j.*;
 
@@ -45,7 +44,8 @@ public class ATresponder extends Thread {
 	private volatile static boolean reset;
 
 	private String serialport;
-	private int baudrate = 230400; // Please check also your device settings
+	//private int baudrate = 230400; // Please check also your device settings
+	private int baudrate = 9600;
 	private int databits = 8;
 	private int stopbits = 1;
 	private int parity = 0;
@@ -90,7 +90,7 @@ public class ATresponder extends Thread {
 		
 		try {
 			initSerialPort();
-			Thread.sleep(500);
+			Thread.sleep(5000);
 			processAtLoop();
 		} catch (UnsupportedEncodingException e) {
 			// TODO Auto-generated catch block
@@ -557,9 +557,6 @@ public class ATresponder extends Thread {
 				}
 		
 				while (isAlive && buffReader.ready() && (rsp = buffReader.readLine()) != null) {
-					
-					// TODO: DEBUG!
-					log.info("<<< " + rsp);
 					
 					if (rsp != null && rsp.length() > 0 && !rsp.contains("OK") && !rsp.contains("^SSTR")) {
 						log.debug("RX2: " + rsp);
