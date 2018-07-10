@@ -31,7 +31,7 @@ import org.apache.log4j.*;
 public class ATresponder extends Thread {
 	private Logger log = Logger.getLogger(ATresponder.class);
 
-	private int sleepMillis = 100;
+	private int sleepMillis = 250;
 	
 	private BufferedReader buffReader;
 	private PrintStream printStream;
@@ -533,7 +533,7 @@ public class ATresponder extends Thread {
 				
 				Thread.sleep(sleepMillis);
 				
-				if ((System.currentTimeMillis() - startTime) >= 15000){
+				if ((System.currentTimeMillis() - startTime) >= 5000){
 					log.error("Timeout when waiting for expected response = '" + compareStr + "'");
 					return false;
 				}
