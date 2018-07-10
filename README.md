@@ -5,16 +5,18 @@ MobileID ATClient for [Raspberry PI 3](https://www.raspberrypi.org/products/rasp
 
 Responds to SIM Toolkit Requests from the Mobile ID application. Useful for automated e2e monitoring purpose.
 
-### Mobile ID
+### What you will need
 
-You will need a Mobile ID ready SIM card (www.mobileid.ch). SIM-PIN must be disabled.
+- Mobile ID SIM card. More details at www.mobileid.ch. 
+- [Raspberry PI 3](https://www.raspberrypi.org/products/raspberry-pi-3-model-b-plus) ~ EUR 35.-
+- [SIM based wireless terminal](http://electronicshcp.com/product/hit-u4-lte) ~ EUR 100.-
 
 ### Wireless terminal
 
 This application has been successfully tested on Raspberry PI 3 B+ (raspbian) as well as Windows 10. A wireless terminal from the list below was used. Baudrate set to default 9600.
 
-- [HCP HIT U8 PHS8 3G terminal](http://electronicshcp.com/product/hit-u8) ~ EUR  97.-
-- [HCP HIT U4 LTE terminal](http://electronicshcp.com/product/hit-u4-lte) ~ EUR 105.-
+- [HCP HIT U8 PHS8 3G terminal](http://electronicshcp.com/product/hit-u8)
+- [HCP HIT U4 LTE terminal](http://electronicshcp.com/product/hit-u4-lte)
 
 ### Port selection
 
