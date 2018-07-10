@@ -5,7 +5,7 @@ MobileID ATClient for [Raspberry PI 3](https://www.raspberrypi.org/products/rasp
 
 Responds to SIM Toolkit Requests from the Mobile ID application. Useful for automated e2e monitoring purpose.
 
-### What you will need
+### What you will need (recommended)
 
 - [Mobile ID SIM card](https://mobileid.ch)
 - [Raspberry PI 3 B+](https://www.raspberrypi.org/products/raspberry-pi-3-model-b-plus) ~ EUR 35.-
