@@ -1,5 +1,5 @@
 # atclient
-MobileID ATClient for Raspberry PI 3 (https://www.raspberrypi.org/products/raspberry-pi-3-model-b-plus/) + SIM based wireless terminal
+MobileID ATClient for [Raspberry PI 3](https://www.raspberrypi.org/products/raspberry-pi-3-model-b-plus) and SIM based wireless terminal
 
 ![Raspberry PI 3 B+](img/raspi.jpg?raw=true "Raspberry PI 3 B+") ![HCP HIT wireless terminal](img/hitu4.jpg?raw=true "HCP HIT wireless terminal")
 
@@ -13,8 +13,8 @@ You will need a Mobile ID ready SIM card (www.mobileid.ch). SIM-PIN must be disa
 
 This application has been successfully tested on Raspberry PI 3 B+ (raspbian) as well as Windows 10. A wirelss terminal from the list below was used. Baudrate set to default 9600.
 
-- HCP HIT U8 PHS8 3G terminal (http://electronicshcp.com/product/hit-u8)
-- HCP HIT U4 LTE terminal (http://electronicshcp.com/product/hit-u4-lte)
+- [HCP HIT U8 PHS8 3G terminal](http://electronicshcp.com/product/hit-u8)
+- [HCP HIT U4 LTE terminal](http://electronicshcp.com/product/hit-u4-lte)
 
 ### Port selection
 
