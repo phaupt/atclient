@@ -90,6 +90,7 @@ public class ATresponder extends Thread {
 		
 		try {
 			initSerialPort();
+			log.info("Wait for 5 seconds...");
 			Thread.sleep(5000);
 			processAtLoop();
 		} catch (UnsupportedEncodingException e) {
@@ -197,6 +198,8 @@ public class ATresponder extends Thread {
 		// * 31 UTRAN and E-UTRAN
 		send("AT+CIMI", "OK", false); // IMSI
 		send("AT+CGSN", "OK", false); // IMEI
+		
+		log.info("Ready to receive incoming data...");
 
 		// Start endless loop...
 		while (isAlive) {
