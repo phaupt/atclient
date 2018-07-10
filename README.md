@@ -9,6 +9,8 @@ ATClient application can be used to respond to SIM Toolkit requests from the Mob
 
 - [Mobile ID SIM card](https://mobileid.ch)
 - [Raspberry PI 3 B+](https://www.raspberrypi.org/products/raspberry-pi-3-model-b-plus) ~ EUR 35.-
+  - RASPIAN kernel 4.14 or newer
+  - JAVA 8 or newer
 - [SIM based wireless terminal](http://electronicshcp.com/product/hit-u4-lte) ~ EUR 100.-
 
 ### Wireless terminal
