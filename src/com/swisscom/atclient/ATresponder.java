@@ -591,7 +591,7 @@ public class ATresponder extends Thread {
 
 					} else if (rsp.contains(txtSmsKeyword)) {
 						// Text Short Message Keyword detected
-						log.info("Text SMS: " + rsp.toUpperCase().trim());
+						log.info("Text SMS: " + rsp);
 						// TODO: Do something with the text content... 
 					}
 					
