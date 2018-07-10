@@ -1,6 +1,7 @@
 # atclient
 AT Client for Raspberry PI
 
+```
 javac -d ./class -cp "./lib/*" ./src/com/swisscom/atclient/*.java
 
 java -Dlog4j.configuration=file:log4j.properties -cp "./class:./lib/*" com.swisscom.atclient.GsmClient /dev/ttyUSB0 UE
@@ -112,3 +113,4 @@ Jul 10 08:25:32 raspberrypi kernel: [ 3031.403868] usbserial: USB Serial support
 
 sh -c 'echo "1e2d 0053" > /sys/bus/usb-serial/drivers/ftdi_sio/new_id'
 
+```
