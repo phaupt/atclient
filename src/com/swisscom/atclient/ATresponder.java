@@ -44,8 +44,8 @@ public class ATresponder extends Thread {
 	private volatile static boolean reset;
 
 	private String serialport;
-	private int baudrate = 230400; // Please check also your device settings
-	//private int baudrate = 9600;
+	//private int baudrate = 128000; // Please check also your device settings
+	private int baudrate = 9600;
 	private int databits = 8;
 	private int stopbits = 1;
 	private int parity = 0;
