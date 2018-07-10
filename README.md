@@ -1,116 +1,92 @@
 # atclient
-AT Client for Raspberry PI
+MobileID ATClient for Raspberry PI 3
+
+### GSM device
+
+This application has been successfully tested on Raspberry PI 3 B+ using a GSM device from the list below.
+Baudrate set to default 9600.
+- HCP HIT U8 PHS8 (3G) 
+- HCP HIT U4 (LTE)
+
+
+### Port selection
+
+1. Unplug the modem
+2. Run: ```sudo dmesg -c```
+3. Plug in the modem and wait a few seconds
+4. Run: ```sudo dmesg```
+
+You may also trace the syslog while connecting the device: ```sudo tail -f /var/log/syslog```
+
+### Compile and run the application
 
 ```
-javac -d ./class -cp "./lib/*" ./src/com/swisscom/atclient/*.java
+pi@raspberypi:~ $ git clone https://github.com/phaupt/atclient.git
+pi@raspberypi:~ $ cd atclient
+pi@raspberypi:~ $ mkdir class
+pi@raspberypi:~/atclient $ javac -d ./class -cp "./lib/*" ./src/com/swisscom/atclient/*.java
+pi@raspberypi:~/atclient $ java -Dlog4j.configuration=file:log4j.properties -cp "./class:./lib/*" com.swisscom.atclient.GsmClient /dev/ttyACM1 UE
+```
 
-java -Dlog4j.configuration=file:log4j.properties -cp "./class:./lib/*" com.swisscom.atclient.GsmClient /dev/ttyUSB0 UE
+### Log
 
-########### LTE ########### 
+Edit the log4j.properties to configure a different log level.
+If you set TRACE level, it will log the complete RX and TX traffic.
 
-root@raspberrypi:~ # dmesg
-[  124.081576] usb 1-1.2: new high-speed USB device number 8 using dwc_otg
-[  124.212688] usb 1-1.2: New USB device found, idVendor=1e2d, idProduct=0061
-[  124.212706] usb 1-1.2: New USB device strings: Mfr=1, Product=2, SerialNumber=0
-[  124.212715] usb 1-1.2: Product: LTE Modem
-[  124.212723] usb 1-1.2: Manufacturer: Cinterion
-[  124.222865] cdc_acm 1-1.2:1.0: ttyACM0: USB ACM device
-[  124.234398] cdc_acm 1-1.2:1.2: ttyACM1: USB ACM device
-[  124.246836] cdc_acm 1-1.2:1.4: ttyACM2: USB ACM device
-[  124.267097] cdc_acm 1-1.2:1.6: ttyACM3: USB ACM device
-[  124.288873] cdc_acm 1-1.2:1.8: ttyACM4: USB ACM device
-[  124.292051] cdc_ether 1-1.2:1.10 usb0: register 'cdc_ether' at usb-3f980000.usb-1.2, CDC Ethernet Device, de:ad:be:ef:00:00
-[  124.294766] cdc_ether 1-1.2:1.12 usb1: register 'cdc_ether' at usb-3f980000.usb-1.2, CDC Ethernet Device, de:ad:be:ef:00:01
-[  124.422069] cdc_ether 1-1.2:1.10 usb0: CDC: unexpected notification 01!
-[  124.451051] cdc_ether 1-1.2:1.12 usb1: CDC: unexpected notification 01!
-[  124.454066] cdc_ether 1-1.2:1.10 usb0: CDC: unexpected notification 01!
-[  124.483027] cdc_ether 1-1.2:1.12 usb1: CDC: unexpected notification 01!
-[  124.486037] cdc_ether 1-1.2:1.10 usb0: CDC: unexpected notification 01!
-[  124.515041] cdc_ether 1-1.2:1.12 usb1: CDC: unexpected notification 01!
-[  128.483062] cdc_ether 1-1.2:1.12 usb1: CDC: unexpected notification 01!
-[  128.486048] cdc_ether 1-1.2:1.10 usb0: CDC: unexpected notification 01!
+```
+pi@raspberypi:~/atclient $ tail -f GsmClient.log
+```
 
-
-root@raspberrypi:~ # lsusb
-Bus 001 Device 008: ID 1e2d:0061  
-Bus 001 Device 006: ID 046d:c050 Logitech, Inc. RX 250 Optical Mouse
-Bus 001 Device 004: ID 046d:c312 Logitech, Inc. DeLuxe 250 Keyboard
-Bus 001 Device 007: ID 0424:7800 Standard Microsystems Corp. 
-Bus 001 Device 003: ID 0424:2514 Standard Microsystems Corp. USB 2.0 Hub
-Bus 001 Device 002: ID 0424:2514 Standard Microsystems Corp. USB 2.0 Hub
-Bus 001 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
-
-########### PHS8 3G ########### 
-
-root@raspberrypi:~ # dmesg
-[  519.091789] usb 1-1.2: new high-speed USB device number 9 using dwc_otg
-[  519.224073] usb 1-1.2: New USB device found, idVendor=1e2d, idProduct=0053
-[  519.224092] usb 1-1.2: New USB device strings: Mfr=3, Product=2, SerialNumber=0
-[  519.224100] usb 1-1.2: Product: PH8
-[  519.224108] usb 1-1.2: Manufacturer: Cinterion
-[  519.306677] usbcore: registered new interface driver usbserial
-[  519.306760] usbcore: registered new interface driver usbserial_generic
-[  519.306822] usbserial: USB Serial support registered for generic
-[  519.313778] usbcore: registered new interface driver cdc_wdm
-[  519.327341] usbcore: registered new interface driver option
-[  519.327417] usbserial: USB Serial support registered for GSM modem (1-port)
-[  519.328603] option 1-1.2:1.0: GSM modem (1-port) converter detected
-[  519.330149] usb 1-1.2: GSM modem (1-port) converter now attached to ttyUSB0
-[  519.331616] qmi_wwan 1-1.2:1.4: cdc-wdm0: USB WDM device
-[  519.332739] qmi_wwan 1-1.2:1.4 wwan0: register 'qmi_wwan' at usb-3f980000.usb-1.2, WWAN/QMI device, b6:15:8f:83:77:e4
-[  519.333172] usbcore: registered new interface driver qmi_wwan
-[  519.343524] option 1-1.2:1.1: GSM modem (1-port) converter detected
-[  519.345952] usb 1-1.2: GSM modem (1-port) converter now attached to ttyUSB1
-[  519.346820] option 1-1.2:1.2: GSM modem (1-port) converter detected
-[  519.347398] usb 1-1.2: GSM modem (1-port) converter now attached to ttyUSB2
-[  519.348135] option 1-1.2:1.3: GSM modem (1-port) converter detected
-[  519.348649] usb 1-1.2: GSM modem (1-port) converter now attached to ttyUSB3
-
-root@raspberrypi:~ # lsusb
-Bus 001 Device 009: ID 1e2d:0053  
-Bus 001 Device 006: ID 046d:c050 Logitech, Inc. RX 250 Optical Mouse
-Bus 001 Device 004: ID 046d:c312 Logitech, Inc. DeLuxe 250 Keyboard
-Bus 001 Device 007: ID 0424:7800 Standard Microsystems Corp. 
-Bus 001 Device 003: ID 0424:2514 Standard Microsystems Corp. USB 2.0 Hub
-Bus 001 Device 002: ID 0424:2514 Standard Microsystems Corp. USB 2.0 Hub
-Bus 001 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
-
-root@raspberrypi:~ # tail -f /var/log/syslog
-Jul 10 07:52:40 raspberrypi kernel: [ 1059.504059] usb 1-1.2: new high-speed USB device number 10 using dwc_otg
-Jul 10 07:52:40 raspberrypi kernel: [ 1059.643515] usb 1-1.2: New USB device found, idVendor=1e2d, idProduct=0053
-Jul 10 07:52:40 raspberrypi kernel: [ 1059.643535] usb 1-1.2: New USB device strings: Mfr=3, Product=2, SerialNumber=0
-Jul 10 07:52:40 raspberrypi kernel: [ 1059.643543] usb 1-1.2: Product: PH8
-Jul 10 07:52:40 raspberrypi kernel: [ 1059.643551] usb 1-1.2: Manufacturer: Cinterion
-Jul 10 07:52:40 raspberrypi kernel: [ 1059.648322] option 1-1.2:1.0: GSM modem (1-port) converter detected
-Jul 10 07:52:40 raspberrypi kernel: [ 1059.649871] usb 1-1.2: GSM modem (1-port) converter now attached to ttyUSB0
-Jul 10 07:52:40 raspberrypi kernel: [ 1059.650787] option 1-1.2:1.1: GSM modem (1-port) converter detected
-Jul 10 07:52:40 raspberrypi kernel: [ 1059.651220] usb 1-1.2: GSM modem (1-port) converter now attached to ttyUSB1
-Jul 10 07:52:40 raspberrypi kernel: [ 1059.652075] option 1-1.2:1.2: GSM modem (1-port) converter detected
-Jul 10 07:52:40 raspberrypi kernel: [ 1059.652439] usb 1-1.2: GSM modem (1-port) converter now attached to ttyUSB2
-Jul 10 07:52:40 raspberrypi kernel: [ 1059.653309] option 1-1.2:1.3: GSM modem (1-port) converter detected
-Jul 10 07:52:40 raspberrypi kernel: [ 1059.653675] usb 1-1.2: GSM modem (1-port) converter now attached to ttyUSB3
-Jul 10 07:52:40 raspberrypi kernel: [ 1059.656173] qmi_wwan 1-1.2:1.4: cdc-wdm0: USB WDM device
-Jul 10 07:52:40 raspberrypi kernel: [ 1059.657224] qmi_wwan 1-1.2:1.4 wwan0: register 'qmi_wwan' at usb-3f980000.usb-1.2, WWAN/QMI device, b6:15:8f:83:77:e4
-Jul 10 07:52:40 raspberrypi mtp-probe: checking bus 1, device 10: "/sys/devices/platform/soc/3f980000.usb/usb1/1-1/1-1.2"
-Jul 10 07:52:40 raspberrypi mtp-probe: bus: 1, device: 10 was not an MTP device
-Jul 10 07:52:40 raspberrypi dhcpcd-run-hooks[1461]: wwan0: starting wpa_supplicant
-Jul 10 07:52:41 raspberrypi dhcpcd[383]: wwan0: waiting for carrier
-Jul 10 07:52:41 raspberrypi dhcpcd[383]: wwan0: carrier acquired
-Jul 10 07:52:41 raspberrypi dhcpcd[383]: wwan0: IAID 8f:83:77:e4
-Jul 10 07:52:41 raspberrypi dhcpcd[383]: wwan0: adding address fe80::d657:4bf1:e078:19b2
-Jul 10 07:52:41 raspberrypi dhcpcd[383]: wwan0: carrier lost
-Jul 10 07:52:41 raspberrypi dhcpcd[383]: wwan0: deleting address fe80::d657:4bf1:e078:19b2
-
-root@raspberrypi:~/atclient # modprobe -r ftdi_sio
-Jul 10 08:24:54 raspberrypi kernel: [ 2993.746436] usbserial: USB Serial deregistering driver FTDI USB Serial Device
-Jul 10 08:24:54 raspberrypi kernel: [ 2993.746574] usbcore: deregistering interface driver ftdi_sio
-
-root@raspberrypi:~/atclient # modprobe ftdi_sio vendor=0x0403 product=0xfac6
-Jul 10 08:25:32 raspberrypi kernel: [ 3031.399221] ftdi_sio: unknown parameter 'vendor' ignored
-Jul 10 08:25:32 raspberrypi kernel: [ 3031.399237] ftdi_sio: unknown parameter 'product' ignored
-Jul 10 08:25:32 raspberrypi kernel: [ 3031.402105] usbcore: registered new interface driver ftdi_sio
-Jul 10 08:25:32 raspberrypi kernel: [ 3031.403868] usbserial: USB Serial support registered for FTDI USB Serial Device
-
-sh -c 'echo "1e2d 0053" > /sys/bus/usb-serial/drivers/ftdi_sio/new_id'
-
+#### Example Log Output
+```
+2018-07-10 14:31:34,316 [ATRESP] INFO  atclient.ATresponder - Application started...
+2018-07-10 14:31:34,332 [ATRESP] DEBUG atclient.ATresponder - Attached Shutdown Hook
+2018-07-10 14:31:34,332 [ATRESP] INFO  atclient.ATresponder - Init Serial Port in progress.
+2018-07-10 14:31:34,416 [ATRESP] DEBUG atclient.ATresponder - Index: 0; COM3; Serial0; Intel(R) Active Management Technology - SOL (COM3)
+2018-07-10 14:31:34,416 [ATRESP] DEBUG atclient.ATresponder - Index: 1; COM4; PH8; Cinterion PH8 HSPA USB Com Port (COM4)
+2018-07-10 14:31:34,416 [ATRESP] DEBUG atclient.ATresponder - Index: 2; COM11; PH8; Cinterion PH8 HSPA USB Modem
+2018-07-10 14:31:34,416 [ATRESP] DEBUG atclient.ATresponder - Index: 3; COM8; PH8; Cinterion PH8 HSPA USB NMEA Com Port (COM8)
+2018-07-10 14:31:34,416 [ATRESP] DEBUG atclient.ATresponder - Index: 4; COM9; PH8; Cinterion PH8 HSPA USB reserved Com Port (COM9)
+2018-07-10 14:31:34,416 [ATRESP] DEBUG atclient.ATresponder - Selected Port: COM4
+2018-07-10 14:31:35,417 [ATRESP] DEBUG atclient.ATresponder - Opened Port: true
+2018-07-10 14:31:35,818 [ATRESP] DEBUG atclient.ATresponder - Set DTR: true
+2018-07-10 14:31:35,818 [ATRESP] INFO  atclient.ATresponder - Connection successfully established.
+2018-07-10 14:31:35,818 [ATRESP] INFO  atclient.ATresponder - Wait for 5 seconds...
+2018-07-10 14:31:40,823 [ATRESP] DEBUG atclient.ATresponder - ### Set SMS text mode ###
+2018-07-10 14:31:40,823 [ATRESP] DEBUG atclient.ATresponder - TX1: AT+CMGF=1
+2018-07-10 14:31:41,340 [ATRESP] DEBUG atclient.ATresponder - RX2: AT+CMGF=1
+2018-07-10 14:31:41,593 [ATRESP] DEBUG atclient.ATresponder - ### Activate the display of a URC on every received SMS ###
+2018-07-10 14:31:42,125 [ATRESP] DEBUG atclient.ATresponder - RX2: AT+CNMI=1,1
+2018-07-10 14:31:42,378 [ATRESP] DEBUG atclient.ATresponder - ### Retrieve Provider Details ###
+2018-07-10 14:31:42,894 [ATRESP] DEBUG atclient.ATresponder - RX2: AT+COPS?
+2018-07-10 14:31:42,894 [ATRESP] DEBUG atclient.ATresponder - RX2: +COPS: 0,0,"Swisscom",2
+2018-07-10 14:31:42,894 [ATRESP] INFO  atclient.ATresponder - Operator: Swisscom
+2018-07-10 14:31:43,164 [ATRESP] DEBUG atclient.ATresponder - ### Retrieve Signal Strength Details ###
+2018-07-10 14:31:43,680 [ATRESP] DEBUG atclient.ATresponder - RX2: AT+CSQ
+2018-07-10 14:31:43,680 [ATRESP] DEBUG atclient.ATresponder - RX2: +CSQ: 31,99
+2018-07-10 14:31:43,680 [ATRESP] INFO  atclient.ATresponder - SignalStrength: 31,99
+2018-07-10 14:31:43,943 [ATRESP] DEBUG atclient.ATresponder - ### Retrieve Wireless Data Service Details ###
+2018-07-10 14:31:44,466 [ATRESP] DEBUG atclient.ATresponder - RX2: AT+WS46=?
+2018-07-10 14:31:44,466 [ATRESP] DEBUG atclient.ATresponder - RX2: +WS46: (12,22,25)
+2018-07-10 14:31:44,466 [ATRESP] INFO  atclient.ATresponder - Wireless Service:  (12,22,25)
+2018-07-10 14:31:44,729 [ATRESP] DEBUG atclient.ATresponder - ### Retrieve IMSI ###
+2018-07-10 14:31:45,246 [ATRESP] DEBUG atclient.ATresponder - RX2: AT+CIMI
+2018-07-10 14:31:45,247 [ATRESP] DEBUG atclient.ATresponder - RX2: 228012123638957
+2018-07-10 14:31:45,247 [ATRESP] INFO  atclient.ATresponder - IMSI: 228012123638957
+2018-07-10 14:31:45,501 [ATRESP] DEBUG atclient.ATresponder - ### Retrieve IMEI ###
+2018-07-10 14:31:46,032 [ATRESP] DEBUG atclient.ATresponder - RX2: AT+CGSN
+2018-07-10 14:31:46,032 [ATRESP] DEBUG atclient.ATresponder - RX2: 359998040020283
+2018-07-10 14:31:46,032 [ATRESP] INFO  atclient.ATresponder - IMEI: 359998040020283
+2018-07-10 14:31:46,287 [ATRESP] INFO  atclient.ATresponder - Ready to receive incoming data...
+2018-07-10 14:31:46,550 [ATRESP] DEBUG atclient.ATresponder - RX1: +CMTI: "SM", 1
+2018-07-10 14:31:46,551 [ATRESP] INFO  atclient.ATresponder - ### Incoming Short Message ###
+2018-07-10 14:31:46,551 [ATRESP] DEBUG atclient.ATresponder - ### Read SMS Details ###
+2018-07-10 14:31:46,551 [ATRESP] DEBUG atclient.ATresponder - TX1: AT+CMGR=1
+2018-07-10 14:31:47,336 [ATRESP] DEBUG atclient.ATresponder - ### Delete SMS storage ###
+2018-07-10 14:31:47,336 [ATRESP] DEBUG atclient.ATresponder - TX1: AT+CMGD=0,4
+2018-07-10 14:31:47,852 [ATRESP] DEBUG atclient.ATresponder - RX2: AT+CMGR=1
+2018-07-10 14:31:47,852 [ATRESP] DEBUG atclient.ATresponder - RX2: +CMGR: "REC UNREAD","+41797895164",,"18/07/10,14:31:44+08"
+2018-07-10 14:31:47,852 [ATRESP] DEBUG atclient.ATresponder - RX2: The OTP is xxx
+2018-07-10 14:31:47,853 [ATRESP] INFO  atclient.ATresponder - Text SMS: THE OTP IS XXX
+2018-07-10 14:31:48,105 [ATRESP] DEBUG atclient.ATresponder - RX1: AT+CMGD=0,4
 ```
