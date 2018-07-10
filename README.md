@@ -13,7 +13,7 @@ ATClient application can be used to respond to SIM Toolkit requests from the Mob
 
 ### Wireless terminal
 
-This application has been successfully tested on Raspberry PI 3 B+ (raspbian) as well as Windows 10. A wireless terminal from the list below was used. Baudrate set to default 9600.
+This application has been successfully tested on Raspberry PI 3 B+ (raspbian) and Windows 10 desktop PC. A wireless terminal from the list below was used. Baudrate set to default 9600.
 
 - [HCP HIT U8 PHS8 3G terminal](http://electronicshcp.com/product/hit-u8)
 - [HCP HIT U4 LTE terminal](http://electronicshcp.com/product/hit-u4-lte)
