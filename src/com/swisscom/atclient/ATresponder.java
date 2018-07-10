@@ -268,8 +268,7 @@ public class ATresponder extends Thread {
 							if (ackCmdRequired) {
 								// SEND MESSAGE
 								log.info("### 19: SEND MESSAGE (Acknowledge) ###");
-								send("at^sstgi=" + cmdType, "at^sstgi=" + cmdType); // GetInfos		
-								Thread.sleep(500); // ..this seems necessary to avoid ERROR on linux/PH8 modem
+								send("at^sstgi=" + cmdType, "ok"); // GetInfos		
 								send("at^sstr=" + cmdType + ",0", "ok"); // Confirm
 							}
 							ackCmdRequired = false;
