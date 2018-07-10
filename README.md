@@ -19,11 +19,11 @@ This application has been successfully tested on Raspberry PI 3 B+ (raspbian) as
 ### Port selection
 
 1. Unplug the modem
-2. Run: ```sudo dmesg -c```
+2. Run: `sudo dmesg -c`
 3. Plug in the modem and wait a few seconds
-4. Run: ```sudo dmesg```
+4. Run: `sudo dmesg`
 
-You may also trace the syslog while connecting the device: ```sudo tail -f /var/log/syslog```
+You may also trace the syslog while connecting the device: `sudo tail -f /var/log/syslog`
 
 Port descriptor must be something like "/dev/ttyUSB0" (Linux) or "COM4" (Windows).
 
@@ -39,7 +39,7 @@ pi@raspberypi:~/atclient $ java -Dlog4j.configuration=file:log4j.properties -cp 
 
 ### Logfile
 
-Edit the log4j.properties to configure a different log level, if needed. DEBUG level is default.
+Edit the `log4j.properties` to configure a different log level, if needed. DEBUG level is default.
 If you set TRACE level, it will log the complete RX and TX traffic.
 
 ```
