@@ -31,6 +31,8 @@ import org.apache.log4j.*;
 public class ATresponder extends Thread {
 	private Logger log = Logger.getLogger(ATresponder.class);
 
+	private String txtSmsKeyword = "OTP";
+	
 	private int sleepMillis = 250;
 	
 	private BufferedReader buffReader;
@@ -587,6 +589,10 @@ public class ATresponder extends Thread {
 						log.info("Wireless Service: " + list);
 						stampString[2] = list;
 
+					} else if (rsp.contains(txtSmsKeyword)) {
+						// Text Short Message Keyword detected
+						log.info("Text SMS: " + rsp.toUpperCase().trim());
+						// TODO: Do something with the text content... 
 					}
 					
 					else if (rsp.toUpperCase().trim().contains(compareStr) || rsp.toUpperCase().trim().contains("ERROR")) {
