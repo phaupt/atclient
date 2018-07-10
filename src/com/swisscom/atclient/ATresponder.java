@@ -44,6 +44,7 @@ public class ATresponder extends Thread {
 	private volatile static boolean reset;
 
 	private String serialport;
+	private SerialPort comPort;
 	//private int baudrate = 128000; // Please check also your device settings
 	private int baudrate = 9600;
 	private int databits = 8;
@@ -88,8 +89,6 @@ public class ATresponder extends Thread {
 		
 		try {
 			initSerialPort();
-			log.info("Wait for 5 seconds...");
-			Thread.sleep(5000);
 			processAtLoop();
 		} catch (UnsupportedEncodingException e) {
 			e.printStackTrace();
@@ -112,14 +111,27 @@ public class ATresponder extends Thread {
 			log.debug("Index: " + i + "; " + ports[i].getSystemPortName() + "; " + ports[i].getPortDescription() + "; " + ports[i].getDescriptivePortName() );
 		}
 		
-		SerialPort comPort = SerialPort.getCommPort(serialport);
+		comPort = SerialPort.getCommPort(serialport);
 		
 		log.debug("Selected Port: " + comPort.getSystemPortName());
 		
-		log.debug("Opened Port: " + comPort.openPort());
+		while (!comPort.isOpen()) {
+			comPort.openPort();
+			if (!comPort.isOpen()) {
+				log.error("Selected Port not available yet. Trying again in 5 seconds.");
+				try {
+					Thread.sleep(5000);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+			} else {
+				log.debug("Selected Port successfully opened.");
+			}
+		}
+		
 		comPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 100, 0);
 		comPort.setComPortParameters(baudrate, databits, stopbits, parity);
-		
+
 		// LTE Modul set DTR to true
 		log.debug("Set DTR: " + comPort.setDTR());
 		
@@ -127,6 +139,42 @@ public class ATresponder extends Thread {
 		printStream = new PrintStream(comPort.getOutputStream(), true, "UTF-8");
 
 		log.info("Connection successfully established.");
+		
+		log.info("Wait for 5 seconds...");
+		try {
+			Thread.sleep(5000);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+
+		log.debug("### Set SMS text mode ###");
+		send("AT+CMGF=1", "OK");
+
+		log.debug("### Activate the display of a URC on every received SMS ###");
+		send("AT+CNMI=1,1", "OK", false);
+
+		log.debug("### Retrieve Provider Details ###");
+		send("AT+COPS?", "OK", false); // Provider
+
+		log.debug("### Retrieve Signal Strength Details ###");
+		send("AT+CSQ", "OK", false); // Signal Strength
+
+		log.debug("### Retrieve Wireless Data Service Details ###");
+		send("AT+WS46=?", "OK", false); // Wireless Data Service (WDS)
+		// * 12 GSM Digital Cellular Systems (GERAN only) --> 2G
+		// * 22 UTRAN only --> 3G
+		// * 25 3GPP Systems (GERAN, UTRAN and E-UTRAN) --> 4G/LTE
+		// * 28 E-UTRAN only
+		// * 29 GERAN and UTRAN
+		// * 30 GERAN and E-UTRAN
+		// * 31 UTRAN and E-UTRAN
+
+		log.debug("### Retrieve IMSI ###");
+		send("AT+CIMI", "OK", false); // IMSI
+
+		log.debug("### Retrieve IMEI ###");
+		send("AT+CGSN", "OK", false); // IMEI
+
 	}
 	
 	
@@ -176,41 +224,11 @@ public class ATresponder extends Thread {
 		int cmdType = 0;
 		boolean ackCmdRequired = false;
 		
-		log.debug("### Set SMS text mode ###");
-		send("AT+CMGF=1", "OK");
-		
-		log.debug("### Activate the display of a URC on every received SMS ###");
-		send("AT+CNMI=1,1", "OK", false);
-		
-		log.debug("### Retrieve Provider Details ###");
-		send("AT+COPS?", "OK", false); // Provider
-		
-		log.debug("### Retrieve Signal Strength Details ###");
-		send("AT+CSQ", "OK", false); // Signal Strength
-		
-		log.debug("### Retrieve Wireless Data Service Details ###");
-		send("AT+WS46=?", "OK", false); // Wireless Data Service (WDS)
-		// * 12 GSM Digital Cellular Systems (GERAN only) --> 2G
-		// * 22 UTRAN only --> 3G
-		// * 25 3GPP Systems (GERAN, UTRAN and E-UTRAN) --> 4G/LTE
-		// * 28 E-UTRAN only
-		// * 29 GERAN and UTRAN
-		// * 30 GERAN and E-UTRAN
-		// * 31 UTRAN and E-UTRAN
-		
-		log.debug("### Retrieve IMSI ###");
-		send("AT+CIMI", "OK", false); // IMSI
-		
-		log.debug("### Retrieve IMEI ###");
-		send("AT+CGSN", "OK", false); // IMEI
-		
 		log.info("Ready to receive incoming data...");
 
 		// Start endless loop...
 		while (isAlive) {
-			
 			Thread.sleep(sleepMillis);
-
 			send("AT^SSTR?");
 
 			// Listening for incoming notifications (SIM->ME)
