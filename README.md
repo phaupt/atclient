@@ -42,72 +42,103 @@ pi@raspberypi:~ $ git clone https://github.com/phaupt/atclient.git
 pi@raspberypi:~ $ cd atclient
 pi@raspberypi:~/atclient $ mkdir class
 pi@raspberypi:~/atclient $ javac -d ./class -cp "./lib/*" ./src/com/swisscom/atclient/*.java
-pi@raspberypi:~/atclient $ java -Dlog4j.configuration=file:log4j.properties -cp "./class:./lib/*" com.swisscom.atclient.GsmClient /dev/ttyACM1 UE
+pi@raspberypi:~/atclient $ java -Dlog.file=GsmClient-ttyACM1.log -cp "./class:./lib/*" com.swisscom.atclient.GsmClient /dev/ttyACM1 UE
 ```
 #### Nohup
 
 Nohup will detach a process you run from your current console and let it continue when you close the terminal:
-`nohup java -Dlog4j.configuration=file:log4j.properties -cp "./class:./lib/*" com.swisscom.atclient.GsmClient /dev/ttyACM1 UE &`
+`nohup java -Dlog.file=GsmClient-ttyACM1.log -cp "./class:./lib/*" com.swisscom.atclient.GsmClient /dev/ttyACM1 UE &`
 
 ### Logfile
 
-Edit the `log4j.properties` to configure a different log level, if needed. DEBUG level is default.
-If you set TRACE level, it will log the complete RX and TX traffic.
+Edit the `log4j2.xml` to configure a different log level, if needed. DEBUG level is default.
+If you set TRACE level, it will log all RX and TX traffic.
 
-```
-pi@raspberypi:~/atclient $ tail -f GsmClient.log
-```
+With the default log4j configuration you can pass the log file name as a command line parameter: `-Dlog.file=GsmClient-ttyACM1.log`
 
 #### Example logfile output
 ```
-2018-07-10 14:31:34,316 [ATRESP] INFO  atclient.ATresponder - Application started...
-2018-07-10 14:31:34,332 [ATRESP] DEBUG atclient.ATresponder - Attached Shutdown Hook
-2018-07-10 14:31:34,332 [ATRESP] INFO  atclient.ATresponder - Init Serial Port in progress.
-2018-07-10 14:31:34,416 [ATRESP] DEBUG atclient.ATresponder - Index: 0; COM3; Serial0; Intel(R) Active Management Technology - SOL (COM3)
-2018-07-10 14:31:34,416 [ATRESP] DEBUG atclient.ATresponder - Index: 1; COM4; PH8; Cinterion PH8 HSPA USB Com Port (COM4)
-2018-07-10 14:31:34,416 [ATRESP] DEBUG atclient.ATresponder - Index: 2; COM11; PH8; Cinterion PH8 HSPA USB Modem
-2018-07-10 14:31:34,416 [ATRESP] DEBUG atclient.ATresponder - Index: 3; COM8; PH8; Cinterion PH8 HSPA USB NMEA Com Port (COM8)
-2018-07-10 14:31:34,416 [ATRESP] DEBUG atclient.ATresponder - Index: 4; COM9; PH8; Cinterion PH8 HSPA USB reserved Com Port (COM9)
-2018-07-10 14:31:34,416 [ATRESP] DEBUG atclient.ATresponder - Selected Port: COM4
-2018-07-10 14:31:35,417 [ATRESP] DEBUG atclient.ATresponder - Opened Port: true
-2018-07-10 14:31:35,818 [ATRESP] DEBUG atclient.ATresponder - Set DTR: true
-2018-07-10 14:31:35,818 [ATRESP] INFO  atclient.ATresponder - Connection successfully established.
-2018-07-10 14:31:35,818 [ATRESP] INFO  atclient.ATresponder - Wait for 5 seconds...
-2018-07-10 14:31:40,823 [ATRESP] DEBUG atclient.ATresponder - ### Set SMS text mode ###
-2018-07-10 14:31:40,823 [ATRESP] DEBUG atclient.ATresponder - TX1: AT+CMGF=1
-2018-07-10 14:31:41,340 [ATRESP] DEBUG atclient.ATresponder - RX2: AT+CMGF=1
-2018-07-10 14:31:41,593 [ATRESP] DEBUG atclient.ATresponder - ### Activate the display of a URC on every received SMS ###
-2018-07-10 14:31:42,125 [ATRESP] DEBUG atclient.ATresponder - RX2: AT+CNMI=1,1
-2018-07-10 14:31:42,378 [ATRESP] DEBUG atclient.ATresponder - ### Retrieve Provider Details ###
-2018-07-10 14:31:42,894 [ATRESP] DEBUG atclient.ATresponder - RX2: AT+COPS?
-2018-07-10 14:31:42,894 [ATRESP] DEBUG atclient.ATresponder - RX2: +COPS: 0,0,"Swisscom",2
-2018-07-10 14:31:42,894 [ATRESP] INFO  atclient.ATresponder - Operator: Swisscom
-2018-07-10 14:31:43,164 [ATRESP] DEBUG atclient.ATresponder - ### Retrieve Signal Strength Details ###
-2018-07-10 14:31:43,680 [ATRESP] DEBUG atclient.ATresponder - RX2: AT+CSQ
-2018-07-10 14:31:43,680 [ATRESP] DEBUG atclient.ATresponder - RX2: +CSQ: 31,99
-2018-07-10 14:31:43,680 [ATRESP] INFO  atclient.ATresponder - SignalStrength: 31,99
-2018-07-10 14:31:43,943 [ATRESP] DEBUG atclient.ATresponder - ### Retrieve Wireless Data Service Details ###
-2018-07-10 14:31:44,466 [ATRESP] DEBUG atclient.ATresponder - RX2: AT+WS46=?
-2018-07-10 14:31:44,466 [ATRESP] DEBUG atclient.ATresponder - RX2: +WS46: (12,22,25)
-2018-07-10 14:31:44,466 [ATRESP] INFO  atclient.ATresponder - Wireless Service:  (12,22,25)
-2018-07-10 14:31:44,729 [ATRESP] DEBUG atclient.ATresponder - ### Retrieve IMSI ###
-2018-07-10 14:31:45,246 [ATRESP] DEBUG atclient.ATresponder - RX2: AT+CIMI
-2018-07-10 14:31:45,247 [ATRESP] DEBUG atclient.ATresponder - RX2: 228012123638957
-2018-07-10 14:31:45,247 [ATRESP] INFO  atclient.ATresponder - IMSI: 228012123638957
-2018-07-10 14:31:45,501 [ATRESP] DEBUG atclient.ATresponder - ### Retrieve IMEI ###
-2018-07-10 14:31:46,032 [ATRESP] DEBUG atclient.ATresponder - RX2: AT+CGSN
-2018-07-10 14:31:46,032 [ATRESP] DEBUG atclient.ATresponder - RX2: 359998040020283
-2018-07-10 14:31:46,032 [ATRESP] INFO  atclient.ATresponder - IMEI: 359998040020283
-2018-07-10 14:31:46,287 [ATRESP] INFO  atclient.ATresponder - Ready to receive incoming data...
-2018-07-10 14:31:46,550 [ATRESP] DEBUG atclient.ATresponder - RX1: +CMTI: "SM", 1
-2018-07-10 14:31:46,551 [ATRESP] INFO  atclient.ATresponder - ### Incoming Short Message ###
-2018-07-10 14:31:46,551 [ATRESP] DEBUG atclient.ATresponder - ### Read SMS Details ###
-2018-07-10 14:31:46,551 [ATRESP] DEBUG atclient.ATresponder - TX1: AT+CMGR=1
-2018-07-10 14:31:47,336 [ATRESP] DEBUG atclient.ATresponder - ### Delete SMS storage ###
-2018-07-10 14:31:47,336 [ATRESP] DEBUG atclient.ATresponder - TX1: AT+CMGD=0,4
-2018-07-10 14:31:47,852 [ATRESP] DEBUG atclient.ATresponder - RX2: AT+CMGR=1
-2018-07-10 14:31:47,852 [ATRESP] DEBUG atclient.ATresponder - RX2: +CMGR: "REC UNREAD","+41797895164",,"18/07/10,14:31:44+08"
-2018-07-10 14:31:47,852 [ATRESP] DEBUG atclient.ATresponder - RX2: The OTP is xxx
-2018-07-10 14:31:47,853 [ATRESP] INFO  atclient.ATresponder - Text SMS: THE OTP IS XXX
-2018-07-10 14:31:48,105 [ATRESP] DEBUG atclient.ATresponder - RX1: AT+CMGD=0,4
+2018-07-11 10:47:52,391 [INFO] Application started...
+2018-07-11 10:47:52,405 [DEBUG] Attached Shutdown Hook
+2018-07-11 10:47:52,405 [INFO] Init Serial Port in progress.
+2018-07-11 10:47:52,522 [DEBUG] Index: 0; COM3; Serial0; Intel(R) Active Management Technology - SOL (COM3)
+2018-07-11 10:47:52,522 [DEBUG] Index: 1; COM4; PH8; Cinterion PH8 HSPA USB Com Port (COM4)
+2018-07-11 10:47:52,522 [DEBUG] Index: 2; COM9; PH8; Cinterion PH8 HSPA USB reserved Com Port (COM9)
+2018-07-11 10:47:52,522 [DEBUG] Index: 3; COM8; PH8; Cinterion PH8 HSPA USB NMEA Com Port (COM8)
+2018-07-11 10:47:52,522 [DEBUG] Index: 4; COM11; PH8; Cinterion PH8 HSPA USB Modem
+2018-07-11 10:47:52,522 [DEBUG] Selected Port: COM4
+2018-07-11 10:47:53,529 [DEBUG] Selected Port successfully opened.
+2018-07-11 10:47:53,945 [DEBUG] Set DTR: true
+2018-07-11 10:47:53,945 [INFO] Connection successfully established.
+2018-07-11 10:47:53,945 [INFO] Wait for 5 seconds...
+2018-07-11 10:47:58,945 [DEBUG] ### Set SMS text mode ###
+2018-07-11 10:47:58,946 [DEBUG] TX1: AT+CMGF=1
+2018-07-11 10:47:59,262 [DEBUG] RX2: AT+CMGF=1
+2018-07-11 10:47:59,331 [DEBUG] ### Activate the display of a URC on every received SMS ###
+2018-07-11 10:47:59,647 [DEBUG] RX2: AT+CNMI=1,1
+2018-07-11 10:47:59,710 [DEBUG] ### Retrieve Provider Details ###
+2018-07-11 10:48:00,048 [DEBUG] RX2: AT+COPS?
+2018-07-11 10:48:00,055 [DEBUG] RX2: +COPS: 0,0,"Swisscom",2
+2018-07-11 10:48:00,055 [INFO] Operator: Swisscom
+2018-07-11 10:48:00,133 [DEBUG] ### Retrieve Signal Strength Details ###
+2018-07-11 10:48:00,450 [DEBUG] RX2: AT+CSQ
+2018-07-11 10:48:00,450 [DEBUG] RX2: +CSQ: 30,99
+2018-07-11 10:48:00,450 [INFO] SignalStrength: 30,99
+2018-07-11 10:48:00,516 [DEBUG] ### Retrieve Wireless Data Service Details ###
+2018-07-11 10:48:00,835 [DEBUG] RX2: AT+WS46=?
+2018-07-11 10:48:00,835 [DEBUG] RX2: +WS46: (12,22,25)
+2018-07-11 10:48:00,835 [INFO] Wireless Service:  (12,22,25)
+2018-07-11 10:48:00,898 [DEBUG] ### Retrieve IMSI ###
+2018-07-11 10:48:01,208 [DEBUG] RX2: AT+CIMI
+2018-07-11 10:48:01,208 [DEBUG] RX2: 228012123638957
+2018-07-11 10:48:01,208 [INFO] IMSI: 228012123638957
+2018-07-11 10:48:01,267 [DEBUG] ### Retrieve IMEI ###
+2018-07-11 10:48:01,599 [DEBUG] RX2: AT+CGSN
+2018-07-11 10:48:01,599 [DEBUG] RX2: 359998040020283
+2018-07-11 10:48:01,599 [INFO] IMEI: 359998040020283
+2018-07-11 10:48:01,653 [DEBUG] ### Retrieve MSISDN ###
+2018-07-11 10:48:01,985 [DEBUG] RX2: AT+CNUM
+2018-07-11 10:48:01,985 [DEBUG] RX2: +CNUM: "\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00","+41796691746",145
+2018-07-11 10:48:02,047 [INFO] Ready to receive incoming data...
+2018-07-11 10:49:18,100 [DEBUG] RX1: ^SSTN: 33
+2018-07-11 10:49:18,100 [INFO] ### 33: DISPLAY TEXT ####
+2018-07-11 10:49:18,101 [DEBUG] TX1: AT^SSTGI=33
+2018-07-11 10:49:18,415 [DEBUG] RX2: at^sstgi=33
+2018-07-11 10:49:18,415 [DEBUG] RX2: ^SSTGI: 33,129,"0074006500730074002E0063006F006D003A00200044006F00200079006F0075002000770061006E007400200074006F0020006C006F00670069006E00200074006F00200063006F00720070006F0072006100740065002000560050004E003F",0,1,0
+2018-07-11 10:49:18,415 [INFO] UI Text="test.com: Do you want to login to corporate VPN?"
+2018-07-11 10:49:18,478 [DEBUG] CANCEL: false | STKTIMEOUT: false | RESET: false
+2018-07-11 10:49:18,479 [DEBUG] TX1: AT^SSTR=33,0
+2018-07-11 10:49:18,531 [DEBUG] RX1: at^sstr=33,0
+2018-07-11 10:49:18,531 [DEBUG] RX1: ^SSTN: 35
+2018-07-11 10:49:18,531 [INFO] ### 35: GET INPUT ####
+2018-07-11 10:49:18,531 [DEBUG] TX1: AT^SSTGI=35
+2018-07-11 10:49:18,917 [DEBUG] CANCEL: false | STKTIMEOUT: false | RESET: false
+2018-07-11 10:49:18,917 [DEBUG] TX1: AT^SSTR=35,0,,003100320033003400350036
+2018-07-11 10:49:19,232 [DEBUG] RX2: at^sstgi=35
+2018-07-11 10:49:19,233 [DEBUG] RX2: ^SSTGI: 35,4,"002000410075007400680065006E0074006900630061007400650020007700690074006800200079006F007500720020004D006F00620069006C0065002000490044002000500049004E",1,15,"",1,0
+2018-07-11 10:49:19,233 [INFO] UI Text=" Authenticate with your Mobile ID PIN"
+2018-07-11 10:49:19,233 [DEBUG] RX2: at^sstr=35,0,,003100320033003400350036
+2018-07-11 10:49:19,602 [DEBUG] RX1: ^SSTN: 19
+2018-07-11 10:49:19,602 [INFO] ### 19: SEND MESSAGE (Acknowledge) ###
+2018-07-11 10:49:19,602 [DEBUG] TX1: AT^SSTGI=19
+2018-07-11 10:49:19,981 [DEBUG] TX1: AT^SSTR=19,0
+2018-07-11 10:49:20,303 [DEBUG] RX2: at^sstgi=19
+2018-07-11 10:49:20,304 [DEBUG] RX2: ^SSTGI: 19,0,"",1,0
+2018-07-11 10:49:20,304 [DEBUG] RX2: at^sstr=19,0
+2018-07-11 10:49:21,321 [DEBUG] RX1: ^SSTN: 19
+2018-07-11 10:49:21,322 [INFO] ### 19: SEND MESSAGE (Acknowledge) ###
+2018-07-11 10:49:21,322 [DEBUG] TX1: AT^SSTGI=19
+2018-07-11 10:49:21,637 [DEBUG] RX2: at^sstgi=19
+2018-07-11 10:49:21,637 [DEBUG] RX2: ^SSTGI: 19,0,"",1,0
+2018-07-11 10:49:21,705 [DEBUG] TX1: AT^SSTR=19,0
+2018-07-11 10:49:22,022 [DEBUG] RX2: at^sstr=19,0
+2018-07-11 10:49:22,986 [DEBUG] RX1: ^SSTN: 19
+2018-07-11 10:49:22,987 [INFO] ### 19: SEND MESSAGE (Acknowledge) ###
+2018-07-11 10:49:22,987 [DEBUG] TX1: AT^SSTGI=19
+2018-07-11 10:49:23,308 [DEBUG] RX2: at^sstgi=19
+2018-07-11 10:49:23,308 [DEBUG] RX2: ^SSTGI: 19,0,"",1,0
+2018-07-11 10:49:23,370 [DEBUG] TX1: AT^SSTR=19,0
+2018-07-11 10:49:23,687 [DEBUG] RX2: at^sstr=19,0
+2018-07-11 10:49:24,524 [DEBUG] RX1: ^SSTN: 254
+2018-07-11 10:49:24,525 [INFO] ### 254: SIM Applet returns to main menu ####
 ```

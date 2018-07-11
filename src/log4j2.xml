@@ -1,0 +1,27 @@
+<Configuration status="WARN">
+   <Properties>
+      <Property name="log-path">logs</Property>
+      "log4j.properties"
+   </Properties>
+   <Appenders>
+      <Console name="console" target="SYSTEM_OUT">
+         <PatternLayout pattern="%d [%p] %m%n"/>
+      </Console>
+      <RollingFile name="reporter" fileName="${sys:log.file}" filePattern="${sys:log.file}-%d{MM-dd-yyyy}-%i.log">
+         <PatternLayout>
+            <Pattern>%d [%p] %m%n</Pattern>
+         </PatternLayout>
+         <Policies>
+            <TimeBasedTriggeringPolicy/>
+            <SizeBasedTriggeringPolicy size="50 MB"/>
+         </Policies>
+         <DefaultRolloverStrategy max="4"/>
+      </RollingFile>
+   </Appenders>
+   <Loggers>
+      <Root level="debug" additivity="false">
+         <AppenderRef ref="console"/>
+         <AppenderRef ref="reporter"/>
+      </Root>
+   </Loggers>
+</Configuration>

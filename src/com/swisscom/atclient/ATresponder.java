@@ -7,10 +7,12 @@ package com.swisscom.atclient;
 import com.fazecast.jSerialComm.*;
 import java.io.*;
 
-import org.apache.log4j.*;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class ATresponder extends Thread {
-	private Logger log = Logger.getLogger(ATresponder.class);
+	
+	private final Logger log = LogManager.getLogger(ATresponder.class.getName());
 
 	private String txtSmsKeyword = "OTP";
 	
@@ -62,6 +64,7 @@ public class ATresponder extends Thread {
 	
 	public void run() {
 		Thread.currentThread().setName("ATRESP");
+		
 		log.info("Application started...");
 
 		attachShutDownHook();
