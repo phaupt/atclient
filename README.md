@@ -32,6 +32,7 @@ Port descriptor must be something like "/dev/ttyUSB0" (Linux) or "COM4" (Windows
 #### Set baud rate
 
 Set baud rate to 115200: `sudo stty -F /dev/ttyUSB0 115200`
+
 Verify baud rate: `sudo stty -F /dev/ttyUSB0`
 
 ### Clone GIT, compile and run
