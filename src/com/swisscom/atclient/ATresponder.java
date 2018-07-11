@@ -9,44 +9,23 @@ import java.io.*;
 
 import org.apache.log4j.*;
 
-/*
- * send("AT+COPS?", "OK"); // Provider
- * send("AT+CSQ", "OK"); // Signal Strength
- * send("AT+WS46=?", "OK"); // Wireless Data Service (WDS)
- *     12 GSM Digital Cellular Systems (GERAN only) --> 2G
- *     22 UTRAN only --> 3G
- *     25 3GPP Systems (GERAN, UTRAN and E-UTRAN) --> 4G/LTE
- *     28 E-UTRAN only
- *     29 GERAN and UTRAN
- *     30 GERAN and E-UTRAN
- *     31 UTRAN and E-UTRAN
- * send("AT+WS46?", "OK"); // Selected Wireless Data Service (WDS)
- * send("AT+WS46=12", "OK"); // Wireless Data Service (WDS)
- * send("AT^SMSO", "^SHUTDOWN"); // Restart
- * send("AT+WS46?", "OK"); // Selected Wireless Data Service (WDS)
- * send("AT+CIMI", "OK"); // IMSI
- * send("AT+CGSN", "OK"); // IMEI
- */
-
 public class ATresponder extends Thread {
 	private Logger log = Logger.getLogger(ATresponder.class);
 
 	private String txtSmsKeyword = "OTP";
 	
-	private int sleepMillis = 250;
+	private int sleepMillis = 50;
 	
 	private BufferedReader buffReader;
 	private PrintStream printStream;
 	
-	// User specific behaviour for automated testing
 	private volatile static boolean cancel;
 	private volatile static boolean stk_timeout;
 	private volatile static boolean reset;
 
 	private String serialport;
 	private SerialPort comPort;
-	//private int baudrate = 128000; // Please check also your device settings
-	private int baudrate = 9600;
+	private int baudrate = 115200;
 	private int databits = 8;
 	private int stopbits = 1;
 	private int parity = 0;
@@ -174,7 +153,9 @@ public class ATresponder extends Thread {
 
 		log.debug("### Retrieve IMEI ###");
 		send("AT+CGSN", "OK", false); // IMEI
-
+		
+		log.debug("### Retrieve MSISDN ###");
+		send("AT+CNUM", "OK", false); // MSISDN
 	}
 	
 	
@@ -203,9 +184,6 @@ public class ATresponder extends Thread {
 	public void rebootAndExit(){
 		log.info("### Send SHUTDOWN Command ###");
 		send("AT^SMSO", "^SHUTDOWN"); // Restart
-		
-		log.info("The GSM Module will now perform a reboot.");
-		
 		isAlive = false; // will exit the while loop and terminate the application	
 	}
 
@@ -229,7 +207,7 @@ public class ATresponder extends Thread {
 		// Start endless loop...
 		while (isAlive) {
 			Thread.sleep(sleepMillis);
-			send("AT^SSTR?");
+			send("AT^SSTR?"); // Poll for incoming data..
 
 			// Listening for incoming notifications (SIM->ME)
 			try {
@@ -239,14 +217,6 @@ public class ATresponder extends Thread {
 
 					if (rcvStr != null && rcvStr.length() > 0) {
 						
-						/*
-						 * Hide these content (status response):
-						 * 2018-05-29 09:41:06,732 [ATRESP] DEBUG hit55.ATresponder - TX?: AT^SSTR?
-						 * 2018-05-29 09:41:06,983 [ATRESP] DEBUG hit55.ATresponder - RX1: AT^SSTR?
-						 * 2018-05-29 09:41:06,983 [ATRESP] DEBUG hit55.ATresponder - RX1: ^SSTR: 2,0
-						 * 2018-05-29 09:41:06,983 [ATRESP] DEBUG hit55.ATresponder - RX1: OK
-						 */
-						//TODO: DEBUG
 						if (!rcvStr.contains("^SSTR") && !rcvStr.contains("OK")){
 							log.debug("RX1: " + rcvStr);
 							getMeTextAscii(rcvStr); // may set the flag such as CANCEL
@@ -367,7 +337,7 @@ public class ATresponder extends Thread {
 									}
 								} 
 
-								send("at^sstr=" + cmdType + "," + code); // Confirm
+								send("at^sstr=" + cmdType + "," + code, "at^sstr=" + cmdType + "," + code); // Confirm
 							}
 							ackCmdRequired = false;
 							break;
@@ -463,7 +433,7 @@ public class ATresponder extends Thread {
 								}
 							} 
 
-							send("at^sstr=" + cmdType + "," + code); // Confirm
+							send("at^sstr=" + cmdType + "," + code, "at^sstr=" + cmdType + "," + code); // Confirm
 							break;
 						case 36:
 							// SELECT ITEM
@@ -553,8 +523,8 @@ public class ATresponder extends Thread {
 				
 				Thread.sleep(sleepMillis);
 				
-				if ((System.currentTimeMillis() - startTime) >= 5000){
-					log.error("Timeout when waiting for expected response = '" + compareStr + "'");
+				if ((System.currentTimeMillis() - startTime) >= 3000){
+					log.error("Didn't get expected response '" + compareStr + "' whithin 3 second.");
 					return false;
 				}
 		
@@ -632,12 +602,12 @@ public class ATresponder extends Thread {
 	private void getMeTextAscii(String rsp) throws UnsupportedEncodingException {
 		String textUcs2 = rsp;
 		// Only in case of UCS2 Mode: Convert to ASCII
-		if (!rsp.contains("+CMGR") && rsp.indexOf(",\"") != -1 && rsp.indexOf("\",") != -1 && rsp.charAt(rsp.indexOf(",\"") + 2) != '"') {
+		if (rsp.contains("^SSTGI:") && rsp.indexOf(",\"") != -1 && rsp.indexOf("\",") != -1 && rsp.charAt(rsp.indexOf(",\"") + 2) != '"') {
 			// Found some possible text content
 			try {
 				textUcs2 = rsp.substring(rsp.indexOf(",\"") + 2, rsp.indexOf("\",", rsp.indexOf(",\"") + 2));
 				textUcs2 = new String(hexToByte(textUcs2), "UTF-16");
-				log.debug("UI Text=\"" + textUcs2 + "\"");
+				log.info("UI Text=\"" + textUcs2 + "\"");
 			} catch (Exception e) {
 				//do nothing...
 			}
