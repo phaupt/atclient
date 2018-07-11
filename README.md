@@ -47,7 +47,7 @@ pi@raspberypi:~/atclient $ java -Dlog.file=GsmClient-ttyACM1.log -cp "./class:./
 #### Nohup
 
 Nohup will detach a process you run from your current console and let it continue when you close the terminal:
-`nohup java -Dlog.file=GsmClient-ttyACM1.log -cp "./class:./lib/*" com.swisscom.atclient.GsmClient /dev/ttyACM1 UE &`
+`nohup java -Dlog.file=GsmClient-COM4.log -Dlog4j.configurationFile=log4j2.xml -cp "./class:./lib/*" com.swisscom.atclient.GsmClient /dev/ttyACM1 UE &`
 
 ### Logfile
 
