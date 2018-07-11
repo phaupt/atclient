@@ -13,12 +13,12 @@ ATClient application can be used to respond to SIM Toolkit requests from the Mob
 
 ### Wireless terminal
 
-This application has been successfully tested on Raspberry PI 3 B+ (raspbian) and Windows 10 desktop PC. A wireless terminal from the list below was used. Baudrate set to default 9600.
+This application has been successfully tested on Raspberry PI 3 B+ (raspbian) and Windows 10 desktop PC. A wireless terminal from the list below was used. 
 
 - [HCP HIT U8 PHS8 3G terminal](http://electronicshcp.com/product/hit-u8)
 - [HCP HIT U4 LTE terminal](http://electronicshcp.com/product/hit-u4-lte)
 
-### Port selection
+### Serial port configuration
 
 1. Unplug the modem
 2. Run: `sudo dmesg -c`
@@ -28,6 +28,11 @@ This application has been successfully tested on Raspberry PI 3 B+ (raspbian) an
 You may also trace the syslog while connecting the device: `sudo tail -f /var/log/syslog`
 
 Port descriptor must be something like "/dev/ttyUSB0" (Linux) or "COM4" (Windows).
+
+#### Set baud rate
+
+Set baud rate to 115200: `sudo stty -F /dev/ttyUSB0 115200`
+Verify baud rate: `sudo stty -F /dev/ttyUSB0`
 
 ### Clone GIT, compile and run
 
