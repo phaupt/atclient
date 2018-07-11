@@ -21,7 +21,7 @@
    <Loggers>
       <Root level="debug" additivity="false">
          <AppenderRef ref="console"/>
-         <AppenderRef ref="reporter"/>
+         <!-- <AppenderRef ref="reporter"/> -->
       </Root>
    </Loggers>
 </Configuration>

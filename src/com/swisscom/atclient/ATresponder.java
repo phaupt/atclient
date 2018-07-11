@@ -340,7 +340,7 @@ public class ATresponder extends Thread {
 									}
 								} 
 
-								send("at^sstr=" + cmdType + "," + code, "at^sstr=" + cmdType + "," + code); // Confirm
+								send("at^sstr=" + cmdType + "," + code, "SST"); // Confirm
 							}
 							ackCmdRequired = false;
 							break;
@@ -436,7 +436,7 @@ public class ATresponder extends Thread {
 								}
 							} 
 
-							send("at^sstr=" + cmdType + "," + code, "at^sstr=" + cmdType + "," + code); // Confirm
+							send("at^sstr=" + cmdType + "," + code, "SST"); // Confirm
 							break;
 						case 36:
 							// SELECT ITEM
@@ -500,20 +500,20 @@ public class ATresponder extends Thread {
 			if (!cmd.contains("SSTR?") && logTx){
 				log.debug("TX1: " + cmd.toUpperCase().trim());
 			}
-			log.trace(">>>" + cmd);
+			log.trace(">>> " + cmd);
 			printStream.write((cmd + "\r\n").getBytes());
 		} catch (IOException e) {
 			log.error("send() IOException : ", e);
 		}
 	}
 
-	private synchronized boolean receive(String expectedRsp) {
+	private synchronized boolean receive(String containsRsp) {
 		try {
 			String compareStr;
-			if (expectedRsp == null)
+			if (containsRsp == null)
 				compareStr = "OK";
 			else
-				compareStr = expectedRsp.toUpperCase();
+				compareStr = containsRsp.toUpperCase();
 
 			long startTime = System.currentTimeMillis();
 
@@ -526,14 +526,14 @@ public class ATresponder extends Thread {
 				
 				Thread.sleep(sleepMillis);
 				
-				if ((System.currentTimeMillis() - startTime) >= 3000){
-					log.error("Didn't get expected response '" + compareStr + "' whithin 3 second.");
+				if ((System.currentTimeMillis() - startTime) >= 10000){
+					log.error("Didn't get expected response '" + compareStr + "' in 10 seconds.");
 					return false;
 				}
 		
 				while (isAlive && buffReader.ready() && (rsp = buffReader.readLine()) != null) {
 					
-					log.trace("<<<" + rsp);
+					log.trace("<<< " + rsp);
 					
 					if (rsp != null && rsp.length() > 0 && !rsp.contains("OK") && !rsp.contains("^SSTR")) {
 						log.debug("RX2: " + rsp);
