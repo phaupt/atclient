@@ -27,7 +27,7 @@ public class ATresponder extends Thread {
 
 	private String serialport;
 	private SerialPort comPort;
-	private int baudrate = 115200;
+	private int baudrate = 9600;
 	private int databits = 8;
 	private int stopbits = 1;
 	private int parity = 0;
