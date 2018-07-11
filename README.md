@@ -44,6 +44,10 @@ pi@raspberypi:~/atclient $ mkdir class
 pi@raspberypi:~/atclient $ javac -d ./class -cp "./lib/*" ./src/com/swisscom/atclient/*.java
 pi@raspberypi:~/atclient $ java -Dlog4j.configuration=file:log4j.properties -cp "./class:./lib/*" com.swisscom.atclient.GsmClient /dev/ttyACM1 UE
 ```
+#### Nohup
+
+Nohup will detach a process you run from your current console and let it continue when you close the terminal:
+`nohup java -Dlog4j.configuration=file:log4j.properties -cp "./class:./lib/*" com.swisscom.atclient.GsmClient /dev/ttyACM1 UE &`
 
 ### Logfile
 
