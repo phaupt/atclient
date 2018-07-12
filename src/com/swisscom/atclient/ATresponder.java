@@ -141,6 +141,22 @@ public class ATresponder extends Thread {
 		// 3G = UTRAN is Universal Terrestial Radio Access Network 
 		// 4G = E-UTRAN (Evolved Universal Terrestial Radio Access Network)
 		
+		// # Registration States (SECOND number of AT+CREG?) from http://m2msupport.net/m2msupport/atcreg-network-registration/
+		//		REGISTRATION_STATES = {
+		//			    0  : 'Not Reg/not searching', # not registered, MT is not currently searching a new operator to register to
+		//			    1  : 'Reg/Home net',          # registered, home network
+		//			    2  : 'Not Reg/searching',     # not registered, but MT is currently searching a new operator to register to
+		//			    3  : 'Reg denied',            # registration denied
+		//			    4  : 'Unknown (no coverage)', # unknown (e.g. out of GERAN/UTRAN/E-UTRAN coverage)
+		//			    5  : 'Reg/roaming',           # registered, roaming
+		//			    6  : 'Reg/SMS only/Home net', # registered for "SMS only", home network (applicable only when indicates E-UTRAN)
+		//			    7  : 'Reg/SMS only/roaming',  # registered for "SMS only", roaming (applicable only when indicates E-UTRAN)
+		//			    8  : 'Emergeny only',         # attached for emergency bearer services only (see NOTE 2) (not applicable)
+		//			    9  : 'Reg/No CSFB/Home net',  # registered for "CSFB not preferred", home network (applicable only when indicates E-UTRAN)
+		//			    10 : 'Reg/No CSFB/roaming'    # registered for "CSFB not preferred", roaming (applicable only when indicates E-UTRAN)
+		//			    }
+		send("AT+CREG?", "+CREG", false); // REGISTRATION_STATE
+		
 		send("AT+CIMI", "AT+CIMI", false); // IMSI
 
 		send("AT+CGSN", "AT+CGSN", false); // IMEI
@@ -211,7 +227,7 @@ public class ATresponder extends Thread {
 			if ((System.currentTimeMillis() - inactivityTimer) >= 60000){
 				// Check every 1min of inactivity
 				inactivityTimer = System.currentTimeMillis();
-				send("AT+WS46?", "+WS46", false); // Wireless Data Service (WDS) Selected
+				send("AT+CREG?", "+CREG", false); // REGISTRATION_STATE
 			} else {
 				send("AT^SSTR?"); // Poll for incoming data.. don't expect "ok" as response as sometimes there is a different response.
 			}			
