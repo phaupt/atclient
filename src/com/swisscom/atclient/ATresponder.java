@@ -1,7 +1,3 @@
-/**
- * @author <a href="mailto:philipp.haupt@swisscom.com">Philipp Haupt</a>
- */
-
 package com.swisscom.atclient;
 
 import com.fazecast.jSerialComm.*;
@@ -195,6 +191,7 @@ public class ATresponder extends Thread {
 	public void shutdownAndExit(){
 		log.info("### Send SHUTDOWN Command and exit application ###");
 		send("AT^SMSO", "^SHUTDOWN"); // Restart
+		closingPort();
 		isAlive = false; // will exit the while loop and terminate the application	
 	}
 
@@ -220,7 +217,7 @@ public class ATresponder extends Thread {
 		// Start endless loop...
 		while (isAlive) {
 			Thread.sleep(sleepMillis);
-			send("AT^SSTR?"); // Poll for incoming data..
+			send("AT^SSTR?", "ok"); // Poll for incoming data..
 
 			// Listening for incoming notifications (SIM->ME)
 			try {
@@ -599,6 +596,10 @@ public class ATresponder extends Thread {
 	}
 
 	private void closingPort() {
+		if (comPort.closePort()) {
+			log.debug("Serial Port closed.");
+		}
+		
 		try {
 			if (buffReader != null){
 				buffReader.close();

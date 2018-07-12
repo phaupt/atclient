@@ -1,7 +1,3 @@
-/**
- * @author <a href="mailto:Philipp.Haupt@swisscom.com">Philipp Haupt</a>
- */
-
 package com.swisscom.atclient;
 
 import com.swisscom.atclient.ATresponder;
