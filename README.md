@@ -36,16 +36,41 @@ Port descriptor must be something like "/dev/ttyUSB0" (Linux) or "COM4" (Windows
 Default baud rate is 9600.
 Verify baud rate: `sudo stty -F /dev/ttyUSB0`
 
-### Clone GIT, compile and run
+### How To
 
+#### Clone GIT repository
 ```
 pi@raspberypi:~ $ git clone https://github.com/phaupt/atclient.git
-pi@raspberypi:~ $ cd atclient
+```
+
+#### Compile java source
+```
 pi@raspberypi:~/atclient $ mkdir class
 pi@raspberypi:~/atclient $ javac -d ./class -cp "./lib/*" ./src/com/swisscom/atclient/*.java
-pi@raspberypi:~/atclient $ java -Dlog.file=GsmClient-COM4.log -Dlog4j.configurationFile=log4j2.xml -cp "./class:./lib/*" com.swisscom.atclient.GsmClient /dev/ttyACM1 UE
 ```
-#### Nohup
+
+#### Run the application
+
+##### Show client parameters
+```
+pi@raspberypi:~/atclient $ java -Dlog.file=GsmClient-COM4.log -Dlog4j.configurationFile=log4j2.xml -cp "./class:./lib/*" com.swisscom.atclient.GsmClient /dev/ttyACM1 UE
+
+*** GSM AT Client ***
+
+Usage: GsmClient <PORT> <CMD>
+
+<PORT>	Serial Port
+<CMD>	List of supported commands:
+	ER	Switch to Explicit Response (ER) and reboot
+	AR	Switch to Automatic Response (AR, Factory Default) and reboot
+	UE	Run Alauda User Emulation (UE) in Explicit Response Mode
+```
+
+##### Example usage: User Emulation mode (UE)
+
+`java -Dlog.file=GsmClient-COM4.log -Dlog4j.configurationFile=log4j2.xml -cp "./class:./lib/*" com.swisscom.atclient.GsmClient /dev/ttyACM1 UE`
+
+##### Nohup
 
 Nohup will detach a process you run from your current console and let it continue when you close the terminal:
 `nohup java -Dlog.file=GsmClient-COM4.log -Dlog4j.configurationFile=log4j2.xml -cp "./class:./lib/*" com.swisscom.atclient.GsmClient /dev/ttyACM1 UE &`
