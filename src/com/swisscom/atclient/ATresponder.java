@@ -208,8 +208,8 @@ public class ATresponder extends Thread {
 		while (isAlive) {
 			Thread.sleep(sleepMillis);
 			
-			if ((System.currentTimeMillis() - inactivityTimer) >= 30000){
-				// Check every 30s of inactivity
+			if ((System.currentTimeMillis() - inactivityTimer) >= 60000){
+				// Check every 1min of inactivity
 				inactivityTimer = System.currentTimeMillis();
 				send("AT+WS46?", "+WS46", false); // Wireless Data Service (WDS) Selected
 			} else {
