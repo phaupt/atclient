@@ -61,9 +61,9 @@ Usage: GsmClient <PORT> <CMD>
 
 <PORT>	Serial Port
 <CMD>	List of supported commands:
-	ER	Switch to Explicit Response (ER) and reboot
-	AR	Switch to Automatic Response (AR, Factory Default) and reboot
-	UE	Run Alauda User Emulation (UE) in Explicit Response Mode
+	ER	Switch to Explicit Response (ER) and shutdown
+	AR	Switch to Automatic Response (AR, Factory Default) and shutdown
+	UE	Run continues Alauda User Emulation (UE) in Explicit Response Mode
 ```
 
 ##### Example usage: User Emulation mode (UE)
