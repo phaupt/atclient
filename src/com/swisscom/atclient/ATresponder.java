@@ -129,6 +129,7 @@ public class ATresponder extends Thread {
 		send("AT+CSQ", "+CSQ", false); // Signal Strength
 		
 		send("AT+WS46=?", "+WS46", false); // Wireless Data Service (WDS) List
+		send("AT+WS46=28", "+WS46", false); // Wireless Data Service (WDS) List
 		send("AT+WS46?", "+WS46", false); // Wireless Data Service (WDS) Selected
 		// * 12 GSM Digital Cellular Systems
 		// * 22 UTRAN only 
@@ -226,7 +227,7 @@ public class ATresponder extends Thread {
 						
 						if (!rcvStr.contains("^SSTR") && !rcvStr.contains("OK")){
 							inactivityTimer = System.currentTimeMillis(); // due to activity, reset the inactivty-timer
-							log.debug("RX1: " + rcvStr);
+							log.debug("RX " + rcvStr);
 							getMeTextAscii(rcvStr); // may set the flag such as CANCEL
 						}
 					}	
@@ -463,7 +464,7 @@ public class ATresponder extends Thread {
 	public void send(String cmd, boolean logTx) {
 		try {
 			if (!cmd.contains("SSTR?") && logTx){
-				log.debug("TX1: " + cmd.toUpperCase().trim());
+				log.debug("TX " + cmd.toUpperCase().trim());
 			}
 			log.trace(">>> " + cmd);
 			printStream.write((cmd + "\r\n").getBytes());
@@ -501,7 +502,7 @@ public class ATresponder extends Thread {
 					log.trace("<<< " + rsp);
 					
 					if (rsp != null && rsp.length() > 0 && !rsp.contains("OK") && !rsp.contains("^SSTR")) {
-						log.debug("RX2: " + rsp);
+						log.debug("RX " + rsp);
 						getMeTextAscii(rsp);
 					}
 					
