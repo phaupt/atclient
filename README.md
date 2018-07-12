@@ -53,7 +53,7 @@ pi@raspberypi:~/atclient $ javac -d ./class -cp "./lib/*" ./src/com/swisscom/atc
 
 ##### Show client parameters
 ```
-pi@raspberypi:~/atclient $ java -Dlog.file=GsmClient-COM4.log -Dlog4j.configurationFile=log4j2.xml -cp "./class:./lib/*" com.swisscom.atclient.GsmClient /dev/ttyACM1 UE
+pi@raspberypi:~/atclient $ java -Dlog.file=GsmClient-ttyACM1.log -Dlog4j.configurationFile=log4j2.xml -cp "./class:./lib/*" com.swisscom.atclient.GsmClient /dev/ttyACM1 UE
 
 *** GSM AT Client ***
 
@@ -68,13 +68,13 @@ Usage: GsmClient <PORT> <CMD>
 
 ##### Example usage: User Emulation mode (UE)
 
-`pi@raspberypi:~/atclient $ java -Dlog.file=GsmClient-COM4.log -Dlog4j.configurationFile=log4j2.xml -cp "./class:./lib/*" com.swisscom.atclient.GsmClient /dev/ttyACM1 UE`
+`pi@raspberypi:~/atclient $ java -Dlog.file=GsmClient-ttyACM1.log -Dlog4j.configurationFile=log4j2.xml -cp "./class:./lib/*" com.swisscom.atclient.GsmClient /dev/ttyACM1 UE`
 
 ##### Nohup
 
 Nohup will detach a process you run from your current console and let it continue when you close the terminal:
 
-`pi@raspberypi:~/atclient $ nohup java -Dlog.file=GsmClient-COM4.log -Dlog4j.configurationFile=log4j2.xml -cp "./class:./lib/*" com.swisscom.atclient.GsmClient /dev/ttyACM1 UE &`
+`pi@raspberypi:~/atclient $ nohup java -Dlog.file=GsmClient-ttyACM1.log -Dlog4j.configurationFile=log4j2.xml -cp "./class:./lib/*" com.swisscom.atclient.GsmClient /dev/ttyACM1 UE &`
 
 ### Logfile
 
