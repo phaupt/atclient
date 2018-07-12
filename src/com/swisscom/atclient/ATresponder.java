@@ -217,7 +217,7 @@ public class ATresponder extends Thread {
 		// Start endless loop...
 		while (isAlive) {
 			Thread.sleep(sleepMillis);
-			send("AT^SSTR?", "ok"); // Poll for incoming data..
+			send("AT^SSTR?"); // Poll for incoming data.. don't expect "ok" as response as sometimes there is a different response.
 
 			// Listening for incoming notifications (SIM->ME)
 			try {
