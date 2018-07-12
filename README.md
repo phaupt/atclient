@@ -68,12 +68,13 @@ Usage: GsmClient <PORT> <CMD>
 
 ##### Example usage: User Emulation mode (UE)
 
-`java -Dlog.file=GsmClient-COM4.log -Dlog4j.configurationFile=log4j2.xml -cp "./class:./lib/*" com.swisscom.atclient.GsmClient /dev/ttyACM1 UE`
+`pi@raspberypi:~/atclient $ java -Dlog.file=GsmClient-COM4.log -Dlog4j.configurationFile=log4j2.xml -cp "./class:./lib/*" com.swisscom.atclient.GsmClient /dev/ttyACM1 UE`
 
 ##### Nohup
 
 Nohup will detach a process you run from your current console and let it continue when you close the terminal:
-`nohup java -Dlog.file=GsmClient-COM4.log -Dlog4j.configurationFile=log4j2.xml -cp "./class:./lib/*" com.swisscom.atclient.GsmClient /dev/ttyACM1 UE &`
+
+`pi@raspberypi:~/atclient $ nohup java -Dlog.file=GsmClient-COM4.log -Dlog4j.configurationFile=log4j2.xml -cp "./class:./lib/*" com.swisscom.atclient.GsmClient /dev/ttyACM1 UE &`
 
 ### Logfile
 
