@@ -66,13 +66,21 @@ Usage: GsmClient <PORT> <CMD>
 	UE	Run continues Alauda User Emulation (UE) in Explicit Response Mode
 ```
 
+##### Example usage: Switch to Explicit Response (ER) mode
+
+As a first step, you should switch the terminal from default Automatic Response (AR) mode to Explicit Response (ER) mode.
+
+`pi@raspberypi:~/atclient $ java -Dlog.file=GsmClient-ttyACM1.log -Dlog4j.configurationFile=log4j2.xml -cp "./class:./lib/*" com.swisscom.atclient.GsmClient /dev/ttyACM1 ER`
+
 ##### Example usage: User Emulation mode (UE)
+
+Once your terminal is in Explicit Response (ER) mode you can run the application in continuous User Emulation (UE) mode.
 
 `pi@raspberypi:~/atclient $ java -Dlog.file=GsmClient-ttyACM1.log -Dlog4j.configurationFile=log4j2.xml -cp "./class:./lib/*" com.swisscom.atclient.GsmClient /dev/ttyACM1 UE`
 
 ##### Nohup
 
-Nohup will detach a process you run from your current console and let it continue when you close the terminal:
+Nohup will detach a process you run from your current console and let it continue when you close the terminal. This might be usefuly when you run the User Emulation (UE) mode for continuous end-to-end monitoring purpose.
 
 `pi@raspberypi:~/atclient $ nohup java -Dlog.file=GsmClient-ttyACM1.log -Dlog4j.configurationFile=log4j2.xml -cp "./class:./lib/*" com.swisscom.atclient.GsmClient /dev/ttyACM1 UE &`
 
