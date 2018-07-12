@@ -17,8 +17,6 @@ public class GsmClient {
 		 * 
 		 * 'STKTIMEOUT' : TerminalResponse '18' - No response from user
 		 * 
-		 * 'RESET'      : A reset of the GSM Module will be invoked (AT^SMSO), so the current STK interaction will not be answered at all
-		 * 
 		 */
 		
 		ATresponder atClient = null;
@@ -44,9 +42,9 @@ public class GsmClient {
 							+ "Usage: GsmClient <PORT> <CMD>\n\n"
 							+ "<PORT>\tSerial Port\n"
 							+ "<CMD>\tList of supported commands:\n"
-							+ "\tER\tSwitch to Explicit Response (ER) and reboot\n"
-							+ "\tAR\tSwitch to Automatic Response (AR, Factory Default) and reboot\n"
-							+ "\tUE\tRun Alauda User Emulation (UE) in Explicit Response Mode\n"
+							+ "\tER\tSwitch to Explicit Response (ER) and shutdown\n"
+							+ "\tAR\tSwitch to Automatic Response (AR, Factory Default) and shutdown\n"
+							+ "\tUE\tRun continues Alauda User Emulation (UE) in Explicit Response Mode\n"
 							);
 
 			System.exit(0);

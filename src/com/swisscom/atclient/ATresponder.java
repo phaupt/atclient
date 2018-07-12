@@ -23,7 +23,6 @@ public class ATresponder extends Thread {
 	
 	private volatile static boolean cancel;
 	private volatile static boolean stk_timeout;
-	private volatile static boolean reset;
 
 	private String serialport;
 	private SerialPort comPort;
@@ -129,6 +128,9 @@ public class ATresponder extends Thread {
 			e.printStackTrace();
 		}
 
+	}
+
+	private void initSIM() {
 		log.debug("### Set SMS text mode ###");
 		send("AT+CMGF=1", "OK");
 
@@ -162,30 +164,36 @@ public class ATresponder extends Thread {
 	}
 	
 	
-	private void initialize(boolean arMode){
-			// Turn off echo mode
-			log.info("### Turn Off Echo Mode ###");
-			send("ATE0", "ok");
+	private void initialize(boolean arMode) {
+		
+		/**
+		 * This method is called if mode AR or ER is called
+		 * Not used in case of UE mode
+		 */
 
-			// Switch on verbose error messages
-			log.info("### Switch On Verbose Error Messages ###");
-			send("AT+CMEE=2", "ok");
-			
-			if (arMode){
-				// Switch to Automatic Response (AR) and restart device
-				log.info("### Switch to Automatic Response (AR) ###");
-				send("AT^SSTA=0", "ok"); // Automatic Response Mode
-			} else {
-				// Switch to Explicit Response (ER) and restart device
-				log.info("### Switch to Explicit Response (ER) ###");
-				send("AT^SSTA=1,1", "ok"); // Explicit Response Mode UCS2
-			}
+		// Turn off echo mode
+		log.info("### Turn Off Echo Mode ###");
+		send("ATE0", "ok");
 
-			rebootAndExit();
+		// Switch on verbose error messages
+		log.info("### Switch On Verbose Error Messages ###");
+		send("AT+CMEE=2", "ok");
+
+		if (arMode) {
+			// Switch to Automatic Response (AR) and restart device
+			log.info("### Switch to Automatic Response (AR) ###");
+			send("AT^SSTA=0", "ok"); // Automatic Response Mode
+		} else {
+			// Switch to Explicit Response (ER) and restart device
+			log.info("### Switch to Explicit Response (ER) ###");
+			send("AT^SSTA=1,1", "ok"); // Explicit Response Mode UCS2
+		}
+
+		shutdownAndExit();
 	}
 	
-	public void rebootAndExit(){
-		log.info("### Send SHUTDOWN Command ###");
+	public void shutdownAndExit(){
+		log.info("### Send SHUTDOWN Command and exit application ###");
 		send("AT^SMSO", "^SHUTDOWN"); // Restart
 		isAlive = false; // will exit the while loop and terminate the application	
 	}
@@ -204,6 +212,8 @@ public class ATresponder extends Thread {
 		String rcvStr;
 		int cmdType = 0;
 		boolean ackCmdRequired = false;
+		
+		initSIM();
 		
 		log.info("Ready to receive incoming data...");
 
@@ -282,7 +292,7 @@ public class ATresponder extends Thread {
 								log.info("### 33: DISPLAY TEXT (Acknowledge) ###");
 								send("at^sstgi=" + cmdType, "SSTGI:"); // GetInfos
 								getMeTextAscii(rcvStr); // may set the flag such as CANCEL
-								log.debug("CANCEL: " + cancel + " | STKTIMEOUT: " + stk_timeout + " | RESET: " + reset);
+								log.debug("CANCEL: " + cancel + " | STKTIMEOUT: " + stk_timeout);
 								
 								code = "0"; // OK
 								if (cancel){ 
@@ -295,16 +305,6 @@ public class ATresponder extends Thread {
 									setStkTimeout(false); // reset flag
 									code = "18"; // No response from user
 								}
-								else if (reset) {
-									log.debug("Reset RESET Flag...");
-									setReset(false); // reset flag
-									send("AT^SMSO");
-									try {
-										Thread.sleep(30000);
-									} catch (InterruptedException e) {
-										log.error(e.getMessage());
-									}
-								}
 								
 								send("at^sstr=" + cmdType + "," + code, "ok"); // Confirm
 							}
@@ -316,7 +316,7 @@ public class ATresponder extends Thread {
 								log.info("### 35: GET INPUT (Acknowledge) ###");
 								send("at^sstgi=" + cmdType, "ok"); // GetInfos
 								getMeTextAscii(rcvStr); // may set the flag such as CANCEL
-								log.debug("CANCEL: " + cancel + " | STKTIMEOUT: " + stk_timeout + " | RESET: " + reset);
+								log.debug("CANCEL: " + cancel + " | STKTIMEOUT: " + stk_timeout);
 																
 								code = "0,,003100320033003400350036"; // OK
 								if (cancel){ 
@@ -329,16 +329,6 @@ public class ATresponder extends Thread {
 									setStkTimeout(false); // reset flag
 									code = "18"; // No response from user
 								}
-								else if (reset) {
-									log.debug("Reset RESET Flag...");
-									setReset(false); // reset flag
-									send("AT^SMSO");
-									try {
-										Thread.sleep(30000);
-									} catch (InterruptedException e) {
-										log.error(e.getMessage());
-									}
-								} 
 
 								send("at^sstr=" + cmdType + "," + code, "SST"); // Confirm
 							}
@@ -381,7 +371,7 @@ public class ATresponder extends Thread {
 							log.info("### 33: DISPLAY TEXT ####");
 							send("at^sstgi=33", "SSTGI:");
 							getMeTextAscii(rcvStr); // may set the flag such as CANCEL
-							log.debug("CANCEL: " + cancel + " | STKTIMEOUT: " + stk_timeout + " | RESET: " + reset);
+							log.debug("CANCEL: " + cancel + " | STKTIMEOUT: " + stk_timeout);
 							
 							code = "0"; // OK
 							if (cancel){ 
@@ -394,16 +384,6 @@ public class ATresponder extends Thread {
 								setStkTimeout(false); // reset flag
 								code = "18"; // No response from user
 							}
-							else if (reset) {
-								log.debug("Reset RESET Flag...");
-								setReset(false); // reset flag
-								send("AT^SMSO");
-								try {
-									Thread.sleep(30000);
-								} catch (InterruptedException e) {
-									log.error(e.getMessage());
-								}
-							}
 
 							send("at^sstr=33," + code); // Confirm
 							break;
@@ -412,7 +392,7 @@ public class ATresponder extends Thread {
 							log.info("### 35: GET INPUT ####");
 							send("at^sstgi=35", "ok");
 							getMeTextAscii(rcvStr); // may set the flag such as CANCEL
-							log.debug("CANCEL: " + cancel + " | STKTIMEOUT: " + stk_timeout + " | RESET: " + reset);
+							log.debug("CANCEL: " + cancel + " | STKTIMEOUT: " + stk_timeout);
 														
 							code = "0,,003100320033003400350036"; // OK
 							if (cancel){ 
@@ -425,16 +405,6 @@ public class ATresponder extends Thread {
 								setStkTimeout(false); // reset flag
 								code = "18"; // No response from user
 							}
-							else if (reset) {
-								log.debug("Reset RESET Flag...");
-								setReset(false); // reset flag
-								send("AT^SMSO");
-								try {
-									Thread.sleep(30000);
-								} catch (InterruptedException e) {
-									log.error(e.getMessage());
-								}
-							} 
 
 							send("at^sstr=" + cmdType + "," + code, "SST"); // Confirm
 							break;
@@ -625,10 +595,6 @@ public class ATresponder extends Thread {
 			setStkTimeout(true);
 			log.debug("'STKTIMEOUT'-keyword detected! Message will time out.");
 		}
-		else if (textUcs2.indexOf("RESET") != -1) {
-			setReset(true);
-			log.debug("'RESET'-keyword detected! Message will be dropped and GSM Client will reboot.");
-		}
 		
 	}
 
@@ -673,7 +639,4 @@ public class ATresponder extends Thread {
 		stk_timeout = flag;
 	}
 	
-	public static synchronized void setReset(boolean flag){
-		reset = flag;
-	}
 }
