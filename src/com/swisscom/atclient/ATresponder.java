@@ -116,13 +116,6 @@ public class ATresponder extends Thread {
 		printStream = new PrintStream(comPort.getOutputStream(), true, "UTF-8");
 
 		log.info("Connection successfully established.");
-		
-		log.info("Wait for 5 seconds...");
-		try {
-			Thread.sleep(5000);
-		} catch (InterruptedException e) {
-			e.printStackTrace();
-		}
 
 	}
 
@@ -201,7 +194,7 @@ public class ATresponder extends Thread {
 			return; // exit
 		}
 
-		long wsPollTime = System.currentTimeMillis();
+		long inactivityTimer = System.currentTimeMillis();
 		String code;
 		String rcvStr;
 		int cmdType = 0;
@@ -215,9 +208,9 @@ public class ATresponder extends Thread {
 		while (isAlive) {
 			Thread.sleep(sleepMillis);
 			
-			if ((System.currentTimeMillis() - wsPollTime) >= 30000){
+			if ((System.currentTimeMillis() - inactivityTimer) >= 30000){
 				// Check every 30s of inactivity
-				wsPollTime = System.currentTimeMillis();
+				inactivityTimer = System.currentTimeMillis();
 				send("AT+WS46?", "+WS46", false); // Wireless Data Service (WDS) Selected
 			} else {
 				send("AT^SSTR?"); // Poll for incoming data.. don't expect "ok" as response as sometimes there is a different response.
@@ -227,13 +220,12 @@ public class ATresponder extends Thread {
 			try {
 				while (isAlive && buffReader.ready() && (rcvStr = buffReader.readLine()) != null) {
 					
-					wsPollTime = System.currentTimeMillis();
-					
 					log.trace("<<<" + rcvStr);
 
 					if (rcvStr != null && rcvStr.length() > 0) {
 						
 						if (!rcvStr.contains("^SSTR") && !rcvStr.contains("OK")){
+							inactivityTimer = System.currentTimeMillis(); // due to activity, reset the inactivty-timer
 							log.debug("RX1: " + rcvStr);
 							getMeTextAscii(rcvStr); // may set the flag such as CANCEL
 						}
