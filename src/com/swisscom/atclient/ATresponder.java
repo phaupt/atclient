@@ -129,7 +129,6 @@ public class ATresponder extends Thread {
 		send("AT+CSQ", "+CSQ", false); // Signal Strength
 		
 		send("AT+WS46=?", "+WS46", false); // Wireless Data Service (WDS) List
-		send("AT+WS46=28", "+WS46", false); // Wireless Data Service (WDS) List
 		send("AT+WS46?", "+WS46", false); // Wireless Data Service (WDS) Selected
 		// * 12 GSM Digital Cellular Systems
 		// * 22 UTRAN only 
