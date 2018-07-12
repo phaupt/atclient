@@ -76,6 +76,8 @@ As a first step, you should switch the terminal from default Automatic Response 
 
 Once your terminal is in Explicit Response (ER) mode you can run the application in continuous User Emulation (UE) mode.
 
+Note that GET-INPUT proactive STK commands will be responded with default code '123456'.
+
 `pi@raspberypi:~/atclient $ java -Dlog.file=GsmClient-ttyACM1.log -Dlog4j.configurationFile=log4j2.xml -cp "./class:./lib/*" com.swisscom.atclient.GsmClient /dev/ttyACM1 UE`
 
 ##### Nohup
@@ -92,49 +94,9 @@ If you set TRACE level, it will log all RX and TX traffic.
 With the default log4j configuration you can pass the log file name as a command line parameter: `-Dlog.file=GsmClient-ttyACM1.log`
 
 #### Example logfile output
+
+Mobile ID Signature
 ```
-2018-07-11 10:47:52,391 [INFO] Application started...
-2018-07-11 10:47:52,405 [DEBUG] Attached Shutdown Hook
-2018-07-11 10:47:52,405 [INFO] Init Serial Port in progress.
-2018-07-11 10:47:52,522 [DEBUG] Index: 0; COM3; Serial0; Intel(R) Active Management Technology - SOL (COM3)
-2018-07-11 10:47:52,522 [DEBUG] Index: 1; COM4; PH8; Cinterion PH8 HSPA USB Com Port (COM4)
-2018-07-11 10:47:52,522 [DEBUG] Index: 2; COM9; PH8; Cinterion PH8 HSPA USB reserved Com Port (COM9)
-2018-07-11 10:47:52,522 [DEBUG] Index: 3; COM8; PH8; Cinterion PH8 HSPA USB NMEA Com Port (COM8)
-2018-07-11 10:47:52,522 [DEBUG] Index: 4; COM11; PH8; Cinterion PH8 HSPA USB Modem
-2018-07-11 10:47:52,522 [DEBUG] Selected Port: COM4
-2018-07-11 10:47:53,529 [DEBUG] Selected Port successfully opened.
-2018-07-11 10:47:53,945 [DEBUG] Set DTR: true
-2018-07-11 10:47:53,945 [INFO] Connection successfully established.
-2018-07-11 10:47:53,945 [INFO] Wait for 5 seconds...
-2018-07-11 10:47:58,945 [DEBUG] ### Set SMS text mode ###
-2018-07-11 10:47:58,946 [DEBUG] TX1: AT+CMGF=1
-2018-07-11 10:47:59,262 [DEBUG] RX2: AT+CMGF=1
-2018-07-11 10:47:59,331 [DEBUG] ### Activate the display of a URC on every received SMS ###
-2018-07-11 10:47:59,647 [DEBUG] RX2: AT+CNMI=1,1
-2018-07-11 10:47:59,710 [DEBUG] ### Retrieve Provider Details ###
-2018-07-11 10:48:00,048 [DEBUG] RX2: AT+COPS?
-2018-07-11 10:48:00,055 [DEBUG] RX2: +COPS: 0,0,"Swisscom",2
-2018-07-11 10:48:00,055 [INFO] Operator: Swisscom
-2018-07-11 10:48:00,133 [DEBUG] ### Retrieve Signal Strength Details ###
-2018-07-11 10:48:00,450 [DEBUG] RX2: AT+CSQ
-2018-07-11 10:48:00,450 [DEBUG] RX2: +CSQ: 30,99
-2018-07-11 10:48:00,450 [INFO] SignalStrength: 30,99
-2018-07-11 10:48:00,516 [DEBUG] ### Retrieve Wireless Data Service Details ###
-2018-07-11 10:48:00,835 [DEBUG] RX2: AT+WS46=?
-2018-07-11 10:48:00,835 [DEBUG] RX2: +WS46: (12,22,25)
-2018-07-11 10:48:00,835 [INFO] Wireless Service:  (12,22,25)
-2018-07-11 10:48:00,898 [DEBUG] ### Retrieve IMSI ###
-2018-07-11 10:48:01,208 [DEBUG] RX2: AT+CIMI
-2018-07-11 10:48:01,208 [DEBUG] RX2: 228012123638957
-2018-07-11 10:48:01,208 [INFO] IMSI: 228012123638957
-2018-07-11 10:48:01,267 [DEBUG] ### Retrieve IMEI ###
-2018-07-11 10:48:01,599 [DEBUG] RX2: AT+CGSN
-2018-07-11 10:48:01,599 [DEBUG] RX2: 359998040020283
-2018-07-11 10:48:01,599 [INFO] IMEI: 359998040020283
-2018-07-11 10:48:01,653 [DEBUG] ### Retrieve MSISDN ###
-2018-07-11 10:48:01,985 [DEBUG] RX2: AT+CNUM
-2018-07-11 10:48:01,985 [DEBUG] RX2: +CNUM: "\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00","+41796691746",145
-2018-07-11 10:48:02,047 [INFO] Ready to receive incoming data...
 2018-07-11 10:49:18,100 [DEBUG] RX1: ^SSTN: 33
 2018-07-11 10:49:18,100 [INFO] ### 33: DISPLAY TEXT ####
 2018-07-11 10:49:18,101 [DEBUG] TX1: AT^SSTGI=33
