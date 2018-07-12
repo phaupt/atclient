@@ -124,7 +124,17 @@ public class ATresponder extends Thread {
 		
 		send("AT+CNMI=1,1", "AT+CNMI=1,1", false); // Activate the display of a URC on every received SMS
 		
-		send("AT+COPS?", "+COPS", false); // Provider
+		send("AT+COPS?", "+COPS", false); // Provider + access technology
+		// http://m2msupport.net/m2msupport/atcops-plmn-selection/
+		//		 0 GSM
+		//		 1 GSM Compact
+		//		 2 UTRAN
+		//		 3 GSM w/EGPRS
+		//		 4 UTRAN w/HSDPA
+		//		 5 UTRAN w/HSUPA
+		//		 6 UTRAN w/HSDPA and HSUPA
+		//		 7 E-UTRAN
+		
 		
 		send("AT+CSQ", "+CSQ", false); // Signal Strength
 		
@@ -220,7 +230,16 @@ public class ATresponder extends Thread {
 			if ((System.currentTimeMillis() - inactivityTimer) >= 60000){
 				// Check every 1min of inactivity
 				inactivityTimer = System.currentTimeMillis();
-				send("AT+CREG?", "+CREG", false); // REGISTRATION_STATE
+				send("AT+COPS?", "+COPS", false); // Provider + access technology
+				// http://m2msupport.net/m2msupport/atcops-plmn-selection/
+				//		 0 GSM
+				//		 1 GSM Compact
+				//		 2 UTRAN
+				//		 3 GSM w/EGPRS
+				//		 4 UTRAN w/HSDPA
+				//		 5 UTRAN w/HSUPA
+				//		 6 UTRAN w/HSDPA and HSUPA
+				//		 7 E-UTRAN
 			} else {
 				send("AT^SSTR?"); // Poll for incoming data.. don't expect "ok" as response as sometimes there is a different response.
 			}			
