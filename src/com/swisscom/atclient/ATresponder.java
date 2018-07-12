@@ -127,28 +127,15 @@ public class ATresponder extends Thread {
 	}
 
 	private void initSIM() throws InterruptedException {
-		log.debug("### Set SMS text mode ###");
-		send("AT+CMGF=1", "AT+CMGF=1", false);
+		send("AT+CMGF=1", "AT+CMGF=1", false); // Set SMS text mod
 		
-		Thread.sleep(500);
-
-		log.debug("### Activate the display of a URC on every received SMS ###");
-		send("AT+CNMI=1,1", "AT+CNMI=1,1", false);
+		send("AT+CNMI=1,1", "AT+CNMI=1,1", false); // Activate the display of a URC on every received SMS
 		
-		Thread.sleep(500);
-
-		log.debug("### Retrieve Provider Details ###");
-		send("AT+COPS?", "+COPS", false); // Provider
+		send("AT+COPS?", "+COPS:", false); // Provider
 		
-		Thread.sleep(500);
-
-		log.debug("### Retrieve Signal Strength Details ###");
-		send("AT+CSQ", "+CSQ", false); // Signal Strength
+		send("AT+CSQ", "+CSQ:", false); // Signal Strength
 		
-		Thread.sleep(500);
-
-		log.debug("### Retrieve Wireless Data Service Details ###");
-		send("AT+WS46=?", "+WS46", false); // Wireless Data Service (WDS)
+		send("AT+WS46=?", "+WS46:", false); // Wireless Data Service (WDS)
 		// * 12 GSM Digital Cellular Systems (GERAN only) --> 2G
 		// * 22 UTRAN only --> 3G
 		// * 25 3GPP Systems (GERAN, UTRAN and E-UTRAN) --> 4G/LTE
@@ -157,22 +144,11 @@ public class ATresponder extends Thread {
 		// * 30 GERAN and E-UTRAN
 		// * 31 UTRAN and E-UTRAN
 		
-		Thread.sleep(500);
-
-		log.debug("### Retrieve IMSI ###");
 		send("AT+CIMI", "AT+CIMI", false); // IMSI
-		
-		Thread.sleep(500);
 
-		log.debug("### Retrieve IMEI ###");
 		send("AT+CGSN", "AT+CGSN", false); // IMEI
 		
-		Thread.sleep(500);
-		
-		log.debug("### Retrieve MSISDN ###");
-		send("AT+CNUM", "+CNUM", false); // MSISDN
-		
-		Thread.sleep(500);
+		send("AT+CNUM", "+CNUM:", false); // MSISDN
 	}
 	
 	
