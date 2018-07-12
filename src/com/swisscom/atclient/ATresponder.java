@@ -131,11 +131,11 @@ public class ATresponder extends Thread {
 		
 		send("AT+CNMI=1,1", "AT+CNMI=1,1", false); // Activate the display of a URC on every received SMS
 		
-		send("AT+COPS?", "+COPS:", false); // Provider
+		send("AT+COPS?", "+COPS", false); // Provider
 		
-		send("AT+CSQ", "+CSQ:", false); // Signal Strength
+		send("AT+CSQ", "+CSQ", false); // Signal Strength
 		
-		send("AT+WS46=?", "+WS46:", false); // Wireless Data Service (WDS)
+		send("AT+WS46=?", "+WS46", false); // Wireless Data Service (WDS)
 		// * 12 GSM Digital Cellular Systems (GERAN only) --> 2G
 		// * 22 UTRAN only --> 3G
 		// * 25 3GPP Systems (GERAN, UTRAN and E-UTRAN) --> 4G/LTE
