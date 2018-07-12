@@ -135,14 +135,18 @@ public class ATresponder extends Thread {
 		
 		send("AT+CSQ", "+CSQ", false); // Signal Strength
 		
-		send("AT+WS46=?", "+WS46", false); // Wireless Data Service (WDS)
-		// * 12 GSM Digital Cellular Systems (GERAN only) --> 2G
-		// * 22 UTRAN only --> 3G
-		// * 25 3GPP Systems (GERAN, UTRAN and E-UTRAN) --> 4G/LTE
-		// * 28 E-UTRAN only
+		send("AT+WS46=?", "+WS46", false); // Wireless Data Service (WDS) List
+		send("AT+WS46?", "+WS46", false); // Wireless Data Service (WDS) Selected
+		// * 12 GSM Digital Cellular Systems
+		// * 22 UTRAN only 
+		// * 25 3GPP Systems 
+		// * 28 E-UTRAN only 
 		// * 29 GERAN and UTRAN
 		// * 30 GERAN and E-UTRAN
 		// * 31 UTRAN and E-UTRAN
+		// 2G = GERAN is GSM EDGE Radio Acess Network
+		// 3G = UTRAN is Universal Terrestial Radio Access Network 
+		// 4G = E-UTRAN (Evolved Universal Terrestial Radio Access Network)
 		
 		send("AT+CIMI", "AT+CIMI", false); // IMSI
 
@@ -197,6 +201,7 @@ public class ATresponder extends Thread {
 			return; // exit
 		}
 
+		long wsPollTime = System.currentTimeMillis();
 		String code;
 		String rcvStr;
 		int cmdType = 0;
@@ -209,11 +214,20 @@ public class ATresponder extends Thread {
 		// Start endless loop...
 		while (isAlive) {
 			Thread.sleep(sleepMillis);
-			send("AT^SSTR?"); // Poll for incoming data.. don't expect "ok" as response as sometimes there is a different response.
+			
+			if ((System.currentTimeMillis() - wsPollTime) >= 30000){
+				// Check every 30s of inactivity
+				wsPollTime = System.currentTimeMillis();
+				send("AT+WS46?", "+WS46", false); // Wireless Data Service (WDS) Selected
+			} else {
+				send("AT^SSTR?"); // Poll for incoming data.. don't expect "ok" as response as sometimes there is a different response.
+			}			
 
 			// Listening for incoming notifications (SIM->ME)
 			try {
 				while (isAlive && buffReader.ready() && (rcvStr = buffReader.readLine()) != null) {
+					
+					wsPollTime = System.currentTimeMillis();
 					
 					log.trace("<<<" + rcvStr);
 
@@ -533,8 +547,8 @@ public class ATresponder extends Thread {
 							log.info("IMEI: " + rsp.toUpperCase().trim());
 							stampString[4] = rsp.toUpperCase().trim();
 						}
-					} else if (rsp.trim().startsWith("+WS46: ")) {
-						list = rsp.toUpperCase().trim().substring(6);
+					} else if (rsp.trim().startsWith("+WS46: (")) {
+						list = rsp.toUpperCase().trim().substring(rsp.indexOf("("));
 						// +WS46: (12,22,25,28,29)
 						log.info("Wireless Service: " + list);
 						stampString[2] = list;
