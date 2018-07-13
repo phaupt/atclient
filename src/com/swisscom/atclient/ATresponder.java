@@ -15,8 +15,8 @@ public class ATresponder extends Thread {
 	// Detect incoming Text SMS with specific keyword
 	private final String txtSmsKeyword = "OTP Token:";
 	
-	private final long heartBeatMillis = 10000; // Heart beat to detect serial port disconnection in milliseconds
-	private final int sleepMillis = 10; // Polling interval in milliseconds for incoming requests
+	private final long heartBeatMillis = 600000; // Heart beat to detect serial port disconnection in milliseconds
+	private final int sleepMillis = 50; // Polling interval in milliseconds for incoming requests
 	
 	private BufferedReader buffReader;
 	private PrintStream printStream;
@@ -96,7 +96,6 @@ public class ATresponder extends Thread {
 		String portDesc;
 		
 		while (!portSuccess) {
-			
 			ports = SerialPort.getCommPorts();
 			
 			if (mode == 0) {
@@ -117,7 +116,7 @@ public class ATresponder extends Thread {
 							break; // success, break for loop
 					}
 					
-					Thread.sleep(500);
+					Thread.sleep(100);
 				}
 
 			} else {
@@ -133,10 +132,8 @@ public class ATresponder extends Thread {
 				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}
-			}
-			
-		}
-			
+			}	
+		}	
 	}
 	
 	private boolean openPort() throws IOException {
@@ -160,7 +157,7 @@ public class ATresponder extends Thread {
 
 			log.info(serialport + " connection established.");
 			
-			if (send("AT+CGMM", 500)) {
+			if (send("AT", sleepMillis + 500)) {
 				log.info(serialport + " is responding. Success!");
 				Thread.currentThread().setName(ManagementFactory.getRuntimeMXBean().getName() + " " + serialport); // Update thread name
 				return true;
@@ -169,18 +166,11 @@ public class ATresponder extends Thread {
 				close();
 				return false;
 			}
-			
 		}
 	}
 
 	private void initAtCmd() throws InterruptedException {
-		
-		boolean success = false;
-		while (!success) {
-			Thread.sleep(1000); // Give some time for the terminal to be ready..
-			// Send the first AT command. In case the terminal is not yet ready, repeat the command
-			success = send("AT+CGMM"); // Request model identification	
-		}
+		send("AT+CGMM"); // Request model identification
 		
 		send("ATE0"); // Turn off echo mode
 		
@@ -196,9 +186,9 @@ public class ATresponder extends Thread {
 		
 		send("AT+CNMI=1,1"); // Activate the display of a URC on every received SMS
 		
-		send("AT+COPS?"); // Provider + access technology
-		
 		send("AT+CSQ"); // Signal Strength
+		
+		send("AT+COPS?"); // Provider + access technology
 	}
 	
 	
@@ -255,10 +245,8 @@ public class ATresponder extends Thread {
 			if ((System.currentTimeMillis() - inactivityTimerCurrent) >= heartBeatMillis){
 				// Check every x milliseconds of inactivity
 				
-				log.debug(serialport + " heart beat check...");
-				
-				// heart beat: Provider + access technology
-				if (!send("AT+COPS?")) {
+				// heart beat
+				if (!send("AT")) {
 					// failed...
 					log.error("Trying to re-connect serial port.");
 					close();
