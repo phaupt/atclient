@@ -93,7 +93,7 @@ public class ATresponder extends Thread {
 		log.info("Exiting Application");
 	}
 
-	private void initSerialPort() throws UnsupportedEncodingException, IOException {
+	private void initSerialPort() throws UnsupportedEncodingException, IOException, InterruptedException {
 		log.info("Init Serial Port in progress.");
 		
 		SerialPort[] ports; 
@@ -105,19 +105,18 @@ public class ATresponder extends Thread {
 			ports = SerialPort.getCommPorts();
 			
 			if (mode == 0) {
-				
+
 				// automatic serial port detection!
 				for (SerialPort port : ports) {
 					log.debug("Found serial port: " + port.getSystemPortName() + " | " + port.getDescriptivePortName());
-					//if (port.getDescriptivePortName().contains(portDescription)) {
-						serialport = port.getSystemPortName();
-						// Found a port... trying to open it
-						portSuccess = openPort();
-						if (portSuccess)
-							break; // success, break for loop
-					//}
+					serialport = port.getSystemPortName();
+					// Found a port... trying to open it
+					portSuccess = openPort();
+					if (portSuccess)
+						break; // success, break for loop
+					Thread.sleep(500);
 				}
-				
+
 			} else {
 				// mode 1 (ER), 2 (AR)
 				// serialport was manually defined via argument
@@ -164,6 +163,8 @@ public class ATresponder extends Thread {
 				Thread.currentThread().setName(serialport); // Update thread name
 				return true;
 			} else {
+				log.error(serialport + " wasn't responding.");
+				closing();
 				return false;
 			}
 			
