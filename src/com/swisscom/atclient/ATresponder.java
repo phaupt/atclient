@@ -133,6 +133,9 @@ public class ATresponder extends Thread {
 	private boolean openPort() throws IOException {
 		log.debug(serialport + " tryig to open");
 		comPort = SerialPort.getCommPort(serialport);
+		comPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 500, 500);
+		comPort.setComPortParameters(baudrate, databits, stopbits, parity);
+		comPort.setDTR();
 		comPort.openPort();
 		
 		if (!comPort.isOpen()) {
@@ -142,17 +145,13 @@ public class ATresponder extends Thread {
 		} else {
 			// Port available
 			log.debug(serialport + " successfully opened.");
-			
-			comPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 100, 0);
-			comPort.setComPortParameters(baudrate, databits, stopbits, parity);
-			comPort.setDTR();
-			
+
 			buffReader = new BufferedReader(new InputStreamReader(comPort.getInputStream(), "UTF-8"));
 			printStream = new PrintStream(comPort.getOutputStream(), true, "UTF-8");
 
 			log.info(serialport + " connection established.");
 			
-			if (send("AT+CGMM")) {
+			if (send("AT+CGMM", 500)) {
 				log.info(serialport + " is responding. Success!");
 				Thread.currentThread().setName(serialport); // Update thread name
 				return true;
@@ -501,7 +500,7 @@ public class ATresponder extends Thread {
 				Thread.sleep(sleepMillis);
 				
 				if ((System.currentTimeMillis() - startTime) >= timeout){
-					log.error("Didn't get expected response '" + compareStr + "' in 5 seconds.");
+					log.error(serialport + " timout waiting for response.");
 					return false;
 				}
 		
