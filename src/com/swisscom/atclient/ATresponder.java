@@ -15,7 +15,7 @@ public class ATresponder extends Thread {
 	// Detect incoming Text SMS with specific keyword
 	private final String txtSmsKeyword = "OTP Token:";
 	
-	private final long heartBeatMillis = 60000; // Heart beat to detect serial port disconnection in milliseconds
+	private final long heartBeatMillis = 10000; // Heart beat to detect serial port disconnection in milliseconds
 	private final int sleepMillis = 10; // Polling interval in milliseconds for incoming requests
 	
 	private BufferedReader buffReader;
@@ -170,7 +170,7 @@ public class ATresponder extends Thread {
 		
 		boolean success = false;
 		while (!success) {
-			Thread.sleep(2000); // Give some time for the terminal to be ready..
+			Thread.sleep(1000); // Give some time for the terminal to be ready..
 			// Send the first AT command. In case the terminal is not yet ready, repeat the command
 			success = send("AT+CGMM"); // Request model identification	
 		}
