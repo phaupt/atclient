@@ -56,7 +56,7 @@ public class ATresponder extends Thread {
 					Thread.sleep(2500); // Give some time to complete the socket closing
 				} catch (InterruptedException e) {
 				}
-				closing(); // Double check if ports are closed
+				close(); // Double check if ports are closed
 				System.out.println("Done.");
 			}
 		});
@@ -83,7 +83,7 @@ public class ATresponder extends Thread {
 		}
 		
 		// Loop exited. Let's close ports..
-		closing();
+		close();
 		log.info("Exiting Application");
 	}
 
@@ -153,12 +153,11 @@ public class ATresponder extends Thread {
 			
 			if (send("AT+CGMM", 500)) {
 				log.info(serialport + " is responding. Success!");
-				Thread.currentThread().setName(serialport); // Update thread name
+				Thread.currentThread().setName(ManagementFactory.getRuntimeMXBean().getName() + " " + serialport); // Update thread name
 				return true;
 			} else {
 				log.error(serialport + " wasn't responding.");
-				buffReader.close();
-				printStream.close();
+				close();
 				return false;
 			}
 			
@@ -217,7 +216,7 @@ public class ATresponder extends Thread {
 	public void shutdownAndExit(){
 		log.info("### Send SHUTDOWN Command and exit application ###");
 		send("AT^SMSO"); // Power-off the terminal
-		closing();
+		close();
 		isAlive = false; // will exit the while loop and terminate the application	
 	}
 
@@ -250,7 +249,7 @@ public class ATresponder extends Thread {
 				// Provider + access technology
 				if (!comPort.isOpen() || !send("AT+COPS?")) {
 					log.error("Trying to re-connect serial port.");
-					closing();
+					close();
 					initSerialPort();
 					initAtCmd();
 					send("AT^SSTR?", null); // STK Menu initialization
@@ -448,7 +447,7 @@ public class ATresponder extends Thread {
 				log.debug("Waiting 20s for GSM Module to be back on...");
 				Thread.sleep(20000); 
 				log.debug("Now closing serial ports");
-				closing();
+				close();
 			}
 		}
 	}
@@ -589,7 +588,9 @@ public class ATresponder extends Thread {
 		
 	}
 
-	private void closing() {
+	private void close() {
+		Thread.currentThread().setName(ManagementFactory.getRuntimeMXBean().getName()); // Update thread name
+		
 		if (comPort.isOpen()) {
 			log.debug(serialport + " trying to close serial port.");
 			if (comPort.closePort())
