@@ -97,7 +97,6 @@ public class ATresponder extends Thread {
 		
 		while (!portSuccess) {
 			ports = SerialPort.getCommPorts();
-			
 			if (mode == 0) {
 
 				// automatic serial port detection!
@@ -106,7 +105,7 @@ public class ATresponder extends Thread {
 					portDesc = port.getDescriptivePortName();
 					
 					// Check for known PLS8 terminal (Windows or Linux serial port description)
-					if (portDesc.contains("Gemalto M2M") || portDesc.contains("LTE Modem")) {
+					if (portDesc.contains("Gemalto M2M ALSx PLSx USB CDC-ACM Port 1") || portDesc.contains("LTE Modem")) {
 						log.debug("Found serial port: " + port.getSystemPortName() + " | " + portDesc);
 						serialport = port.getSystemPortName();
 						
