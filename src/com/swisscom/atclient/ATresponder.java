@@ -585,11 +585,13 @@ public class ATresponder extends Thread {
 	}
 
 	private void closing() {
-		if (comPort.closePort()) {
-			log.debug("Serial Port closed.");
+		if (comPort.isOpen()) {
+			log.debug(serialport + " trying to close serial port.");
+			if (comPort.closePort())
+				log.debug(serialport + " is now closed.");
+			else 
+				log.error(serialport + " is still open but couldn't be closed.");
 		}
-		
-		serialport = null;
 		
 		try {
 			if (buffReader != null){
