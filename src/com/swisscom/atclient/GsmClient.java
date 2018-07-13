@@ -17,29 +17,31 @@ public class GsmClient {
 		
 		ATresponder atClient = null;
 
-		if (args.length == 1 && args[0].toUpperCase().equals("ER")) {
-			atClient = new ATresponder((byte) 1);
+		if (args.length == 2 && args[0].toUpperCase().equals("ER")) {
+			atClient = new ATresponder((byte) 1, args[1]);
 			new Thread(atClient).start();
 		}
 
-		else if (args.length == 1 && args[0].toUpperCase().equals("AR")) {
-			atClient = new ATresponder((byte) 2);
+		else if (args.length == 2 && args[0].toUpperCase().equals("AR")) {
+			atClient = new ATresponder((byte) 2, args[1]);
 			new Thread(atClient).start();
 		}
 
-		else if (args.length == 1 && args[0].toUpperCase().equals("UE")) {
+		else if (args.length == 0) {
 			atClient = new ATresponder((byte) 0);
 			new Thread(atClient).start();
 		}
 		
-		else {
+		else if (args.length == 1 && args[0].toUpperCase().equals("--HELP")) {
 			System.out
 					.println("\n*** GSM AT Client ***\n\n"
-							+ "Usage: GsmClient <CMD>\n\n"
-							+ "<CMD>\tList of supported commands:\n"
-							+ "\tER\tSwitch to Explicit Response (ER) and shutdown\n"
-							+ "\tAR\tSwitch to Automatic Response (AR, Factory Default) and shutdown\n"
-							+ "\tUE\tRun continues Alauda User Emulation (UE) in Explicit Response Mode\n"
+							+ "Usage: GsmClient [<MODE>] [<PORT>]\n\n"
+							+ "<PORT>\tSerial Port\n"
+							+ "<MODE>\tSwitch operation mode:\n"
+							+ "\tER\tSwitch to Explicit Response (ER) and shutdown. Requires <PORT> argument.\n"
+							+ "\tAR\tSwitch to Automatic Response (AR) and shutdown. Requires <PORT> argument.\n"
+							+ "\n"
+							+ "Default: User emulation with automatic port detection. Requires prior switch to ER operation mode.\n"
 							);
 
 			System.exit(0);

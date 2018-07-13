@@ -16,7 +16,7 @@ public class ATresponder extends Thread {
 	// Detect incoming Text SMS with specific keyword
 	private final String txtSmsKeyword = "OTP Token:";
 	
-	private final long heartBeatMillis = 30000; // Heart beat to detect serial port disconnection in milliseconds
+	private final long heartBeatMillis = 60000; // Heart beat to detect serial port disconnection in milliseconds
 	private final int sleepMillis = 10; // Polling interval in milliseconds for incoming requests
 	
 	private BufferedReader buffReader;
@@ -25,8 +25,9 @@ public class ATresponder extends Thread {
 	private volatile static boolean cancel;
 	private volatile static boolean stk_timeout;
 
-	private String serialport;
+	private String serialport = null;
 	private SerialPort comPort;
+	
 	private final int baudrate = 9600;
 	private final int databits = 8;
 	private final int stopbits = 1;
@@ -37,8 +38,12 @@ public class ATresponder extends Thread {
 	public volatile static boolean isAlive = true;
 
 	public ATresponder(byte mode) {
-		Thread.currentThread().setName("CLIENT"); // Client Thread
 		this.mode = mode;
+	}
+	
+	public ATresponder(byte mode, String serialPort) {
+		this.mode = mode;
+		this.serialport = serialPort;
 	}
 	
 	public void attachShutDownHook() {
@@ -60,8 +65,6 @@ public class ATresponder extends Thread {
 	}
 	
 	public void run() {
-		Thread.currentThread().setName("ATCLIENT");
-		
 		log.info("Application started...");
 
 		attachShutDownHook();
@@ -95,40 +98,24 @@ public class ATresponder extends Thread {
 			
 			ports = SerialPort.getCommPorts();
 			
-			for (SerialPort port : ports) {
+			if (mode == 0) {
 				
-				log.debug("Found serial port: " + port.getSystemPortName() + " | " + port.getDescriptivePortName() );
-				
-				if (port.getDescriptivePortName().contains(portDescription)) {
-					
-					serialport = port.getSystemPortName();
-					
-					// Found a port... trying to open it
-					log.debug("Trying to open " + serialport);
-					comPort = SerialPort.getCommPort(serialport);
-					comPort.openPort();
-					
-					if (!comPort.isOpen()) {
-						log.error(serialport + " is currently not available.");
-						break; // try with next port
-						
-					} else {
-						log.debug(serialport + " successfully opened.");
-						
-						comPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 100, 0);
-						comPort.setComPortParameters(baudrate, databits, stopbits, parity);
-						comPort.setDTR();
-						
-						buffReader = new BufferedReader(new InputStreamReader(comPort.getInputStream(), "UTF-8"));
-						printStream = new PrintStream(comPort.getOutputStream(), true, "UTF-8");
-
-						log.info("Connection successfully established.");
-						
-						Thread.currentThread().setName(serialport); // Update thread name
-						portSuccess = true;
-						break;
+				// automatic serial port detection!
+				for (SerialPort port : ports) {
+					log.debug("Found serial port: " + port.getSystemPortName() + " | " + port.getDescriptivePortName() );
+					if (port.getDescriptivePortName().contains(portDescription)) {
+						serialport = port.getSystemPortName();
+						// Found a port... trying to open it
+						portSuccess = openPort();
+						if (portSuccess)
+							break; // success, break for loop
 					}
 				}
+				
+			} else {
+				// mode 1 (ER), 2 (AR)
+				// serialport was manually defined via argument
+				portSuccess = openPort();
 			}
 			
 			if (!portSuccess) {
@@ -143,12 +130,39 @@ public class ATresponder extends Thread {
 		}
 			
 	}
+	
+	private boolean openPort() throws UnsupportedEncodingException {
+		log.debug("Trying to open " + serialport);
+		comPort = SerialPort.getCommPort(serialport);
+		comPort.openPort();
+		
+		if (!comPort.isOpen()) {
+			// Port not available
+			log.error(serialport + " is currently not available.");
+			return false;			
+		} else {
+			// Port available
+			log.debug(serialport + " successfully opened.");
+			
+			comPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 100, 0);
+			comPort.setComPortParameters(baudrate, databits, stopbits, parity);
+			comPort.setDTR();
+			
+			buffReader = new BufferedReader(new InputStreamReader(comPort.getInputStream(), "UTF-8"));
+			printStream = new PrintStream(comPort.getOutputStream(), true, "UTF-8");
+
+			log.info("Connection successfully established.");
+			
+			Thread.currentThread().setName(serialport); // Update thread name
+			return true;
+		}
+	}
 
 	private void initAtCmd() throws InterruptedException {
 		
 		boolean success = false;
 		while (!success) {
-			Thread.sleep(1000); // Give some time for the terminal to be ready..
+			Thread.sleep(2000); // Give some time for the terminal to be ready..
 			// Send the first AT command. In case the terminal is not yet ready, repeat the command
 			success = send("AT+CGMM"); // Request model identification	
 		}
@@ -556,6 +570,8 @@ public class ATresponder extends Thread {
 		if (comPort.closePort()) {
 			log.debug("Serial Port closed.");
 		}
+		
+		serialport = null;
 		
 		try {
 			if (buffReader != null){
