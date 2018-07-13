@@ -4,7 +4,6 @@ import com.fazecast.jSerialComm.*;
 import java.io.*;
 import java.lang.management.ManagementFactory;
 import java.util.Arrays;
-import java.util.concurrent.ThreadLocalRandom;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
