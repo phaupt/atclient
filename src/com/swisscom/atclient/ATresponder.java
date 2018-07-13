@@ -2,7 +2,9 @@ package com.swisscom.atclient;
 
 import com.fazecast.jSerialComm.*;
 import java.io.*;
+import java.lang.management.ManagementFactory;
 import java.util.Arrays;
+import java.util.concurrent.ThreadLocalRandom;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -65,8 +67,9 @@ public class ATresponder extends Thread {
 	}
 	
 	public void run() {
-		log.info("Application started...");
+		Thread.currentThread().setName(ManagementFactory.getRuntimeMXBean().getName());
 
+		log.info("Application started...");
 		attachShutDownHook();
 		
 		try {
