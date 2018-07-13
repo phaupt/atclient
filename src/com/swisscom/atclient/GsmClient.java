@@ -17,26 +17,25 @@ public class GsmClient {
 		
 		ATresponder atClient = null;
 
-		if (args.length == 2 && args[1].toUpperCase().equals("ER")) {
-			atClient = new ATresponder(args[0], (byte) 1);
+		if (args.length == 1 && args[0].toUpperCase().equals("ER")) {
+			atClient = new ATresponder((byte) 1);
 			new Thread(atClient).start();
 		}
 
-		else if (args.length == 2 && args[1].toUpperCase().equals("AR")) {
-			atClient = new ATresponder(args[0], (byte) 2);
+		else if (args.length == 1 && args[0].toUpperCase().equals("AR")) {
+			atClient = new ATresponder((byte) 2);
 			new Thread(atClient).start();
 		}
 
-		else if (args.length == 2 && args[1].toUpperCase().equals("UE")) {
-			atClient = new ATresponder(args[0], (byte) 0);
+		else if (args.length == 1 && args[0].toUpperCase().equals("UE")) {
+			atClient = new ATresponder((byte) 0);
 			new Thread(atClient).start();
 		}
 		
 		else {
 			System.out
 					.println("\n*** GSM AT Client ***\n\n"
-							+ "Usage: GsmClient <PORT> <CMD>\n\n"
-							+ "<PORT>\tSerial Port\n"
+							+ "Usage: GsmClient <CMD>\n\n"
 							+ "<CMD>\tList of supported commands:\n"
 							+ "\tER\tSwitch to Explicit Response (ER) and shutdown\n"
 							+ "\tAR\tSwitch to Automatic Response (AR, Factory Default) and shutdown\n"

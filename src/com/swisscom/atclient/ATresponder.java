@@ -10,12 +10,14 @@ import org.apache.logging.log4j.Logger;
 public class ATresponder extends Thread {
 	
 	private final Logger log = LogManager.getLogger(ATresponder.class.getName());
+	
+	private final String portDescription = "Gemalto M2M ALSx PLSx USB CDC-ACM Port 1";
 
 	// Detect incoming Text SMS with specific keyword
 	private final String txtSmsKeyword = "OTP Token:";
 	
-	private final long inactTimerMillis = 600000; // In case of inactivity, get status information such as AT+COPS after x millis
-	private final int sleepMillis = 10; // Polling interval for incoming requests
+	private final long heartBeatMillis = 30000; // Heart beat to detect serial port disconnection in milliseconds
+	private final int sleepMillis = 10; // Polling interval in milliseconds for incoming requests
 	
 	private BufferedReader buffReader;
 	private PrintStream printStream;
@@ -34,9 +36,8 @@ public class ATresponder extends Thread {
 	
 	public volatile static boolean isAlive = true;
 
-	public ATresponder(String serialport, byte mode) {
+	public ATresponder(byte mode) {
 		Thread.currentThread().setName("CLIENT"); // Client Thread
-		this.serialport = serialport;
 		this.mode = mode;
 	}
 	
@@ -51,7 +52,7 @@ public class ATresponder extends Thread {
 					Thread.sleep(2500); // Give some time to complete the socket closing
 				} catch (InterruptedException e) {
 				}
-				closingPort(); // Double check if ports are closed
+				closing(); // Double check if ports are closed
 				System.out.println("Done.");
 			}
 		});
@@ -59,7 +60,7 @@ public class ATresponder extends Thread {
 	}
 	
 	public void run() {
-		Thread.currentThread().setName(serialport);
+		Thread.currentThread().setName("ATCLIENT");
 		
 		log.info("Application started...");
 
@@ -68,7 +69,8 @@ public class ATresponder extends Thread {
 		try {
 			initSerialPort();
 			Thread.sleep(1000);
-			processAtLoop();
+			initAtCmd();
+			listenForRx();
 		} catch (UnsupportedEncodingException e) {
 			e.printStackTrace();
 		} catch (IOException e) {
@@ -78,57 +80,80 @@ public class ATresponder extends Thread {
 		}
 		
 		// Loop exited. Let's close ports..
-		closingPort();
+		closing();
 		log.info("Exiting Application");
 	}
 
 	private void initSerialPort() throws UnsupportedEncodingException, IOException {
 		log.info("Init Serial Port in progress.");
 		
-		SerialPort[] ports = SerialPort.getCommPorts();
-		for (int i = 0; i < ports.length; i++){
-			log.debug("Index: " + i + "; " + ports[i].getSystemPortName() + "; " + ports[i].getPortDescription() + "; " + ports[i].getDescriptivePortName() );
-		}
+		SerialPort[] ports; 
 		
-		comPort = SerialPort.getCommPort(serialport);
+		boolean portSuccess = false;
 		
-		log.debug("Selected Port: " + comPort.getSystemPortName());
-		
-		while (!comPort.isOpen()) {
-			comPort.openPort();
-			if (!comPort.isOpen()) {
-				log.error("Selected Port not available yet. Trying again in 5 seconds.");
+		while (!portSuccess) {
+			
+			ports = SerialPort.getCommPorts();
+			
+			for (SerialPort port : ports) {
+				
+				log.debug("Found serial port: " + port.getSystemPortName() + " | " + port.getDescriptivePortName() );
+				
+				if (port.getDescriptivePortName().contains(portDescription)) {
+					
+					serialport = port.getSystemPortName();
+					
+					// Found a port... trying to open it
+					log.debug("Trying to open " + serialport);
+					comPort = SerialPort.getCommPort(serialport);
+					comPort.openPort();
+					
+					if (!comPort.isOpen()) {
+						log.error(serialport + " is currently not available.");
+						break; // try with next port
+						
+					} else {
+						log.debug(serialport + " successfully opened.");
+						
+						comPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 100, 0);
+						comPort.setComPortParameters(baudrate, databits, stopbits, parity);
+						comPort.setDTR();
+						
+						buffReader = new BufferedReader(new InputStreamReader(comPort.getInputStream(), "UTF-8"));
+						printStream = new PrintStream(comPort.getOutputStream(), true, "UTF-8");
+
+						log.info("Connection successfully established.");
+						
+						Thread.currentThread().setName(serialport); // Update thread name
+						portSuccess = true;
+						break;
+					}
+				}
+			}
+			
+			if (!portSuccess) {
+				log.error("No luck yet to find the proper terminal. Will try again in 3 seconds.");
 				try {
-					Thread.sleep(5000);
+					Thread.sleep(3000);
 				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}
-			} else {
-				log.debug("Selected Port successfully opened.");
 			}
-		} 
-		
-		comPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 100, 0);
-		comPort.setComPortParameters(baudrate, databits, stopbits, parity);
-
-		// LTE Modul set DTR to true
-		log.debug("Set DTR: " + comPort.setDTR());
-		
-		buffReader = new BufferedReader(new InputStreamReader(comPort.getInputStream(), "UTF-8"));
-		printStream = new PrintStream(comPort.getOutputStream(), true, "UTF-8");
-
-		log.info("Connection successfully established.");
+			
+		}
+			
 	}
 
 	private void initAtCmd() throws InterruptedException {
 		
 		boolean success = false;
 		while (!success) {
+			Thread.sleep(1000); // Give some time for the terminal to be ready..
 			// Send the first AT command. In case the terminal is not yet ready, repeat the command
-			success = send("ATE0"); // Turn off echo mode
-			if (!success)
-				Thread.sleep(1000);
+			success = send("AT+CGMM"); // Request model identification	
 		}
+		
+		send("ATE0"); // Turn off echo mode
 		
 		send("AT+CMEE=2"); // Switch on verbose error messages
 		
@@ -171,11 +196,11 @@ public class ATresponder extends Thread {
 	public void shutdownAndExit(){
 		log.info("### Send SHUTDOWN Command and exit application ###");
 		send("AT^SMSO"); // Power-off the terminal
-		closingPort();
+		closing();
 		isAlive = false; // will exit the while loop and terminate the application	
 	}
 
-	private void processAtLoop() throws InterruptedException, UnsupportedEncodingException, IOException {
+	private void listenForRx() throws InterruptedException, UnsupportedEncodingException, IOException {
 
 		if (mode == 1) {
 			initialize(false); // ER
@@ -191,8 +216,6 @@ public class ATresponder extends Thread {
 		int value = 0;
 		boolean ackCmdRequired = false;
 		
-		initAtCmd();
-
 		send("AT^SSTR?", null); // STK Menu initialization
 		
 		// Start endless loop...
@@ -200,11 +223,19 @@ public class ATresponder extends Thread {
 			
 			Thread.sleep(sleepMillis);
 			
-			if ((System.currentTimeMillis() - inactivityTimerCurrent) >= inactTimerMillis){
-				// Check every x seconds of inactivity
-				inactivityTimerCurrent = System.currentTimeMillis();
+			if ((System.currentTimeMillis() - inactivityTimerCurrent) >= heartBeatMillis){
+				// Check every x milliseconds of inactivity
 				
-				send("AT+COPS?"); // Provider + access technology
+				// Provider + access technology
+				if (!send("AT+COPS?")) {
+					log.error("Failed to receive response. Trying to re-connect serial port.");
+					closing();
+					initSerialPort();
+					initAtCmd();
+					send("AT^SSTR?", null); // STK Menu initialization
+				}
+				
+				inactivityTimerCurrent = System.currentTimeMillis();
 			} 
 			
 			// Listening for incoming notifications (SIM->ME)
@@ -396,7 +427,7 @@ public class ATresponder extends Thread {
 				log.debug("Waiting 20s for GSM Module to be back on...");
 				Thread.sleep(20000); 
 				log.debug("Now closing serial ports");
-				closingPort();
+				closing();
 			}
 		}
 	}
@@ -521,7 +552,7 @@ public class ATresponder extends Thread {
 		
 	}
 
-	private void closingPort() {
+	private void closing() {
 		if (comPort.closePort()) {
 			log.debug("Serial Port closed.");
 		}
