@@ -593,13 +593,13 @@ public class ATresponder extends Thread {
 	private void close() {
 		Thread.currentThread().setName(ManagementFactory.getRuntimeMXBean().getName()); // Update thread name
 		
-		if (comPort.isOpen()) {
-			log.debug(serialport + " trying to close serial port.");
-			if (comPort.closePort())
-				log.debug(serialport + " is now closed.");
-			else 
-				log.error(serialport + " is still open but couldn't be closed.");
-		}
+//		if (comPort.isOpen()) {
+//			log.debug(serialport + " trying to close serial port.");
+//			if (comPort.closePort())
+//				log.debug(serialport + " is now closed.");
+//			else 
+//				log.error(serialport + " is still open but couldn't be closed.");
+//		}
 		
 		try {
 			if (buffReader != null){
