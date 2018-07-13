@@ -454,11 +454,19 @@ public class ATresponder extends Thread {
 		}
 	}
 	
+	public boolean send(String cmd, long timeout) {
+		return send(cmd, "ok", timeout);
+	}
+	
 	public boolean send(String cmd) {
 		return send(cmd, "ok");
 	}
-
+	
 	public boolean send(String cmd, String expectedRsp) {
+		return send(cmd, "ok", 0);
+	}
+	
+	public boolean send(String cmd, String expectedRsp, long timeout) {
 		try {
 			log.debug(">>> TX " + cmd);
 			printStream.write((cmd + "\r\n").getBytes());
@@ -467,12 +475,12 @@ public class ATresponder extends Thread {
 		}
 		
 		if (expectedRsp != null)
-			return receiveExpectedRsp(expectedRsp);
+			return receiveExpectedRsp(expectedRsp, timeout);
 		
 		return true; // no expected response
 	}
 
-	private boolean receiveExpectedRsp(String expectedRsp) {
+	private boolean receiveExpectedRsp(String expectedRsp, long timeout) {
 		try {
 			String compareStr;
 			if (expectedRsp == null)
@@ -484,12 +492,15 @@ public class ATresponder extends Thread {
 
 			String rx;
 			int value;
+			
+			if (timeout == 0)
+				timeout = 5000; // default
 
 			while (true) {
 				
 				Thread.sleep(sleepMillis);
 				
-				if ((System.currentTimeMillis() - startTime) >= 5000){
+				if ((System.currentTimeMillis() - startTime) >= timeout){
 					log.error("Didn't get expected response '" + compareStr + "' in 5 seconds.");
 					return false;
 				}
