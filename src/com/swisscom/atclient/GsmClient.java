@@ -20,17 +20,17 @@ public class GsmClient {
 		if (args.length == 2 && args[1].toUpperCase().equals("ER")) {
 			atClient = new ATresponder(args[0], (byte) 1);
 			new Thread(atClient).start();
-		} 
-		
+		}
+
 		else if (args.length == 2 && args[1].toUpperCase().equals("AR")) {
 			atClient = new ATresponder(args[0], (byte) 2);
 			new Thread(atClient).start();
-		} 
-		
+		}
+
 		else if (args.length == 2 && args[1].toUpperCase().equals("UE")) {
 			atClient = new ATresponder(args[0], (byte) 0);
 			new Thread(atClient).start();
-		} 
+		}
 		
 		else {
 			System.out
