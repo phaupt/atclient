@@ -249,7 +249,7 @@ public class ATresponder extends Thread {
 				
 				// Provider + access technology
 				if (!send("AT+COPS?")) {
-					log.error("Failed to receive response. Trying to re-connect serial port.");
+					log.error("Trying to re-connect serial port.");
 					closing();
 					initSerialPort();
 					initAtCmd();
@@ -462,7 +462,7 @@ public class ATresponder extends Thread {
 	}
 	
 	public boolean send(String cmd, String expectedRsp) {
-		return send(cmd, "ok", 0);
+		return send(cmd, expectedRsp, 0);
 	}
 	
 	public boolean send(String cmd, String expectedRsp, long timeout) {
@@ -500,7 +500,7 @@ public class ATresponder extends Thread {
 				Thread.sleep(sleepMillis);
 				
 				if ((System.currentTimeMillis() - startTime) >= timeout){
-					log.error(serialport + " timout waiting for response.");
+					log.error(serialport + " timeout waiting for response.");
 					return false;
 				}
 		
