@@ -157,15 +157,15 @@ public class ATresponder extends Thread {
 			buffReader = new BufferedReader(new InputStreamReader(comPort.getInputStream(), "UTF-8"));
 			printStream = new PrintStream(comPort.getOutputStream(), true, "UTF-8");
 
-			log.info("Connection successfully established.");
+			log.info(serialport + " connection established.");
 			
 			if (send("AT+CGMM")) {
+				log.info(serialport + " is responding. Success!");
 				Thread.currentThread().setName(serialport); // Update thread name
 				return true;
 			} else {
 				return false;
 			}
-			
 			
 		}
 	}
