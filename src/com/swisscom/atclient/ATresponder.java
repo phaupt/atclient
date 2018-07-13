@@ -93,6 +93,7 @@ public class ATresponder extends Thread {
 		SerialPort[] ports; 
 		
 		boolean portSuccess = false;
+		String portDesc;
 		
 		while (!portSuccess) {
 			
@@ -102,12 +103,20 @@ public class ATresponder extends Thread {
 
 				// automatic serial port detection!
 				for (SerialPort port : ports) {
-					log.debug("Found serial port: " + port.getSystemPortName() + " | " + port.getDescriptivePortName());
-					serialport = port.getSystemPortName();
-					// Found a port... trying to open it
-					portSuccess = openPort();
-					if (portSuccess)
-						break; // success, break for loop
+					
+					portDesc = port.getDescriptivePortName();
+					
+					// Check for known PLS8 terminal (Windows or Linux serial port description)
+					if (portDesc.contains("Gemalto M2M") || portDesc.contains("LTE Modem")) {
+						log.debug("Found serial port: " + port.getSystemPortName() + " | " + portDesc);
+						serialport = port.getSystemPortName();
+						
+						// Found a port... trying to open it
+						portSuccess = openPort();
+						if (portSuccess)
+							break; // success, break for loop
+					}
+					
 					Thread.sleep(500);
 				}
 
@@ -248,8 +257,9 @@ public class ATresponder extends Thread {
 				
 				log.debug(serialport + " heart beat check...");
 				
-				// Provider + access technology
+				// heart beat: Provider + access technology
 				if (!send("AT+COPS?")) {
+					// failed...
 					log.error("Trying to re-connect serial port.");
 					close();
 					initSerialPort();
@@ -467,11 +477,6 @@ public class ATresponder extends Thread {
 	}
 	
 	public boolean send(String cmd, String expectedRsp, long timeout) {
-//		if (!comPort.isOpen()) {
-//			log.error(serialport + " is not open. Cannot send TX.");
-//			return false;
-//		}
-		
 		try {
 			log.debug(">>> TX " + cmd);
 			printStream.write((cmd + "\r\n").getBytes());
@@ -593,13 +598,13 @@ public class ATresponder extends Thread {
 	private void close() {
 		Thread.currentThread().setName(ManagementFactory.getRuntimeMXBean().getName()); // Update thread name
 		
-//		if (comPort.isOpen()) {
-//			log.debug(serialport + " trying to close serial port.");
-//			if (comPort.closePort())
-//				log.debug(serialport + " is now closed.");
-//			else 
-//				log.error(serialport + " is still open but couldn't be closed.");
-//		}
+		if (comPort.isOpen()) {
+			log.debug(serialport + " trying to close serial port.");
+			if (comPort.closePort())
+				log.debug(serialport + " is now closed.");
+			else 
+				log.error(serialport + " is still open but couldn't be closed.");
+		}
 		
 		try {
 			if (buffReader != null){

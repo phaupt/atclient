@@ -5,11 +5,11 @@
    </Properties>
    <Appenders>
       <Console name="console" target="SYSTEM_OUT">
-         <PatternLayout pattern="%d %t [%level{WARN=WAR, DEBUG=DEB, ERROR=ERR, TRACE=TRA, INFO=INF}] %m%n"/>
+         <PatternLayout pattern="%d %t [%level{WARN=WRN, DEBUG=DBG, ERROR=ERR, TRACE=TRC, INFO=INF}] %m%n"/>
       </Console>
       <RollingFile name="reporter" fileName="${sys:log.file}" filePattern="${sys:log.file}-%d{MM-dd-yyyy}-%i.log">
          <PatternLayout>
-            <Pattern>%d %t [%level{WARN=WAR, DEBUG=DEB, ERROR=ERR, TRACE=TRA, INFO=INF}] %m%n</Pattern>
+            <Pattern>%d %t [%level{WARN=WRN, DEBUG=DBG, ERROR=ERR, TRACE=TRC, INFO=INF}] %m%n</Pattern>
          </PatternLayout>
          <Policies>
             <TimeBasedTriggeringPolicy/>
