@@ -12,12 +12,6 @@ public class ATresponder extends Thread {
 	
 	private final Logger log = LogManager.getLogger(ATresponder.class.getName());
 	
-	// In case of WINDOWS:
-	//private final String portDescription = "Gemalto M2M ALSx PLSx USB CDC-ACM Port 1";
-
-	// In case of LINUX:
-	private final String portDescription = "Gemalto M2M ALSx PLSx USB CDC-ACM Port 1";
-	
 	// Detect incoming Text SMS with specific keyword
 	private final String txtSmsKeyword = "OTP Token:";
 	
