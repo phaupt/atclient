@@ -12,8 +12,12 @@ public class ATresponder extends Thread {
 	
 	private final Logger log = LogManager.getLogger(ATresponder.class.getName());
 	
-	private final String portDescription = "Gemalto M2M ALSx PLSx USB CDC-ACM Port 1";
+	// In case of WINDOWS:
+	//private final String portDescription = "Gemalto M2M ALSx PLSx USB CDC-ACM Port 1";
 
+	// In case of LINUX:
+	private final String portDescription = "Gemalto M2M ALSx PLSx USB CDC-ACM Port 1";
+	
 	// Detect incoming Text SMS with specific keyword
 	private final String txtSmsKeyword = "OTP Token:";
 	
@@ -104,14 +108,14 @@ public class ATresponder extends Thread {
 				
 				// automatic serial port detection!
 				for (SerialPort port : ports) {
-					log.debug("Found serial port: " + port.getSystemPortName() + " | " + port.getDescriptivePortName() );
-					if (port.getDescriptivePortName().contains(portDescription)) {
+					log.debug("Found serial port: " + port.getSystemPortName() + " | " + port.getDescriptivePortName());
+					//if (port.getDescriptivePortName().contains(portDescription)) {
 						serialport = port.getSystemPortName();
 						// Found a port... trying to open it
 						portSuccess = openPort();
 						if (portSuccess)
 							break; // success, break for loop
-					}
+					//}
 				}
 				
 			} else {
@@ -155,8 +159,14 @@ public class ATresponder extends Thread {
 
 			log.info("Connection successfully established.");
 			
-			Thread.currentThread().setName(serialport); // Update thread name
-			return true;
+			if (send("AT+CGMM")) {
+				Thread.currentThread().setName(serialport); // Update thread name
+				return true;
+			} else {
+				return false;
+			}
+			
+			
 		}
 	}
 
