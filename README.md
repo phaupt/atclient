@@ -98,7 +98,7 @@ With the default log4j configuration you can pass the log file name as a command
 
 #### Example logfile output
 
-Mobile ID signature processing in less than a second:
+Example log in case of a Mobile ID signature processing. It's lightning fast (less than a second).
 ```
 2018-07-13 16:12:01,222 13820@U278884 COM16 [D] <<< RX ^SSTN: 33
 2018-07-13 16:12:01,222 13820@U278884 COM16 [I] ### 33: DISPLAY TEXT ####
