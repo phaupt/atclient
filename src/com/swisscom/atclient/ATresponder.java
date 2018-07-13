@@ -2,6 +2,7 @@ package com.swisscom.atclient;
 
 import com.fazecast.jSerialComm.*;
 import java.io.*;
+import java.util.Arrays;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -14,7 +15,7 @@ public class ATresponder extends Thread {
 	private final String txtSmsKeyword = "OTP Token:";
 	
 	private final long inactTimerMillis = 600000; // In case of inactivity, get status information such as AT+COPS after x millis
-	private final int sleepMillis = 10; // 100ms are recommended in the PLS8-E manual
+	private final int sleepMillis = 10; // Polling interval for incoming requests
 	
 	private BufferedReader buffReader;
 	private PrintStream printStream;
@@ -120,8 +121,15 @@ public class ATresponder extends Thread {
 	}
 
 	private void initAtCmd() throws InterruptedException {
-		send("ATE0"); // Turn off echo mode
-
+		
+		boolean success = false;
+		while (!success) {
+			// Send the first AT command. In case the terminal is not yet ready, repeat the command
+			success = send("ATE0"); // Turn off echo mode
+			if (!success)
+				Thread.sleep(1000);
+		}
+		
 		send("AT+CMEE=2"); // Switch on verbose error messages
 		
 		send("AT+CIMI"); // IMSI
@@ -135,14 +143,6 @@ public class ATresponder extends Thread {
 		send("AT+CNMI=1,1"); // Activate the display of a URC on every received SMS
 		
 		send("AT+COPS?"); // Provider + access technology
-		//		 0 GSM
-		//		 1 GSM Compact (2G)
-		//		 2 UTRAN (3G)
-		//		 3 GSM w/EGPRS
-		//		 4 UTRAN w/HSDPA
-		//		 5 UTRAN w/HSUPA
-		//		 6 UTRAN w/HSDPA and HSUPA
-		//		 7 E-UTRAN (LTE)
 		
 		send("AT+CSQ"); // Signal Strength
 	}
@@ -170,12 +170,12 @@ public class ATresponder extends Thread {
 	
 	public void shutdownAndExit(){
 		log.info("### Send SHUTDOWN Command and exit application ###");
-		send("AT^SMSO", "^SHUTDOWN"); // Restart
+		send("AT^SMSO"); // Power-off the terminal
 		closingPort();
 		isAlive = false; // will exit the while loop and terminate the application	
 	}
 
-	private synchronized void processAtLoop() throws InterruptedException, UnsupportedEncodingException, IOException {
+	private void processAtLoop() throws InterruptedException, UnsupportedEncodingException, IOException {
 
 		if (mode == 1) {
 			initialize(false); // ER
@@ -187,8 +187,8 @@ public class ATresponder extends Thread {
 
 		long inactivityTimerCurrent = System.currentTimeMillis();
 		String code;
-		String rcvStr;
-		int cmdType = 0;
+		String rx;
+		int value = 0;
 		boolean ackCmdRequired = false;
 		
 		initAtCmd();
@@ -209,55 +209,42 @@ public class ATresponder extends Thread {
 			
 			// Listening for incoming notifications (SIM->ME)
 			try {
-				while (isAlive && buffReader.ready() && (rcvStr = buffReader.readLine()) != null) {
+				while (isAlive && buffReader.ready() && (rx = buffReader.readLine()) != null) {
 					
 					inactivityTimerCurrent = System.currentTimeMillis(); // reset the inactivity timer
 					
-					if (rcvStr.length() == 0)
+					if (rx.length() == 0)
 						break;
 					
-					log.debug("<<< RX " + rcvStr);
+					log.debug("<<< RX " + rx);
 	
-					getMeTextAscii(rcvStr); // may set the flag such as CANCEL	
+					getMeTextAscii(rx); // may set the flag such as CANCEL	
 	
-					if (rcvStr.toUpperCase().trim().startsWith("+CMTI: ")) {
-						cmdType = new Integer(rcvStr.substring(13, rcvStr.length())).intValue(); // +CMTI: "SM", 0
-						log.info("### Incoming Short Message ###");
-						
-						// read the SMS data
-						log.debug("### Read SMS Details ###");
-						send("AT+CMGR=" + cmdType);
-						
-						// delete all stored short messages after reading
-						log.debug("### Delete SMS storage ###");
-						send("AT+CMGD=0,4");
-						
-						// delete specific SMS after reading
-						//log.debug("### Delete SMS ###");
-						//send("AT+CMGD=" + cmdType);
-					}
-					
-					// Check if it is a Remote-SAT Response (SSTR)
-					if (rcvStr.toUpperCase().trim().startsWith("^SSTR: ")) {	
+					if (rx.toUpperCase().startsWith("+CMTI: ")) {
+						value = new Integer(rx.substring(13, rx.length())).intValue(); // +CMTI: "SM", 0
+						log.info("### TEXT MESSAGE (SMS) ###");
+						send("AT+CMGR=" + value); // read the SMS data
+						send("AT+CMGD=0,4"); // delete all stored short messages after reading
+					} else if (rx.toUpperCase().startsWith("^SSTR: ")) {	
 						// ^SSTR: 3,19
 						// ^SSTR: 19,0,"" --> ignore this one (NumberFormatException catched and ignored)
-						cmdType = new Integer(rcvStr.substring(9, rcvStr.length())).intValue(); // ^SSTR: ?,XX
+						value = new Integer(rx.substring(9, rx.length())).intValue(); // ^SSTR: ?,XX
 
 						// ^SSTR: 2,?? | ^SSTR: 3,?? | ^SSTR: 4,??
 						// ^SSTR: <state>,<cmdType>
 						// <state>: 0=RESET, 1=OFF, 2=IDLE, 3=PAC, 4=WAIT
 						// <cmdType>: only valid in case of <state> is PAC or WAIT
-						if (rcvStr.substring(7, 8).equals("3") || rcvStr.substring(7, 8).equals("4"))
+						if (rx.substring(7, 8).equals("3") || rx.substring(7, 8).equals("4"))
 							ackCmdRequired = true;
 						
 						// Check Proactive Command Type
-						switch (cmdType) {
+						switch (value) {
 						case 19: // ^SSTR: 3,19
 							if (ackCmdRequired) {
 								// SEND MESSAGE
 								log.info("### 19: SEND MESSAGE ###");
-								send("at^sstgi=" + cmdType); // GetInfos		
-								send("at^sstr=" + cmdType + ",0"); // Confirm
+								send("at^sstgi=" + value); // GetInfos		
+								send("at^sstr=" + value + ",0"); // Confirm
 							}
 							ackCmdRequired = false;
 							break;
@@ -265,8 +252,8 @@ public class ATresponder extends Thread {
 							if (ackCmdRequired) {
 								// PLAY TONE
 								log.info("### 32: PLAY TONE ###");
-								send("at^sstgi=" + cmdType); // GetInfos
-								send("at^sstr=" + cmdType + ",0"); // Confirm
+								send("at^sstgi=" + value); // GetInfos
+								send("at^sstr=" + value + ",0"); // Confirm
 							}
 							ackCmdRequired = false;
 							break;
@@ -274,10 +261,8 @@ public class ATresponder extends Thread {
 							if (ackCmdRequired) {
 								// DISPLAY TEXT
 								log.info("### 33: DISPLAY TEXT ###");
-								send("at^sstgi=" + cmdType); // GetInfos
-								getMeTextAscii(rcvStr); // may set the flag such as CANCEL
-								log.debug("CANCEL: " + cancel + " | STKTIMEOUT: " + stk_timeout);
-								
+								send("at^sstgi=" + value); // GetInfos
+								getMeTextAscii(rx); // may set the flag such as CANCEL
 								code = "0"; // OK
 								if (cancel){ 
 									log.debug("Reset CANCEL Flag...");
@@ -290,7 +275,7 @@ public class ATresponder extends Thread {
 									code = "18"; // No response from user
 								}
 								
-								send("at^sstr=" + cmdType + "," + code); // Confirm
+								send("at^sstr=" + value + "," + code); // Confirm
 							}
 							ackCmdRequired = false;
 							break;
@@ -298,10 +283,8 @@ public class ATresponder extends Thread {
 							if (ackCmdRequired) {
 								// GET INPUT
 								log.info("### 35: GET INPUT ###");
-								send("at^sstgi=" + cmdType); // GetInfos
-								getMeTextAscii(rcvStr); // may set the flag such as CANCEL
-								log.debug("CANCEL: " + cancel + " | STKTIMEOUT: " + stk_timeout);
-																
+								send("at^sstgi=" + value); // GetInfos
+								getMeTextAscii(rx); // may set the flag such as CANCEL						
 								code = "0,,003100320033003400350036"; // OK
 								if (cancel){ 
 									log.debug("Reset CANCEL Flag...");
@@ -314,7 +297,7 @@ public class ATresponder extends Thread {
 									code = "18"; // No response from user
 								}
 
-								send("at^sstr=" + cmdType + "," + code); // Confirm
+								send("at^sstr=" + value + "," + code); // Confirm
 							}
 							ackCmdRequired = false;
 							break;
@@ -322,27 +305,24 @@ public class ATresponder extends Thread {
 							if (ackCmdRequired) {
 								// SET UP MENU
 								log.info("### 37: SET UP MENU ###");
-								send("at^sstgi=" + cmdType); // GetInfos
-								send("at^sstr=" + cmdType + ",0"); // Confirm
+								send("at^sstgi=" + value); // GetInfos
+								send("at^sstr=" + value + ",0"); // Confirm
 							}
 							ackCmdRequired = false;
 							break;
 						default:
 							break;
 						}
-					}
-
-					// Check if it is a Remote-SAT Notification (SSTN)
-					else if (rcvStr.toUpperCase().trim().startsWith("^SSTN: ")) {
-						cmdType = new Integer(rcvStr.substring(7, rcvStr.length())).intValue(); // ^SSTN: 19
+					} else if (rx.toUpperCase().startsWith("^SSTN: ")) {
+						value = new Integer(rx.substring(7, rx.length())).intValue(); // ^SSTN: 19
 
 						// Check Proactive Command Type
-						switch (cmdType) {
+						switch (value) {
 						case 19:
 							// SEND MESSAGE
 							log.info("### 19: SEND MESSAGE ###");
-							send("at^sstgi=" + cmdType); // GetInfos		
-							send("at^sstr=" + cmdType + ",0"); // Confirm
+							send("at^sstgi=" + value); // GetInfos		
+							send("at^sstr=" + value + ",0"); // Confirm
 							break;
 						case 32:
 							// PLAY TONE
@@ -354,9 +334,7 @@ public class ATresponder extends Thread {
 							// DISPLAY TEXT
 							log.info("### 33: DISPLAY TEXT ####");
 							send("at^sstgi=33");
-							getMeTextAscii(rcvStr); // may set the flag such as CANCEL
-							log.debug("CANCEL: " + cancel + " | STKTIMEOUT: " + stk_timeout);
-							
+							getMeTextAscii(rx); // may set the flag such as CANCEL
 							code = "0"; // OK
 							if (cancel){ 
 								log.debug("Reset CANCEL Flag...");
@@ -375,9 +353,7 @@ public class ATresponder extends Thread {
 							// GET INPUT (Input=123456)
 							log.info("### 35: GET INPUT ####");
 							send("at^sstgi=35");
-							getMeTextAscii(rcvStr); // may set the flag such as CANCEL
-							log.debug("CANCEL: " + cancel + " | STKTIMEOUT: " + stk_timeout);
-														
+							getMeTextAscii(rx); // may set the flag such as CANCEL							
 							code = "0,,003100320033003400350036"; // OK
 							if (cancel){ 
 								log.debug("Reset CANCEL Flag...");
@@ -390,7 +366,7 @@ public class ATresponder extends Thread {
 								code = "18"; // No response from user
 							}
 
-							send("at^sstr=" + cmdType + "," + code); // Confirm
+							send("at^sstr=" + value + "," + code); // Confirm
 							break;
 						case 36:
 							// SELECT ITEM
@@ -425,11 +401,11 @@ public class ATresponder extends Thread {
 		}
 	}
 	
-	public void send(String cmd) {
-		send(cmd, "ok");
+	public boolean send(String cmd) {
+		return send(cmd, "ok");
 	}
 
-	public void send(String cmd, String expectedRsp) {
+	public boolean send(String cmd, String expectedRsp) {
 		try {
 			log.debug(">>> TX " + cmd);
 			printStream.write((cmd + "\r\n").getBytes());
@@ -438,10 +414,12 @@ public class ATresponder extends Thread {
 		}
 		
 		if (expectedRsp != null)
-			receiveExpectedRsp(expectedRsp);
+			return receiveExpectedRsp(expectedRsp);
+		
+		return true; // no expected response
 	}
 
-	private synchronized boolean receiveExpectedRsp(String expectedRsp) {
+	private boolean receiveExpectedRsp(String expectedRsp) {
 		try {
 			String compareStr;
 			if (expectedRsp == null)
@@ -451,35 +429,60 @@ public class ATresponder extends Thread {
 
 			long startTime = System.currentTimeMillis();
 
-			String rsp;
+			String rx;
+			int value;
 
 			while (true) {
 				
 				Thread.sleep(sleepMillis);
 				
-				if ((System.currentTimeMillis() - startTime) >= 10000){
-					log.error("Didn't get expected response '" + compareStr + "' in 10 seconds.");
+				if ((System.currentTimeMillis() - startTime) >= 5000){
+					log.error("Didn't get expected response '" + compareStr + "' in 5 seconds.");
 					return false;
 				}
 		
-				while (isAlive && buffReader.ready() && (rsp = buffReader.readLine()) != null) {
+				while (isAlive && buffReader.ready() && (rx = buffReader.readLine()) != null) {
 					
-					if (rsp.length() > 0) {
-						log.debug("<<< RX " + rsp);
+					if (rx.length() > 0) {
+						log.debug("<<< RX " + rx);
 						
-						getMeTextAscii(rsp);
+						getMeTextAscii(rx);
 											
-						if (rsp.contains(txtSmsKeyword)) {
+						if (rx.contains(txtSmsKeyword)) {
 							// Text Short Message Keyword detected
-							log.info("Text SMS: \"" + rsp + "\"");
+							log.info("Text SMS: \"" + rx + "\"");
 							// TODO: Do something with the text content... 
-						}
-						
-						else if (rsp.toUpperCase().trim().contains("ERROR")) {
-							log.error("Got ERROR: '" + rsp.toUpperCase().trim() + "'");
-						} 		
-						
-						else if (rsp.toUpperCase().trim().contains(compareStr)) {			
+						} else if (rx.toUpperCase().startsWith("+COPS: ")) {
+							value = new Integer( Arrays.asList(rx.split(",")).get(3) ).intValue(); // +COPS: 0,0,"Swisscom",7
+							switch (value) {
+							case 0: 
+								log.info("Radio Access Technology: GSM (2G)");
+								break;
+							case 1: 
+								log.info("Radio Access Technology: GSM Compact (2G)");
+								break;
+							case 2: 
+								log.info("Radio Access Technology: UTRAN (3G)");
+								break;
+							case 3: 
+								log.info("Radio Access Technology: GSM w/EGPRS (2G)");
+								break;
+							case 4: 
+								log.info("Radio Access Technology: UTRAN w/HSDPA (3G)");
+								break;
+							case 5: 
+								log.info("Radio Access Technology: UTRAN w/HSUPA (3G)");
+								break;
+							case 6: 
+								log.info("Radio Access Technology: UTRAN w/HSDPA and HSUPA (3G)");
+								break;
+							case 7: 
+								log.info("Radio Access Technology: E-UTRAN (4G/LTE)");
+								break;
+							default:
+								break;
+							}
+						} else if (rx.toUpperCase().trim().contains(compareStr)) {			
 							return true; // Got the expected response
 						} 
 					}
@@ -500,7 +503,7 @@ public class ATresponder extends Thread {
 			try {
 				rsp = rsp.substring(rsp.indexOf(",\"") + 2, rsp.indexOf("\",", rsp.indexOf(",\"") + 2));
 				rsp = new String(hexToByte(rsp), "UTF-16");
-				log.info("UI Text=\"" + rsp + "\"");
+				log.info("TEXT: \"" + rsp + "\"");
 			} catch (Exception e) {
 				//do nothing...
 			}
@@ -509,11 +512,11 @@ public class ATresponder extends Thread {
 		// Check if UI Text contains specific keywords
 		if (rsp.indexOf("CANCEL") != -1) {
 			setCancel(true);
-			log.debug("'CANCEL'-keyword detected! Message will be cancelled.");
+			log.info("'CANCEL'-keyword detected! Message will be cancelled.");
 		}
 		else if (rsp.indexOf("STKTIMEOUT") != -1) {
 			setStkTimeout(true);
-			log.debug("'STKTIMEOUT'-keyword detected! Message will time out.");
+			log.info("'STKTIMEOUT'-keyword detected! Message will time out.");
 		}
 		
 	}
