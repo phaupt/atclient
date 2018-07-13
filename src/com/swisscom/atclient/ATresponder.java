@@ -25,12 +25,12 @@ public class ATresponder extends Thread {
 
 	private String serialport;
 	private SerialPort comPort;
-	private int baudrate = 9600;
+	private final int baudrate = 9600;
 	private final int databits = 8;
 	private final int stopbits = 1;
 	private final int parity = 0;
 	
-	private final byte mode; // Switch: 1=ER, 2=AR
+	private byte mode; // Switch: 1=ER, 2=AR
 	
 	public volatile static boolean isAlive = true;
 
@@ -59,7 +59,7 @@ public class ATresponder extends Thread {
 	}
 	
 	public void run() {
-		Thread.currentThread().setName("ATRESP");
+		Thread.currentThread().setName(serialport);
 		
 		log.info("Application started...");
 
