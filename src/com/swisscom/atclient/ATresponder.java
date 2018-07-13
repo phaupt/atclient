@@ -136,8 +136,8 @@ public class ATresponder extends Thread {
 			
 	}
 	
-	private boolean openPort() throws UnsupportedEncodingException {
-		log.debug("Trying to open " + serialport);
+	private boolean openPort() throws IOException {
+		log.debug(serialport + " tryig to open");
 		comPort = SerialPort.getCommPort(serialport);
 		comPort.openPort();
 		
@@ -164,7 +164,8 @@ public class ATresponder extends Thread {
 				return true;
 			} else {
 				log.error(serialport + " wasn't responding.");
-				closing();
+				buffReader.close();
+				printStream.close();
 				return false;
 			}
 			
