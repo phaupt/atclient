@@ -248,7 +248,7 @@ public class ATresponder extends Thread {
 				// Check every x milliseconds of inactivity
 				
 				// Provider + access technology
-				if (!send("AT+COPS?")) {
+				if (!comPort.isOpen() || !send("AT+COPS?")) {
 					log.error("Trying to re-connect serial port.");
 					closing();
 					initSerialPort();
@@ -466,6 +466,11 @@ public class ATresponder extends Thread {
 	}
 	
 	public boolean send(String cmd, String expectedRsp, long timeout) {
+		if (!comPort.isOpen()) {
+			log.error(serialport + " is not open. Cannot send TX.");
+			return false;
+		}
+			
 		try {
 			log.debug(">>> TX " + cmd);
 			printStream.write((cmd + "\r\n").getBytes());
