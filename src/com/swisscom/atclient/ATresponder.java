@@ -249,7 +249,7 @@ public class ATresponder extends Thread {
 				log.debug(serialport + " heart beat check...");
 				
 				// Provider + access technology
-				if (!comPort.isOpen() || !send("AT+COPS?")) {
+				if (!send("AT+COPS?")) {
 					log.error("Trying to re-connect serial port.");
 					close();
 					initSerialPort();
@@ -467,10 +467,10 @@ public class ATresponder extends Thread {
 	}
 	
 	public boolean send(String cmd, String expectedRsp, long timeout) {
-		if (!comPort.isOpen()) {
-			log.error(serialport + " is not open. Cannot send TX.");
-			return false;
-		}
+//		if (!comPort.isOpen()) {
+//			log.error(serialport + " is not open. Cannot send TX.");
+//			return false;
+//		}
 		
 		try {
 			log.debug(">>> TX " + cmd);
