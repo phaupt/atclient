@@ -246,6 +246,8 @@ public class ATresponder extends Thread {
 			if ((System.currentTimeMillis() - inactivityTimerCurrent) >= heartBeatMillis){
 				// Check every x milliseconds of inactivity
 				
+				log.debug(serialport + " heart beat check...");
+				
 				// Provider + access technology
 				if (!comPort.isOpen() || !send("AT+COPS?")) {
 					log.error("Trying to re-connect serial port.");
@@ -469,7 +471,7 @@ public class ATresponder extends Thread {
 			log.error(serialport + " is not open. Cannot send TX.");
 			return false;
 		}
-			
+		
 		try {
 			log.debug(">>> TX " + cmd);
 			printStream.write((cmd + "\r\n").getBytes());
