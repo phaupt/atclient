@@ -12,8 +12,12 @@ public class ATresponder extends Thread {
 	
 	private final Logger log = LogManager.getLogger(ATresponder.class.getName());
 	
-	// Detect incoming Text SMS with specific keyword
-	private final String txtSmsKeyword = "OTP Token:";
+	// Detect incoming Text SMS that contains a specific keyword and forward to target MSISDN
+	private final String txtSmsKeyword = "identification code";
+	private final String targetMsisdn = "+41791234567";
+	
+	private final String prtNameWindows = "Gemalto M2M ALSx PLSx USB CDC-ACM Port 1";
+	private final String prtNameLinux = "LTE Modem";
 	
 	private final long heartBeatMillis = 600000; // Heart beat to detect serial port disconnection in milliseconds
 	private final int sleepMillis = 50; // Polling interval in milliseconds for incoming requests
@@ -35,6 +39,9 @@ public class ATresponder extends Thread {
 	private byte mode; // Switch: 1=ER, 2=AR
 	
 	public volatile static boolean isAlive = true;
+	
+	private final char quote = 34;
+	private final char ctrlz = 26;
 
 	public ATresponder(byte mode) {
 		this.mode = mode;
@@ -105,17 +112,17 @@ public class ATresponder extends Thread {
 					portDesc = port.getDescriptivePortName();
 					
 					// Check for known PLS8 terminal (Windows or Linux serial port description)
-					if (portDesc.contains("Gemalto M2M ALSx PLSx USB CDC-ACM Port 1") || portDesc.contains("LTE Modem")) {
+					if (portDesc.contains(prtNameWindows) || portDesc.contains(prtNameLinux)) {
 						log.debug("Found serial port: " + port.getSystemPortName() + " | " + portDesc);
 						serialport = port.getSystemPortName();
 						
-						// Found a port... trying to open it
+						// Found a port with matching name... trying to open it
 						portSuccess = openPort();
 						if (portSuccess)
-							break; // success, break for loop
+							break; // success, break for-loop
 					}
 					
-					Thread.sleep(100);
+					Thread.sleep(100); // wait before to proceed with next available port in list
 				}
 
 			} else {
@@ -125,9 +132,9 @@ public class ATresponder extends Thread {
 			}
 			
 			if (!portSuccess) {
-				log.error("No luck yet to find the proper terminal. Will try again in 3 seconds.");
+				log.error("No luck yet to find the proper terminal. Will try again in 5 seconds.");
 				try {
-					Thread.sleep(3000);
+					Thread.sleep(5000); 
 				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}
@@ -138,12 +145,12 @@ public class ATresponder extends Thread {
 	private boolean openPort() throws IOException {
 		log.debug(serialport + " tryig to open");
 		comPort = SerialPort.getCommPort(serialport);
-		comPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 500, 500);
+		comPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 0, 0);
 		comPort.setComPortParameters(baudrate, databits, stopbits, parity);
 		comPort.setDTR();
-		comPort.openPort();
 		
-		if (!comPort.isOpen()) {
+		// Try to open port..
+		if (!comPort.openPort()) {
 			// Port not available
 			log.error(serialport + " is currently not available.");
 			return false;			
@@ -156,14 +163,15 @@ public class ATresponder extends Thread {
 
 			log.info(serialport + " connection established.");
 			
+			// Check if terminal is responding to AT command
 			if (send("AT", sleepMillis + 500)) {
 				log.info(serialport + " is responding. Success!");
 				Thread.currentThread().setName(ManagementFactory.getRuntimeMXBean().getName() + " " + serialport); // Update thread name
-				return true;
+				return true; // success
 			} else {
 				log.error(serialport + " wasn't responding.");
 				close();
-				return false;
+				return false; // failed. terminal wasn't responding.
 			}
 		}
 	}
@@ -498,7 +506,7 @@ public class ATresponder extends Thread {
 				Thread.sleep(sleepMillis);
 				
 				if ((System.currentTimeMillis() - startTime) >= timeout){
-					log.error(serialport + " timeout waiting for response.");
+					log.error(serialport + " timeout (" + timeout + "ms) waiting for response '" + expectedRsp + "'");
 					return false;
 				}
 		
@@ -511,7 +519,10 @@ public class ATresponder extends Thread {
 											
 						if (rx.contains(txtSmsKeyword)) {
 							// Text Short Message Keyword detected
-							log.info("Text SMS: \"" + rx + "\"");
+							log.info("Detected Text SMS with keyword: \"" + rx + "\"");
+							log.info("Forward Text SMS to " + targetMsisdn);
+						    send("AT+CMGS=" + quote + targetMsisdn + quote + ",145");
+						    send(rx + ctrlz, "+CMGS");
 						} else if (rx.toUpperCase().startsWith("+COPS: ")) {
 							value = Integer.parseInt( Arrays.asList(rx.split(",")).get(3) ); // +COPS: 0,0,"Swisscom",7
 							switch (value) {
