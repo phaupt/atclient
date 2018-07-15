@@ -271,14 +271,14 @@ public class ATresponder extends Thread {
 					getMeTextAscii(rx); // may set the flag such as CANCEL	
 	
 					if (rx.toUpperCase().startsWith("+CMTI: ")) {
-						value = new Integer(rx.substring(13, rx.length())).intValue(); // +CMTI: "SM", 0
+						value = Integer.parseInt((rx.substring(13, rx.length()))); // +CMTI: "SM", 0
 						log.info("### TEXT MESSAGE (SMS) ###");
 						send("AT+CMGR=" + value); // read the SMS data
 						send("AT+CMGD=0,4"); // delete all stored short messages after reading
 					} else if (rx.toUpperCase().startsWith("^SSTR: ")) {	
 						// ^SSTR: 3,19
 						// ^SSTR: 19,0,"" --> ignore this one (NumberFormatException catched and ignored)
-						value = new Integer(rx.substring(9, rx.length())).intValue(); // ^SSTR: ?,XX
+						value = Integer.parseInt(rx.substring(9, rx.length())); // ^SSTR: ?,XX
 
 						// ^SSTR: 2,?? | ^SSTR: 3,?? | ^SSTR: 4,??
 						// ^SSTR: <state>,<cmdType>
@@ -364,7 +364,7 @@ public class ATresponder extends Thread {
 							break;
 						}
 					} else if (rx.toUpperCase().startsWith("^SSTN: ")) {
-						value = new Integer(rx.substring(7, rx.length())).intValue(); // ^SSTN: 19
+						value = Integer.parseInt(rx.substring(7, rx.length())); // ^SSTN: 19
 
 						// Check Proactive Command Type
 						switch (value) {
@@ -512,9 +512,8 @@ public class ATresponder extends Thread {
 						if (rx.contains(txtSmsKeyword)) {
 							// Text Short Message Keyword detected
 							log.info("Text SMS: \"" + rx + "\"");
-							// TODO: Do something with the text content... 
 						} else if (rx.toUpperCase().startsWith("+COPS: ")) {
-							value = new Integer( Arrays.asList(rx.split(",")).get(3) ).intValue(); // +COPS: 0,0,"Swisscom",7
+							value = Integer.parseInt( Arrays.asList(rx.split(",")).get(3) ); // +COPS: 0,0,"Swisscom",7
 							switch (value) {
 							case 0: 
 								log.info("Radio Access Technology: GSM (2G)");
