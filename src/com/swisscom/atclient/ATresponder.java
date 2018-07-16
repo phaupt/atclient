@@ -16,10 +16,10 @@ public class ATresponder extends Thread {
 	private final String txtSmsKeyword = "identification code";
 	private final String targetMsisdn = "+41791234567";
 	
-	private final String prtNameWindows = "Gemalto M2M ALSx PLSx USB CDC-ACM Port 1";
-	private final String prtNameLinux = "LTE Modem";
-	
-	private final long heartBeatMillis = 600000; // Heart beat to detect serial port disconnection in milliseconds
+	private final String prtStrWindows = "Gemalto M2M ALSx PLSx USB CDC-ACM Port 1";
+	private final String prtStrLinux = "LTE Modem";
+
+	private final long heartBeatMillis = 10000; // Heart beat to detect serial port disconnection in milliseconds
 	private final int sleepMillis = 50; // Polling interval in milliseconds for incoming requests
 	
 	private BufferedReader buffReader;
@@ -28,15 +28,15 @@ public class ATresponder extends Thread {
 	private volatile static boolean cancel;
 	private volatile static boolean stk_timeout;
 
-	private String serialport = null;
-	private SerialPort comPort;
+	private String serPortStr = null;
+	private SerialPort serPort;
 	
 	private final int baudrate = 9600;
 	private final int databits = 8;
 	private final int stopbits = 1;
 	private final int parity = 0;
 	
-	private byte mode; // Switch: 1=ER, 2=AR
+	private byte opMode; // Switch: 1=ER, 2=AR
 	
 	public volatile static boolean isAlive = true;
 	
@@ -44,12 +44,12 @@ public class ATresponder extends Thread {
 	private final char ctrlz = 26;
 
 	public ATresponder(byte mode) {
-		this.mode = mode;
+		this.opMode = mode;
 	}
 	
 	public ATresponder(byte mode, String serialPort) {
-		this.mode = mode;
-		this.serialport = serialPort;
+		this.opMode = mode;
+		this.serPortStr = serialPort;
 	}
 	
 	public void attachShutDownHook() {
@@ -104,7 +104,7 @@ public class ATresponder extends Thread {
 		
 		while (!portSuccess) {
 			ports = SerialPort.getCommPorts();
-			if (mode == 0) {
+			if (opMode == 0) {
 
 				// automatic serial port detection!
 				for (SerialPort port : ports) {
@@ -112,9 +112,9 @@ public class ATresponder extends Thread {
 					portDesc = port.getDescriptivePortName();
 					
 					// Check for known PLS8 terminal (Windows or Linux serial port description)
-					if (portDesc.contains(prtNameWindows) || portDesc.contains(prtNameLinux)) {
+					if (portDesc.contains(prtStrWindows) || portDesc.contains(prtStrLinux)) {
 						log.debug("Found serial port: " + port.getSystemPortName() + " | " + portDesc);
-						serialport = port.getSystemPortName();
+						serPortStr = port.getSystemPortName();
 						
 						// Found a port with matching name... trying to open it
 						portSuccess = openPort();
@@ -143,33 +143,33 @@ public class ATresponder extends Thread {
 	}
 	
 	private boolean openPort() throws IOException {
-		log.debug(serialport + " tryig to open");
-		comPort = SerialPort.getCommPort(serialport);
-		comPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 0, 0);
-		comPort.setComPortParameters(baudrate, databits, stopbits, parity);
-		comPort.setDTR();
+		log.debug(serPortStr + " tryig to open");
+		serPort = SerialPort.getCommPort(serPortStr);
+		serPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 0, 0);
+		serPort.setComPortParameters(baudrate, databits, stopbits, parity);
+		serPort.setDTR();
 		
 		// Try to open port..
-		if (!comPort.openPort()) {
+		if (!serPort.openPort()) {
 			// Port not available
-			log.error(serialport + " is currently not available.");
+			log.error(serPortStr + " is currently not available.");
 			return false;			
 		} else {
 			// Port available
-			log.debug(serialport + " successfully opened.");
+			log.debug(serPortStr + " successfully opened.");
 
-			buffReader = new BufferedReader(new InputStreamReader(comPort.getInputStream(), "UTF-8"));
-			printStream = new PrintStream(comPort.getOutputStream(), true, "UTF-8");
+			buffReader = new BufferedReader(new InputStreamReader(serPort.getInputStream(), "UTF-8"));
+			printStream = new PrintStream(serPort.getOutputStream(), true, "UTF-8");
 
-			log.info(serialport + " connection established.");
+			log.info(serPortStr + " connection established.");
 			
 			// Check if terminal is responding to AT command
 			if (send("AT", sleepMillis + 500)) {
-				log.info(serialport + " is responding. Success!");
-				Thread.currentThread().setName(ManagementFactory.getRuntimeMXBean().getName() + " " + serialport); // Update thread name
+				log.info(serPortStr + " is responding. Success!");
+				Thread.currentThread().setName(ManagementFactory.getRuntimeMXBean().getName() + " " + serPortStr); // Update thread name
 				return true; // success
 			} else {
-				log.error(serialport + " wasn't responding.");
+				log.error(serPortStr + " wasn't responding.");
 				close();
 				return false; // failed. terminal wasn't responding.
 			}
@@ -228,10 +228,10 @@ public class ATresponder extends Thread {
 
 	private void listenForRx() throws InterruptedException, UnsupportedEncodingException, IOException {
 
-		if (mode == 1) {
+		if (opMode == 1) {
 			initialize(false); // ER
 			return; // exit
-		} else if (mode == 2) {
+		} else if (opMode == 2) {
 			initialize(true); // AR
 			return; // exit
 		}
@@ -475,23 +475,24 @@ public class ATresponder extends Thread {
 		try {
 			log.debug(">>> TX " + cmd);
 			printStream.write((cmd + "\r\n").getBytes());
+			
+			if (expectedRsp != null)
+				return getRx(expectedRsp, timeout);
+			else
+				return true;
 		} catch (IOException e) {
 			log.error("send() IOException : ", e);
+			return false;
 		}
-		
-		if (expectedRsp != null)
-			return receiveExpectedRsp(expectedRsp, timeout);
-		
-		return true; // no expected response
 	}
 
-	private boolean receiveExpectedRsp(String expectedRsp, long timeout) {
+	private boolean getRx(String expectedRx, long timeout) {
 		try {
 			String compareStr;
-			if (expectedRsp == null)
+			if (expectedRx == null)
 				compareStr = "OK";
 			else
-				compareStr = expectedRsp.toUpperCase();
+				compareStr = expectedRx.toUpperCase();
 
 			long startTime = System.currentTimeMillis();
 
@@ -503,14 +504,16 @@ public class ATresponder extends Thread {
 
 			while (true) {
 				
-				Thread.sleep(sleepMillis);
+				// Wait buffered reader to have data available.
 				
 				if ((System.currentTimeMillis() - startTime) >= timeout){
-					log.error(serialport + " timeout (" + timeout + "ms) waiting for response '" + expectedRsp + "'");
+					log.error(serPortStr + " timeout (" + timeout + "ms) waiting for response '" + expectedRx + "'");
 					return false;
 				}
 		
 				while (isAlive && buffReader.ready() && (rx = buffReader.readLine()) != null) {
+					
+					// Data is available. Read it all.
 					
 					if (rx.length() > 0) {
 						log.debug("<<< RX " + rx);
@@ -558,6 +561,7 @@ public class ATresponder extends Thread {
 						} 
 					}
 				}	
+				Thread.sleep(sleepMillis);
 			}
 		} catch (IOException e) {
 			log.error("receive() IOException : ", e);
@@ -575,33 +579,34 @@ public class ATresponder extends Thread {
 				rsp = rsp.substring(rsp.indexOf(",\"") + 2, rsp.indexOf("\",", rsp.indexOf(",\"") + 2));
 				rsp = new String(hexToByte(rsp), "UTF-16");
 				log.info("TEXT: \"" + rsp + "\"");
+				
+				// Check if UI Text contains specific keywords
+				if (rsp.indexOf("CANCEL") != -1) {
+					setCancel(true);
+					log.info("'CANCEL'-keyword detected! Message will be cancelled.");
+				}
+				else if (rsp.indexOf("STKTIMEOUT") != -1) {
+					setStkTimeout(true);
+					log.info("'STKTIMEOUT'-keyword detected! Message will time out.");
+				}
 			} catch (Exception e) {
 				//do nothing...
 			}
-		}
-		
-		// Check if UI Text contains specific keywords
-		if (rsp.indexOf("CANCEL") != -1) {
-			setCancel(true);
-			log.info("'CANCEL'-keyword detected! Message will be cancelled.");
-		}
-		else if (rsp.indexOf("STKTIMEOUT") != -1) {
-			setStkTimeout(true);
-			log.info("'STKTIMEOUT'-keyword detected! Message will time out.");
-		}
-		
+		}		
 	}
 
 	private void close() {
 		Thread.currentThread().setName(ManagementFactory.getRuntimeMXBean().getName()); // Update thread name
-		
-		if (comPort.isOpen()) {
-			log.debug(serialport + " trying to close serial port.");
-			if (comPort.closePort())
-				log.debug(serialport + " is now closed.");
-			else 
-				log.error(serialport + " is still open but couldn't be closed.");
-		}
+
+// not reliable on unix
+//		if (serPort.isOpen()) {
+//			log.debug(serPortStr + " trying to close serial port.");
+//			
+//			if (serPort.closePort())
+//				log.debug(serPortStr + " is now closed.");
+//			else 
+//				log.error(serPortStr + " is still open but couldn't be closed.");
+//		}
 		
 		try {
 			if (buffReader != null){
