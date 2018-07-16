@@ -491,6 +491,7 @@ public class ATresponder extends Thread {
 				
 				if ((System.currentTimeMillis() - startTime) >= timeout){
 					log.error(serPortStr + " timeout (" + timeout + "ms) waiting for response '" + expectedRx + "'");
+					send("AT^SSTR?", null); // Check status, this may help.
 					return false;
 				}
 		
