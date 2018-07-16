@@ -1,9 +1,11 @@
 # atclient auto start
 
-Add 'ATClient' script to /etc/init.d 
+Add 'ATClient' script to /etc/init.d
+`$ sudo cp ATClient /etc/init.d/`
+`$ sudo chmod 775 /etc/init.d/ATClient`
 
 Invoke the script: 
-`$ /etc/init.d/ATClient start`
+`$ sudo etc/init.d/ATClient start`
 
 Make it start automatically:
-`$ update-rc.d ATClient defaults`
+`$ sudo update-rc.d ATClient defaults`
