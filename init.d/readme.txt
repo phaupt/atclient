@@ -7,5 +7,8 @@ Add 'ATClient' script to /etc/init.d
 Invoke the script: 
 `$ sudo etc/init.d/ATClient start`
 
-Make it start automatically:
+For removing services you must use the -f parameter:
+`$ sudo update-rc.d -f ATClient remove`
+
+For configuring startup on boot, try:
 `$ sudo update-rc.d ATClient defaults`
