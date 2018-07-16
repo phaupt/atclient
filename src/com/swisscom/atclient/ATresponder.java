@@ -272,6 +272,7 @@ public class ATresponder extends Thread {
 				close();
 				initSerialPort();
 				initAtCmd();
+				Thread.sleep(1000);
 				send("AT^SSTR?", null); // Check for STK Menu initialization 
 				// reset all timers
 				rspTimerCurrent = System.currentTimeMillis();
@@ -285,7 +286,7 @@ public class ATresponder extends Thread {
 				
 				while (isAlive && buffReader.ready() && (rx = buffReader.readLine()) != null && rx.length() > 0) {
 					
-					// reset all timers
+					// reset all timers as we have received RX data
 					rspTimerCurrent = System.currentTimeMillis();
 					heartBeatTimerCurrent = rspTimerCurrent;
 					
