@@ -266,7 +266,7 @@ public class ATresponder extends Thread {
 			} 
 			
 			// Condition below should only occur if no RX received even after heart beat timer
-			if ((System.currentTimeMillis() - rspTimerCurrent) >= (heartBeatMillis + 5000)) {
+			else if ((System.currentTimeMillis() - rspTimerCurrent) >= (heartBeatMillis + 5000)) {
 				// Didn't get any response 
 				log.error(serPortStr + " down? Trying to re-connect.");
 				close();
