@@ -19,7 +19,7 @@ public class ATresponder extends Thread {
 	private final String prtStrWindows = "Gemalto M2M ALSx PLSx USB CDC-ACM Port 1";
 	private final String prtStrLinux = "LTE Modem";
 
-	private final long heartBeatMillis = 30000; // Heart beat to detect serial port disconnection in milliseconds
+	private final long heartBeatMillis = 10000; // Heart beat to detect serial port disconnection in milliseconds
 	private final int sleepMillis = 50; // Polling interval in milliseconds for incoming requests
 	
 	private BufferedReader buffReader;
