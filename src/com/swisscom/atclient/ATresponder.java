@@ -52,24 +52,6 @@ public class ATresponder extends Thread {
 		this.serPortStr = serialPort;
 	}
 	
-	public void attachShutDownHook() {
-		Runtime.getRuntime().addShutdownHook(new Thread() {
-			public void run() {
-				Thread.currentThread().setName("SDHOOK");
-				log.debug("Executing Shutdown Hook");
-				System.out.println("Shutdown in progress...");
-				isAlive = false; // will exit the while loop and terminate the application	
-				try {
-					Thread.sleep(2500); // Give some time to complete the socket closing
-				} catch (InterruptedException e) {
-				}
-				close(); // Double check if ports are closed
-				System.out.println("Done.");
-			}
-		});
-		log.debug("Attached Shutdown Hook");
-	}
-	
 	public void run() {
 		Thread.currentThread().setName(ManagementFactory.getRuntimeMXBean().getName());
 		
@@ -95,6 +77,25 @@ public class ATresponder extends Thread {
 		
 		close();
 		log.info("Exiting Application");
+	}
+	
+	public void attachShutDownHook() {
+		Runtime.getRuntime().addShutdownHook(new Thread() {
+			public void run() {
+				Thread.currentThread().setName("ShutdownHook");
+				log.debug("Executing Shutdown Hook");
+				isAlive = false; // will exit the while loop and terminate the application	
+				close(); // Double check if ports are closed
+			}
+		});
+		log.debug("Attached Shutdown Hook");
+	}
+	
+	public void shutdownAndExit(){
+		log.info("### Send SHUTDOWN Command and exit application ###");
+		send("AT^SMSO"); // Power-off the terminal
+		close();
+		isAlive = false; // will exit the while loop and terminate the application	
 	}
 
 	private void initSerialPort() throws UnsupportedEncodingException, IOException, InterruptedException {
@@ -202,41 +203,19 @@ public class ATresponder extends Thread {
 		send("AT+COPS?"); // Provider + access technology
 	}
 	
-	
-	private void initialize(boolean arMode) {
-		
-		/**
-		 * This method is called if mode AR or ER is called
-		 * Not used in case of UE mode
-		 */
-
-		if (arMode) {
-			// Switch to Automatic Response (AR) and restart device
-			log.info("### Switch to Automatic Response (AR) ###");
-			send("AT^SSTA=0"); // Automatic Response Mode
-		} else {
-			// Switch to Explicit Response (ER) and restart device
-			log.info("### Switch to Explicit Response (ER) ###");
-			send("AT^SSTA=1,1"); // Explicit Response Mode UCS2
-		}
-
-		shutdownAndExit();
-	}
-	
-	public void shutdownAndExit(){
-		log.info("### Send SHUTDOWN Command and exit application ###");
-		send("AT^SMSO"); // Power-off the terminal
-		close();
-		isAlive = false; // will exit the while loop and terminate the application	
-	}
-
 	private void listenForRx() throws InterruptedException, UnsupportedEncodingException, IOException {
 
 		if (opMode == 1) {
-			initialize(false); // ER
+			// Switch to Explicit Response (ER) and restart device
+			log.info("### Switch to Explicit Response (ER) ###");
+			send("AT^SSTA=1,1"); // Explicit Response Mode UCS2
+			shutdownAndExit();
 			return; // exit
 		} else if (opMode == 2) {
-			initialize(true); // AR
+			// Switch to Automatic Response (AR) and restart device
+			log.info("### Switch to Automatic Response (AR) ###");
+			send("AT^SSTA=0"); // Automatic Response Mode
+			shutdownAndExit();
 			return; // exit
 		}
 
@@ -338,12 +317,10 @@ public class ATresponder extends Thread {
 								getMeTextAscii(rx); // may set the flag such as CANCEL
 								code = "0"; // OK
 								if (cancel){ 
-									log.debug("Reset CANCEL Flag...");
 									setCancel(false); // reset flag
 									code = "16"; // Proactive SIM session terminated by user
 								}
 								else if (stk_timeout) {
-									log.debug("Reset STKTIMEOUT Flag...");
 									setStkTimeout(false); // reset flag
 									code = "18"; // No response from user
 								}
@@ -360,12 +337,10 @@ public class ATresponder extends Thread {
 								getMeTextAscii(rx); // may set the flag such as CANCEL						
 								code = "0,,003100320033003400350036"; // OK
 								if (cancel){ 
-									log.debug("Reset CANCEL Flag...");
 									setCancel(false); // reset flag
 									code = "16"; // Proactive SIM session terminated by user
 								}
 								else if (stk_timeout) {
-									log.debug("Reset STKTIMEOUT Flag...");
 									setStkTimeout(false); // reset flag
 									code = "18"; // No response from user
 								}
@@ -410,12 +385,10 @@ public class ATresponder extends Thread {
 							getMeTextAscii(rx); // may set the flag such as CANCEL
 							code = "0"; // OK
 							if (cancel){ 
-								log.debug("Reset CANCEL Flag...");
 								setCancel(false); // reset flag
 								code = "16"; // Proactive SIM session terminated by user
 							}
 							else if (stk_timeout) {
-								log.debug("Reset STKTIMEOUT Flag...");
 								setStkTimeout(false); // reset flag
 								code = "18"; // No response from user
 							}
@@ -429,12 +402,10 @@ public class ATresponder extends Thread {
 							getMeTextAscii(rx); // may set the flag such as CANCEL							
 							code = "0,,003100320033003400350036"; // OK
 							if (cancel){ 
-								log.debug("Reset CANCEL Flag...");
 								setCancel(false); // reset flag
 								code = "16"; // Proactive SIM session terminated by user
 							}
 							else if (stk_timeout) {
-								log.debug("Reset STKTIMEOUT Flag...");
 								setStkTimeout(false); // reset flag
 								code = "18"; // No response from user
 							}
@@ -463,14 +434,7 @@ public class ATresponder extends Thread {
 				}
 			} catch (NumberFormatException e) {
 				// Ignore the ^SSTR: 19,0,"" cases
-			} catch (IOException e) {
-				log.warn("processAtLoop() IOException: ", e);
-				// Possible REBOOT
-				log.debug("Waiting 20s for GSM Module to be back on...");
-				Thread.sleep(20000); 
-				log.debug("Now closing serial ports");
-				close();
-			}
+			} 
 		}
 	}
 	
@@ -595,24 +559,20 @@ public class ATresponder extends Thread {
 		// Only in case of UCS2 Mode: Convert to ASCII
 		if (rsp.contains("^SSTGI:") && rsp.indexOf(",\"") != -1 && rsp.indexOf("\",") != -1 && rsp.charAt(rsp.indexOf(",\"") + 2) != '"') {
 			// Found some possible text content
-			try {
-				rsp = rsp.substring(rsp.indexOf(",\"") + 2, rsp.indexOf("\",", rsp.indexOf(",\"") + 2));
-				rsp = new String(hexToByte(rsp), "UTF-16");
-				log.info("TEXT: \"" + rsp + "\"");
-				
-				// Check if UI Text contains specific keywords
-				if (rsp.indexOf("CANCEL") != -1) {
-					setCancel(true);
-					log.info("'CANCEL'-keyword detected! Message will be cancelled.");
-				}
-				else if (rsp.indexOf("STKTIMEOUT") != -1) {
-					setStkTimeout(true);
-					log.info("'STKTIMEOUT'-keyword detected! Message will time out.");
-				}
-			} catch (Exception e) {
-				//do nothing...
+
+			rsp = rsp.substring(rsp.indexOf(",\"") + 2, rsp.indexOf("\",", rsp.indexOf(",\"") + 2));
+			rsp = new String(hexToByte(rsp), "UTF-16");
+			log.info("TEXT: \"" + rsp + "\"");
+
+			// Check if UI Text contains specific keywords
+			if (rsp.indexOf("CANCEL") != -1) {
+				setCancel(true);
+				log.info("'CANCEL'-keyword detected! Message will be cancelled.");
+			} else if (rsp.indexOf("STKTIMEOUT") != -1) {
+				setStkTimeout(true);
+				log.info("'STKTIMEOUT'-keyword detected! Message will time out.");
 			}
-		}		
+		}
 	}
 
 	private void close() {
