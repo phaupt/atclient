@@ -262,7 +262,9 @@ public class ATresponder extends Thread {
 				
 				send("AT", null); // Send "AT". Next RX shall be received in this thread as it could be some other event coming in.
 				
-				heartBeatTimerCurrent = System.currentTimeMillis();
+				// reset all timers
+				rspTimerCurrent = System.currentTimeMillis();
+				heartBeatTimerCurrent = rspTimerCurrent;
 			} 
 			
 			// Condition below should only occur if no RX received even after heart beat timer
@@ -272,7 +274,10 @@ public class ATresponder extends Thread {
 				close();
 				initSerialPort();
 				initAtCmd();
-				send("AT^SSTR?", null); // STK Menu initialization
+				send("AT^SSTR?", null); // Check for STK Menu initialization 
+				// reset all timers
+				rspTimerCurrent = System.currentTimeMillis();
+				heartBeatTimerCurrent = rspTimerCurrent;	
 			}
 			
 			// Listening for incoming notifications (SIM->ME)
