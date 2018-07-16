@@ -73,7 +73,10 @@ public class ATresponder extends Thread {
 	public void run() {
 		Thread.currentThread().setName(ManagementFactory.getRuntimeMXBean().getName());
 		
-		targetMsisdn = System.getProperty("targetMsisdn");
+		try {
+			targetMsisdn = System.getProperty("targetMsisdn");
+		} catch (Exception e1) {
+		}
 
 		log.info("Application started...");
 		attachShutDownHook();
@@ -91,13 +94,12 @@ public class ATresponder extends Thread {
 			e.printStackTrace();
 		}
 		
-		// Loop exited. Let's close ports..
 		close();
 		log.info("Exiting Application");
 	}
 
 	private void initSerialPort() throws UnsupportedEncodingException, IOException, InterruptedException {
-		log.info("Init Serial Port in progress.");
+		log.info("Init serial port.");
 		
 		SerialPort[] ports; 
 		
@@ -134,7 +136,7 @@ public class ATresponder extends Thread {
 			}
 			
 			if (!portSuccess) {
-				log.error("No luck yet to find the proper terminal. Will try again in 5 seconds.");
+				log.error("No terminal found. Next check in 5 seconds.");
 				try {
 					Thread.sleep(5000); 
 				} catch (InterruptedException e) {
@@ -272,7 +274,7 @@ public class ATresponder extends Thread {
 			// Listening for incoming notifications (SIM->ME)
 			try {
 				
-				log.debug("Waiting for RX data..");
+				log.trace("Waiting for RX data..");
 				
 				while (isAlive && buffReader.ready() && (rx = buffReader.readLine()) != null && rx.length() > 0) {
 					
