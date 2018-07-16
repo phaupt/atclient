@@ -182,29 +182,7 @@ public class ATresponder extends Thread {
 	}
 
 	private void initAtCmd() throws InterruptedException {
-		send("AT+CGMM"); // Request model identification
 		
-		send("ATE0"); // Turn off echo mode
-		
-		send("AT+CMEE=2"); // Switch on verbose error messages
-		
-		send("AT+CIMI"); // IMSI
-
-		send("AT+CGSN"); // IMEI
-		
-		send("AT+CNUM"); // MSISDN
-		
-		send("AT+CMGF=1"); // Set SMS text mode
-		
-		send("AT+CNMI=1,1"); // Activate the display of a URC on every received SMS
-		
-		send("AT+CSQ"); // Signal Strength
-		
-		send("AT+COPS?"); // Provider + access technology
-	}
-	
-	private void listenForRx() throws InterruptedException, UnsupportedEncodingException, IOException {
-
 		if (opMode == 1) {
 			// Switch to Explicit Response (ER) and restart device
 			log.info("### Switch to Explicit Response (ER) ###");
@@ -217,7 +195,33 @@ public class ATresponder extends Thread {
 			send("AT^SSTA=0"); // Automatic Response Mode
 			shutdownAndExit();
 			return; // exit
+		} else {
+			
+			// User Emulation operation mode
+			
+			send("AT+CGMM"); // Request model identification
+			
+			send("ATE0"); // Turn off echo mode
+			
+			send("AT+CMEE=2"); // Switch on verbose error messages
+			
+			send("AT+CIMI"); // IMSI
+
+			send("AT+CGSN"); // IMEI
+			
+			send("AT+CNUM"); // MSISDN
+			
+			send("AT+CMGF=1"); // Set SMS text mode
+			
+			send("AT+CNMI=1,1"); // Activate the display of a URC on every received SMS
+			
+			send("AT+CSQ"); // Signal Strength
+			
+			send("AT+COPS?"); // Provider + access technology
 		}
+	}
+	
+	private void listenForRx() throws InterruptedException, UnsupportedEncodingException, IOException {
 
 		long heartBeatTimerCurrent = System.currentTimeMillis();
 		long rspTimerCurrent = System.currentTimeMillis();
