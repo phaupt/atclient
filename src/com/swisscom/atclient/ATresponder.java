@@ -378,7 +378,7 @@ public class ATresponder extends Thread {
 							if (ackCmdRequired) {
 								// SET UP MENU
 								log.info("### 37: SET UP MENU ###");
-								send("at^sstgi=" + value); // GetInfos
+								send("at^sstgi=" + value, "SSTGI"); // GetInfos
 								send("at^sstr=" + value + ",0"); // Confirm
 							}
 							ackCmdRequired = false;
