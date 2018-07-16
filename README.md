@@ -86,7 +86,7 @@ Note that any GET-INPUT proactive STK commands will be responded with default co
 
 ##### Auto start at boot
 
-Application startup on boot can be configured in several different ways. One possible way is described in the directory `init.d`. 
+Application startup on boot can be configured in several different ways. We recommend to use init.d, see [here](init.d/).
 
 ### Logfile
 
