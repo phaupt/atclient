@@ -14,12 +14,12 @@ public class ATresponder extends Thread {
 	
 	// Detect incoming Text SMS that contains a specific keyword and forward to target MSISDN
 	private final String txtSmsKeyword = "identification code";
-	private final String targetMsisdn = "+41791234567";
+	private String targetMsisdn = null;
 	
 	private final String prtStrWindows = "Gemalto M2M ALSx PLSx USB CDC-ACM Port 1";
 	private final String prtStrLinux = "LTE Modem";
 
-	private final long heartBeatMillis = 10000; // Heart beat to detect serial port disconnection in milliseconds
+	private final long heartBeatMillis = 30000; // Heart beat to detect serial port disconnection in milliseconds
 	private final int sleepMillis = 50; // Polling interval in milliseconds for incoming requests
 	
 	private BufferedReader buffReader;
@@ -72,6 +72,8 @@ public class ATresponder extends Thread {
 	
 	public void run() {
 		Thread.currentThread().setName(ManagementFactory.getRuntimeMXBean().getName());
+		
+		targetMsisdn = System.getProperty("targetMsisdn");
 
 		log.info("Application started...");
 		attachShutDownHook();
@@ -145,7 +147,7 @@ public class ATresponder extends Thread {
 	private boolean openPort() throws IOException {
 		log.debug(serPortStr + " tryig to open");
 		serPort = SerialPort.getCommPort(serPortStr);
-		serPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 0, 0);
+		serPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 500, 0);
 		serPort.setComPortParameters(baudrate, databits, stopbits, parity);
 		serPort.setDTR();
 		
@@ -520,12 +522,17 @@ public class ATresponder extends Thread {
 						
 						getMeTextAscii(rx);
 											
-						if (rx.contains(txtSmsKeyword)) {
+						if (rx.contains(txtSmsKeyword) && targetMsisdn != null) {
+							
 							// Text Short Message Keyword detected
 							log.info("Detected Text SMS with keyword: \"" + rx + "\"");
 							log.info("Forward Text SMS to " + targetMsisdn);
-						    send("AT+CMGS=" + quote + targetMsisdn + quote + ",145");
+
+						    send("AT+CMGS=" + quote + targetMsisdn + quote + ",145"); 
+						    
+						    Thread.sleep(500);
 						    send(rx + ctrlz, "+CMGS");
+						    
 						} else if (rx.toUpperCase().startsWith("+COPS: ")) {
 							value = Integer.parseInt( Arrays.asList(rx.split(",")).get(3) ); // +COPS: 0,0,"Swisscom",7
 							switch (value) {
@@ -598,15 +605,14 @@ public class ATresponder extends Thread {
 	private void close() {
 		Thread.currentThread().setName(ManagementFactory.getRuntimeMXBean().getName()); // Update thread name
 
-// not reliable on unix
-//		if (serPort.isOpen()) {
-//			log.debug(serPortStr + " trying to close serial port.");
-//			
-//			if (serPort.closePort())
-//				log.debug(serPortStr + " is now closed.");
-//			else 
-//				log.error(serPortStr + " is still open but couldn't be closed.");
-//		}
+		if (serPort.isOpen()) {
+			log.debug(serPortStr + " trying to close serial port.");
+			
+			if (serPort.closePort())
+				log.debug(serPortStr + " is now closed.");
+			else 
+				log.error(serPortStr + " is still open but couldn't be closed.");
+		}
 		
 		try {
 			if (buffReader != null){
