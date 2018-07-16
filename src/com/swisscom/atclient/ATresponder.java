@@ -240,7 +240,8 @@ public class ATresponder extends Thread {
 			return; // exit
 		}
 
-		long inactivityTimerCurrent = System.currentTimeMillis();
+		long heartBeatTimerCurrent = System.currentTimeMillis();
+		long rspTimerCurrent = System.currentTimeMillis();
 		String code;
 		String rx;
 		int value = 0;
@@ -253,23 +254,26 @@ public class ATresponder extends Thread {
 			
 			Thread.sleep(sleepMillis);
 			
-			if ((System.currentTimeMillis() - inactivityTimerCurrent) >= heartBeatMillis){
+			// Enter this condition if heart beat timer is up
+			if ((System.currentTimeMillis() - heartBeatTimerCurrent) >= heartBeatMillis){
 				// Check every x milliseconds of inactivity
 				
 				log.debug(serPortStr + " heart beat test");
 				
-				// heart beat
-				if (!send("AT")) {
-					// failed...
-					log.error(serPortStr + " down? Trying to re-connect.");
-					close();
-					initSerialPort();
-					initAtCmd();
-					send("AT^SSTR?", null); // STK Menu initialization
-				}
+				send("AT", null); // Send "AT". Next RX shall be received in this thread as it could be some other event coming in.
 				
-				inactivityTimerCurrent = System.currentTimeMillis();
+				heartBeatTimerCurrent = System.currentTimeMillis();
 			} 
+			
+			// Condition below should only occur if no RX received even after heart beat timer
+			if ((System.currentTimeMillis() - rspTimerCurrent) >= (heartBeatMillis + 5000)) {
+				// Didn't get any response 
+				log.error(serPortStr + " down? Trying to re-connect.");
+				close();
+				initSerialPort();
+				initAtCmd();
+				send("AT^SSTR?", null); // STK Menu initialization
+			}
 			
 			// Listening for incoming notifications (SIM->ME)
 			try {
@@ -278,7 +282,9 @@ public class ATresponder extends Thread {
 				
 				while (isAlive && buffReader.ready() && (rx = buffReader.readLine()) != null && rx.length() > 0) {
 					
-					inactivityTimerCurrent = System.currentTimeMillis(); // reset the inactivity timer
+					// reset all timers
+					rspTimerCurrent = System.currentTimeMillis();
+					heartBeatTimerCurrent = rspTimerCurrent;
 					
 					log.debug("<<< RX " + rx);
 	
