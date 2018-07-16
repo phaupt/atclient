@@ -218,6 +218,8 @@ public class ATresponder extends Thread {
 			send("AT+CSQ"); // Signal Strength
 			
 			send("AT+COPS?"); // Provider + access technology
+			
+			send("AT^SSTR?", null); // Check for STK Menu initialization 
 		}
 	}
 	
@@ -229,8 +231,6 @@ public class ATresponder extends Thread {
 		String rx;
 		int value = 0;
 		boolean ackCmdRequired = false;
-		
-		send("AT^SSTR?", null); // STK Menu initialization
 		
 		// Start endless loop...
 		while (isAlive) {
