@@ -254,10 +254,12 @@ public class ATresponder extends Thread {
 			if ((System.currentTimeMillis() - inactivityTimerCurrent) >= heartBeatMillis){
 				// Check every x milliseconds of inactivity
 				
+				log.debug(serPortStr + " heart beat test");
+				
 				// heart beat
 				if (!send("AT")) {
 					// failed...
-					log.error("Trying to re-connect serial port.");
+					log.error(serPortStr + " down? Trying to re-connect.");
 					close();
 					initSerialPort();
 					initAtCmd();
@@ -269,12 +271,12 @@ public class ATresponder extends Thread {
 			
 			// Listening for incoming notifications (SIM->ME)
 			try {
-				while (isAlive && buffReader.ready() && (rx = buffReader.readLine()) != null) {
+				
+				log.debug("Waiting for RX data..");
+				
+				while (isAlive && buffReader.ready() && (rx = buffReader.readLine()) != null && rx.length() > 0) {
 					
 					inactivityTimerCurrent = System.currentTimeMillis(); // reset the inactivity timer
-					
-					if (rx.length() == 0)
-						break;
 					
 					log.debug("<<< RX " + rx);
 	
