@@ -83,7 +83,6 @@ public class ATresponder extends Thread {
 		
 		try {
 			initSerialPort();
-			Thread.sleep(1000);
 			initAtCmd();
 			listenForRx();
 		} catch (UnsupportedEncodingException e) {
@@ -136,14 +135,15 @@ public class ATresponder extends Thread {
 			}
 			
 			if (!portSuccess) {
-				log.error("No terminal found. Next check in 5 seconds.");
+				log.error("No terminal found. Next check in 10 seconds.");
 				try {
-					Thread.sleep(5000); 
+					Thread.sleep(10000); 
 				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}
 			}	
 		}	
+		Thread.sleep(2000);
 	}
 	
 	private boolean openPort() throws IOException {
@@ -272,7 +272,6 @@ public class ATresponder extends Thread {
 				close();
 				initSerialPort();
 				initAtCmd();
-				Thread.sleep(1000);
 				send("AT^SSTR?", null); // Check for STK Menu initialization 
 				// reset all timers
 				rspTimerCurrent = System.currentTimeMillis();
