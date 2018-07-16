@@ -262,9 +262,7 @@ public class ATresponder extends Thread {
 				
 				send("AT", null); // Send "AT". Next RX shall be received in this thread as it could be some other event coming in.
 				
-				// reset all timers
-				rspTimerCurrent = System.currentTimeMillis();
-				heartBeatTimerCurrent = rspTimerCurrent;
+				heartBeatTimerCurrent = System.currentTimeMillis();
 			} 
 			
 			// Condition below should only occur if no RX received even after heart beat timer
