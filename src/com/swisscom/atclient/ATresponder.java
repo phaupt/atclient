@@ -17,8 +17,8 @@ public class ATresponder extends Thread {
 	private String targetMsisdn = null;
 	
 	// Auto detect terminal based on descriptive string representing the serial port or the device connected to it
-	// String is retrieved via com.fazecast.jSerialComm.SerialPort.getDescriptivePortName()
-	private final String[] portStrArr = { "Gemalto M2M ALSx PLSx USB CDC-ACM Port 1", "LTE Modem", "Cinterion PH8 HSPA USB Com Port" };
+	// String is retrieved via com.fazecast.jSerialComm.SerialPort.getDescriptivePortName() for both Windows and Linux
+	private final String[] portStrArr = { "Gemalto M2M ALSx PLSx USB CDC-ACM Port 1", "LTE Modem", "Cinterion PH8 HSPA USB Com Port", "USB-to-Serial Port (option1)" };
 
 	private final long heartBeatMillis = 10000; // Heart beat to detect serial port disconnection in milliseconds
 	private final int sleepMillis = 50; // Polling interval in milliseconds for incoming requests
