@@ -84,11 +84,9 @@ Note that any GET-INPUT proactive STK commands will be responded with default co
 
 `pi@raspberypi:~/atclient $ java -Dlog.file=GsmClient.log -Dlog4j.configurationFile=log4j2.xml -cp "./class:./lib/*" com.swisscom.atclient.GsmClient`
 
-##### Nohup
+##### Auto start at boot
 
-Nohup will detach a process you run from your current console and let it continue when you close the terminal. This might be useful when you run the User Emulation mode for continuous end-to-end monitoring purpose.
-
-`pi@raspberypi:~/atclient $ nohup java -Dlog.file=GsmClient-ttyACM1.log -Dlog4j.configurationFile=log4j2.xml -cp "./class:./lib/*" com.swisscom.atclient.GsmClient &`
+Application startup on boot can be configured in several different ways. We recommend to use init.d, see [here](init.d/).
 
 ### Logfile
 
