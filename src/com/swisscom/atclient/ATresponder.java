@@ -16,8 +16,9 @@ public class ATresponder extends Thread {
 	private final String txtSmsKeyword = "identification code";
 	private String targetMsisdn = null;
 	
-	private final String prtStrWindows = "Gemalto M2M ALSx PLSx USB CDC-ACM Port 1";
-	private final String prtStrLinux = "LTE Modem";
+	// Auto detect terminal based on descriptive string representing the serial port or the device connected to it
+	// String is retrieved via com.fazecast.jSerialComm.SerialPort.getDescriptivePortName()
+	private final String[] portStrArr = { "Gemalto M2M ALSx PLSx USB CDC-ACM Port 1", "LTE Modem", "Cinterion PH8 HSPA USB Com Port" };
 
 	private final long heartBeatMillis = 10000; // Heart beat to detect serial port disconnection in milliseconds
 	private final int sleepMillis = 50; // Polling interval in milliseconds for incoming requests
@@ -109,22 +110,27 @@ public class ATresponder extends Thread {
 		while (!portSuccess) {
 			ports = SerialPort.getCommPorts();
 			if (opMode == 0) {
-
 				// automatic serial port detection!
 				for (SerialPort port : ports) {
 					
 					portDesc = port.getDescriptivePortName();
 					
-					// Check for known PLS8 terminal (Windows or Linux serial port description)
-					if (portDesc.contains(prtStrWindows) || portDesc.contains(prtStrLinux)) {
-						log.debug("Found serial port: " + port.getSystemPortName() + " | " + portDesc);
-						serPortStr = port.getSystemPortName();
-						
-						// Found a port with matching name... trying to open it
-						portSuccess = openPort();
-						if (portSuccess)
-							break; // success, break for-loop
+					for (String portStr : portStrArr) {
+						// Check for known terminal (port string)
+						if (portDesc.contains(portStr)) {
+							log.debug("Found a serial port: " + port.getSystemPortName() + " " + portDesc);
+							serPortStr = port.getSystemPortName();
+
+							// Found a port with matching name... trying to open it
+							portSuccess = openPort();
+							if (portSuccess)
+								break; // success, break iteration for portStrArr
+						} 
 					}
+					if (portSuccess)
+						break; // success, break iteration for available serial ports
+					else
+						log.debug("Unknown serial port: " + port.getSystemPortName() + " " + portDesc);
 					
 					Thread.sleep(100); // wait before to proceed with next available port in list
 				}
@@ -148,7 +154,7 @@ public class ATresponder extends Thread {
 	}
 	
 	private boolean openPort() throws IOException {
-		log.debug(serPortStr + " tryig to open");
+		log.debug(serPortStr + " trying to open");
 		serPort = SerialPort.getCommPort(serPortStr);
 		serPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 500, 0);
 		serPort.setComPortParameters(baudrate, databits, stopbits, parity);
