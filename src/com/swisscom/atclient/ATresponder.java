@@ -93,7 +93,7 @@ public class ATresponder extends Thread {
 	}
 	
 	public void shutdownAndExit(){
-		log.info("### Send SHUTDOWN Command and exit application ###");
+		log.info("Send SHUTDOWN Command and exit application");
 		send("AT^SMSO"); // Power-off the terminal
 		close();
 		isAlive = false; // will exit the while loop and terminate the application	
@@ -191,13 +191,13 @@ public class ATresponder extends Thread {
 		
 		if (opMode == 1) {
 			// Switch to Explicit Response (ER) and restart device
-			log.info("### Switch to Explicit Response (ER) ###");
+			log.info("Switch to Explicit Response (ER)");
 			send("AT^SSTA=1,1"); // Explicit Response Mode UCS2
 			shutdownAndExit();
 			return; // exit
 		} else if (opMode == 2) {
 			// Switch to Automatic Response (AR) and restart device
-			log.info("### Switch to Automatic Response (AR) ###");
+			log.info("Switch to Automatic Response (AR)");
 			send("AT^SSTA=0"); // Automatic Response Mode
 			shutdownAndExit();
 			return; // exit
@@ -284,7 +284,7 @@ public class ATresponder extends Thread {
 	
 					if (rx.toUpperCase().startsWith("+CMTI: ")) {
 						value = Integer.parseInt((rx.substring(13, rx.length()))); // +CMTI: "SM", 0
-						log.info("### TEXT MESSAGE (SMS) ###");
+						log.info("TEXT MESSAGE (SMS)");
 						send("AT+CMGR=" + value); // read the SMS data
 						send("AT+CMGD=0,4"); // delete all stored short messages after reading
 					} else if (rx.toUpperCase().startsWith("^SSTR: ")) {	
@@ -304,7 +304,7 @@ public class ATresponder extends Thread {
 						case 19: // ^SSTR: 3,19
 							if (ackCmdRequired) {
 								// SEND MESSAGE
-								log.info("### 19: SEND MESSAGE ###");
+								log.info("SEND MESSAGE (Command Code 19)");
 								send("at^sstgi=" + value); // GetInfos		
 								send("at^sstr=" + value + ",0"); // Confirm
 							}
@@ -313,7 +313,7 @@ public class ATresponder extends Thread {
 						case 32: // ^SSTR: 3,32
 							if (ackCmdRequired) {
 								// PLAY TONE
-								log.info("### 32: PLAY TONE ###");
+								log.info("PLAY TONE (Command Code 32)");
 								send("at^sstgi=" + value); // GetInfos
 								send("at^sstr=" + value + ",0"); // Confirm
 							}
@@ -322,7 +322,7 @@ public class ATresponder extends Thread {
 						case 33: // ^SSTR: 3,33
 							if (ackCmdRequired) {
 								// DISPLAY TEXT
-								log.info("### 33: DISPLAY TEXT ###");
+								log.info("DISPLAY TEXT (Command Code 33)");
 								send("at^sstgi=" + value); // GetInfos
 								getMeTextAscii(rx); // may set the flag such as CANCEL
 								code = "0"; // OK
@@ -342,7 +342,7 @@ public class ATresponder extends Thread {
 						case 35: // ^SSTR: 3,35
 							if (ackCmdRequired) {
 								// GET INPUT
-								log.info("### 35: GET INPUT ###");
+								log.info("GET INPUT (Command Code 35)");
 								send("at^sstgi=" + value); // GetInfos
 								getMeTextAscii(rx); // may set the flag such as CANCEL						
 								code = "0,,003100320033003400350036"; // OK
@@ -362,7 +362,7 @@ public class ATresponder extends Thread {
 						case 37: // ^SSTR: 3,37
 							if (ackCmdRequired) {
 								// SET UP MENU
-								log.info("### 37: SET UP MENU ###");
+								log.info("SET UP MENU (Command Code 37)");
 								send("at^sstgi=" + value, "SSTGI"); // GetInfos
 								send("at^sstr=" + value + ",0"); // Confirm
 							}
@@ -378,19 +378,19 @@ public class ATresponder extends Thread {
 						switch (value) {
 						case 19:
 							// SEND MESSAGE
-							log.info("### 19: SEND MESSAGE ###");
+							log.info("SEND MESSAGE (Command Code 19)");
 							send("at^sstgi=" + value); // GetInfos		
 							send("at^sstr=" + value + ",0"); // Confirm
 							break;
 						case 32:
 							// PLAY TONE
-							log.info("### 32: PLAY TONE ####");
+							log.info("PLAY TONE (Command Code 32)");
 							send("at^sstgi=32");
 							send("at^sstr=32,0"); // TerminalResponse=0 (OK)
 							break;
 						case 33:
 							// DISPLAY TEXT
-							log.info("### 33: DISPLAY TEXT ####");
+							log.info("DISPLAY TEXT (Command Code 33)");
 							send("at^sstgi=33");
 							getMeTextAscii(rx); // may set the flag such as CANCEL
 							code = "0"; // OK
@@ -407,7 +407,7 @@ public class ATresponder extends Thread {
 							break;
 						case 35:
 							// GET INPUT (Input=123456)
-							log.info("### 35: GET INPUT ####");
+							log.info("GET INPUT (Command Code 35)");
 							send("at^sstgi=35");
 							getMeTextAscii(rx); // may set the flag such as CANCEL							
 							code = "0,,003100320033003400350036"; // OK
@@ -424,17 +424,17 @@ public class ATresponder extends Thread {
 							break;
 						case 36:
 							// SELECT ITEM
-							log.info("### 36: SELECT ITEM ####");
+							log.info("SELECT ITEM (Command Code 36)");
 							send("at^sstgi=36"); // GetInformation
 							break;
 						case 37:
 							// SET UP MENU
-							log.info("### 37: SET UP MENU ####");
+							log.info("SET UP MENU (Command Code 37)");
 							send("at^sstgi=37"); // Get Information
 							send("at^sstr=37,0"); // Remote-SAT Response
 							break;
 						case 254:
-							log.info("### 254: SIM Applet returns to main menu ####");
+							log.info("SIM Applet returns to main menu (Command Code 254)");
 							break;
 						default:
 							break;
