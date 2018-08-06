@@ -76,7 +76,6 @@ public class ATresponder extends Thread {
 			e.printStackTrace();
 		}
 		
-		close();
 		log.info("Exiting Application");
 	}
 	
@@ -86,7 +85,6 @@ public class ATresponder extends Thread {
 				Thread.currentThread().setName("ShutdownHook");
 				log.debug("Executing Shutdown Hook");
 				isAlive = false; // will exit the while loop and terminate the application	
-				close(); // Double check if ports are closed
 			}
 		});
 		log.debug("Attached Shutdown Hook");
@@ -95,7 +93,6 @@ public class ATresponder extends Thread {
 	public void shutdownAndExit(){
 		log.info("Send SHUTDOWN Command and exit application");
 		send("AT^SMSO"); // Power-off the terminal
-		close();
 		isAlive = false; // will exit the while loop and terminate the application	
 	}
 
@@ -175,13 +172,13 @@ public class ATresponder extends Thread {
 			log.info(serPortStr + " connection established.");
 			
 			// Check if terminal is responding to AT command
-			if (send("AT", sleepMillis + 500)) {
+			if (send("AT", sleepMillis + 500, false)) {
 				log.info(serPortStr + " is responding. Success!");
 				Thread.currentThread().setName(ManagementFactory.getRuntimeMXBean().getName() + " " + serPortStr); // Update thread name
 				return true; // success
 			} else {
 				log.error(serPortStr + " wasn't responding.");
-				close();
+				close(false);
 				return false; // failed. terminal wasn't responding.
 			}
 		}
@@ -258,7 +255,7 @@ public class ATresponder extends Thread {
 			else if ((System.currentTimeMillis() - rspTimerCurrent) >= (heartBeatMillis + 5000)) {
 				// Didn't get any response 
 				log.error(serPortStr + " down? Trying to re-connect.");
-				close();
+				close(true);
 				initSerialPort();
 				initAtCmd();
 				send("AT^SSTR?", null); // Check for STK Menu initialization 
@@ -448,8 +445,8 @@ public class ATresponder extends Thread {
 		}
 	}
 	
-	public boolean send(String cmd, long timeout) {
-		return send(cmd, "ok", timeout);
+	public boolean send(String cmd, long timeout, boolean sstr) {
+		return send(cmd, "ok", timeout, sstr);
 	}
 	
 	public boolean send(String cmd) {
@@ -457,16 +454,20 @@ public class ATresponder extends Thread {
 	}
 	
 	public boolean send(String cmd, String expectedRsp) {
-		return send(cmd, expectedRsp, 0);
+		return send(cmd, expectedRsp, 0, true);
 	}
 	
-	public boolean send(String cmd, String expectedRsp, long timeout) {
+	public boolean send(String cmd, String expectedRsp, boolean sstr) {
+		return send(cmd, expectedRsp, 0, sstr);
+	}
+	
+	public boolean send(String cmd, String expectedRsp, long timeout, boolean sstr) {
 		try {
 			log.debug(">>> TX " + cmd);
 			printStream.write((cmd + "\r\n").getBytes());
 			
 			if (expectedRsp != null)
-				return getRx(expectedRsp, timeout);
+				return getRx(expectedRsp, timeout, sstr);
 			else
 				return true;
 		} catch (IOException e) {
@@ -475,7 +476,7 @@ public class ATresponder extends Thread {
 		}
 	}
 
-	private boolean getRx(String expectedRx, long timeout) {
+	private boolean getRx(String expectedRx, long timeout, boolean sstr) {
 		try {
 			String compareStr;
 			if (expectedRx == null)
@@ -497,7 +498,8 @@ public class ATresponder extends Thread {
 				
 				if ((System.currentTimeMillis() - startTime) >= timeout){
 					log.error(serPortStr + " timeout (" + timeout + "ms) waiting for response '" + expectedRx + "'");
-					send("AT^SSTR?", null); // Check status, this may help.
+					if (sstr) 
+						send("AT^SSTR?", null); // Check status, this may help.
 					return false;
 				}
 		
@@ -586,10 +588,10 @@ public class ATresponder extends Thread {
 		}
 	}
 
-	private void close() {
+	private void close(boolean closePort) {
 		Thread.currentThread().setName(ManagementFactory.getRuntimeMXBean().getName()); // Update thread name
 
-		if (serPort.isOpen()) {
+		if (closePort && serPort.isOpen()) {
 			log.debug(serPortStr + " trying to close serial port.");
 			
 			if (serPort.closePort())
