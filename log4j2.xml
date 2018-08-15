@@ -26,7 +26,7 @@
 		</RollingFile>
 
 		<Socket name="syslogsocket" host="localhost" port="514"	protocol="UDP">
-			<PatternLayout pattern="&lt;%level{TRACE=7, DEBUG=7, INFO=6, WARN=4, ERROR=3, Fatal=0}&gt;%d{MMM d hh:mm:ss} ${hostName} %m%n"/>
+			<PatternLayout pattern="%d %t [%level{WARN=WRN, DEBUG=DBG, ERROR=ERR, TRACE=TRC, INFO=INF}] %m%n"/>
 		</Socket>
 	</Appenders>
 	
