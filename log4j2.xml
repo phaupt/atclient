@@ -25,8 +25,7 @@
 			<DefaultRolloverStrategy max="4" />
 		</RollingFile>
 
-		<Socket name="syslogsocket" host="myhost" port="514"
-			protocol="UDP">
+		<Socket name="syslogsocket" host="localhost" port="514"	protocol="UDP">
 			<PatternLayout pattern="&lt;%level{TRACE=7, DEBUG=7, INFO=6, WARN=4, ERROR=3, Fatal=0}&gt;%d{MMM d hh:mm:ss} ${hostName} %m%n"/>
 		</Socket>
 	</Appenders>
@@ -35,7 +34,7 @@
 		<Root level="debug" additivity="false">
 			<!-- <AppenderRef ref="console"/> -->
 			<AppenderRef ref="reporter" />
-			<AppenderRef ref="syslog"/>
+			<AppenderRef ref="syslogsocket"/>
 		</Root>
 	</Loggers>
 	
