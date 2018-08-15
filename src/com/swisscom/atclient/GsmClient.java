@@ -18,12 +18,12 @@ public class GsmClient {
 		ATresponder atClient = null;
 
 		if (args.length == 2 && args[0].toUpperCase().equals("ER")) {
-			atClient = new ATresponder((byte) 1, args[1]);
+			atClient = new ATresponder((byte) 1);
 			new Thread(atClient).start();
 		}
 
 		else if (args.length == 2 && args[0].toUpperCase().equals("AR")) {
-			atClient = new ATresponder((byte) 2, args[1]);
+			atClient = new ATresponder((byte) 2);
 			new Thread(atClient).start();
 		}
 
@@ -35,13 +35,18 @@ public class GsmClient {
 		else if (args.length == 1 && args[0].toUpperCase().equals("--HELP")) {
 			System.out
 					.println("\n*** GSM AT Client ***\n\n"
-							+ "Usage: GsmClient [<MODE>] [<PORT>]\n\n"
-							+ "<PORT>\tSerial Port\n"
+							+ "Usage: GsmClient [<MODE>]\n\n"
 							+ "<MODE>\tSwitch operation mode:\n"
-							+ "\tER\tSwitch to Explicit Response (ER) and shutdown. Requires <PORT> argument.\n"
-							+ "\tAR\tSwitch to Automatic Response (AR) and shutdown. Requires <PORT> argument.\n"
+							+ "\tER\tSwitch to Explicit Response (ER) and shutdown.\n"
+							+ "\tAR\tSwitch to Automatic Response (AR) and shutdown.\n"
 							+ "\n"
-							+ "Default: User emulation with automatic port detection. Requires prior switch to ER operation mode.\n"
+							+ "If no <MODE> argument found: Run user emulation with automatic serial port detection (ER operation mode only)\n"
+							+ "\n"
+							+ "Optional system properties with example values:\n"
+							+ "\t-Dlog.file=GsmClient.log               # Application log file\n"
+							+ "\t-Dlog4j.configurationFile=log4j2.xml   # Location of log4j.xml configuration file\n"
+							+ "\t-DtargetMsisdn=+41791234567            # Target phone number to forward text sms content\n"
+							+ "\t-Dserial.port=COM16                    # Select specific serial port (no automatic port detection)\n"
 							);
 
 			System.exit(0);

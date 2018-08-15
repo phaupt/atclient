@@ -28,6 +28,10 @@ public class ATresponder extends Thread {
 	
 	private volatile static boolean cancel;
 	private volatile static boolean stk_timeout;
+	
+	private boolean getInputTimerFlag = false;
+	private boolean getInputTimerKeyGenFlag = false;
+	private long getInputTimer = 0;
 
 	private String serPortStr = null;
 	private SerialPort serPort;
@@ -58,6 +62,7 @@ public class ATresponder extends Thread {
 		
 		try {
 			targetMsisdn = System.getProperty("targetMsisdn");
+			serPortStr = System.getProperty("serial.port");
 		} catch (Exception e1) {
 		}
 
@@ -65,7 +70,11 @@ public class ATresponder extends Thread {
 		attachShutDownHook();
 		
 		try {
-			initSerialPort();
+			if (serPortStr == null) {
+				lookupSerialPort();
+			} else {
+				openPort();
+			}
 			initAtCmd();
 			listenForRx();
 		} catch (UnsupportedEncodingException e) {
@@ -96,7 +105,7 @@ public class ATresponder extends Thread {
 		isAlive = false; // will exit the while loop and terminate the application	
 	}
 
-	private void initSerialPort() throws UnsupportedEncodingException, IOException, InterruptedException {
+	private void lookupSerialPort() throws UnsupportedEncodingException, IOException, InterruptedException {
 		log.info("Init serial port.");
 		
 		SerialPort[] ports; 
@@ -228,10 +237,11 @@ public class ATresponder extends Thread {
 	
 	private void listenForRx() throws InterruptedException, UnsupportedEncodingException, IOException {
 
-		long heartBeatTimerCurrent = System.currentTimeMillis();
-		long rspTimerCurrent = System.currentTimeMillis();
-		String code;
-		String rx;
+		// timer variables
+		long heartBeatTimerCurrent, rspTimerCurrent;
+		heartBeatTimerCurrent = rspTimerCurrent = System.currentTimeMillis();
+		
+		String code, rx;
 		int value = 0;
 		boolean ackCmdRequired = false;
 		
@@ -256,7 +266,7 @@ public class ATresponder extends Thread {
 				// Didn't get any response 
 				log.error(serPortStr + " down? Trying to re-connect.");
 				close(true);
-				initSerialPort();
+				lookupSerialPort();
 				initAtCmd();
 				send("AT^SSTR?", null); // Check for STK Menu initialization 
 				// reset all timers
@@ -350,8 +360,9 @@ public class ATresponder extends Thread {
 								else if (stk_timeout) {
 									setStkTimeout(false); // reset flag
 									code = "18"; // No response from user
+								} else {
+									getInputTimerFlag = true;
 								}
-
 								send("at^sstr=" + value + "," + code); // Confirm
 							}
 							ackCmdRequired = false;
@@ -374,6 +385,14 @@ public class ATresponder extends Thread {
 						// Check Proactive Command Type
 						switch (value) {
 						case 19:
+							if (getInputTimerFlag && getInputTimerKeyGenFlag) {
+								long timer = System.currentTimeMillis() - getInputTimer;
+								int seconds = (int) (timer/1000);
+								long millis = timer - seconds * 1000;
+								log.info("KeyGen took " + String.format("%02d", seconds) + "," + String.format("%03d", millis) + " seconds");
+								getInputTimerFlag = getInputTimerKeyGenFlag = false;
+							}
+							
 							// SEND MESSAGE
 							log.info("SEND MESSAGE (Command Code 19)");
 							send("at^sstgi=" + value); // GetInfos		
@@ -415,8 +434,9 @@ public class ATresponder extends Thread {
 							else if (stk_timeout) {
 								setStkTimeout(false); // reset flag
 								code = "18"; // No response from user
+							} else {
+								getInputTimerFlag = true;
 							}
-
 							send("at^sstr=" + value + "," + code); // Confirm
 							break;
 						case 36:
@@ -553,7 +573,9 @@ public class ATresponder extends Thread {
 							default:
 								break;
 							}
-						} else if (rx.toUpperCase().trim().contains(compareStr)) {			
+						} else if (rx.toUpperCase().trim().contains(compareStr)) {		
+							if (getInputTimerFlag && getInputTimerKeyGenFlag)
+								getInputTimer = System.currentTimeMillis();
 							return true; // Got the expected response
 						} 
 					}
@@ -584,7 +606,9 @@ public class ATresponder extends Thread {
 			} else if (rsp.indexOf("STKTIMEOUT") != -1) {
 				setStkTimeout(true);
 				log.info("'STKTIMEOUT'-keyword detected! Message will time out.");
-			}
+			} else if (rsp.indexOf("Confirm your new Mobile ID PIN") != -1) {
+				getInputTimerKeyGenFlag = true;
+			} 
 		}
 	}
 

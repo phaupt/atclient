@@ -1,29 +1,47 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE xml>
 <Configuration status="WARN">
-   <Properties>
-      <Property name="log-path">logs</Property>
-      "log4j.properties"
-   </Properties>
-   <Appenders>
-      <Console name="console" target="SYSTEM_OUT">
-         <PatternLayout pattern="%d %t [%level{WARN=WRN, DEBUG=DBG, ERROR=ERR, TRACE=TRC, INFO=INF}] %m%n"/>
-      </Console>
-      <RollingFile name="reporter" fileName="${sys:log.file}" filePattern="${sys:log.file}-%d{MM-dd-yyyy}-%i.log">
-         <PatternLayout>
-            <Pattern>%d %t [%level{WARN=WRN, DEBUG=DBG, ERROR=ERR, TRACE=TRC, INFO=INF}] %m%n</Pattern>
-         </PatternLayout>
-         <Policies>
-            <TimeBasedTriggeringPolicy/>
-            <SizeBasedTriggeringPolicy size="50 MB"/>
-         </Policies>
-         <DefaultRolloverStrategy max="4"/>
-      </RollingFile>
-   </Appenders>
-   <Loggers>
-      <Root level="debug" additivity="false">
-         <!-- <AppenderRef ref="console"/> -->
-         <AppenderRef ref="reporter"/>
-      </Root>
-   </Loggers>
+	<Properties>
+		<Property name="log-path">logs</Property>
+		"log4j.properties"
+	</Properties>
+	<Appenders>
+	
+		<Console name="console" target="SYSTEM_OUT">
+			<PatternLayout
+				pattern="%d %t [%level{WARN=WRN, DEBUG=DBG, ERROR=ERR, TRACE=TRC, INFO=INF}] %m%n" />
+		</Console>
+		
+		<RollingFile name="reporter" fileName="${sys:log.file}"
+			filePattern="${sys:log.file}-%d{MM-dd-yyyy}-%i.log">
+			<PatternLayout>
+				<Pattern>%d %t [%level{WARN=WRN, DEBUG=DBG, ERROR=ERR, TRACE=TRC,INFO=INF}] %m%n</Pattern>
+			</PatternLayout>
+			<Policies>
+				<TimeBasedTriggeringPolicy />
+				<SizeBasedTriggeringPolicy size="50 MB" />
+			</Policies>
+			<DefaultRolloverStrategy max="4" />
+		</RollingFile>
+		
+		<!-- Use standard syslog and add fields with LoggerFields -->
+		<Syslog name="syslog" format="RFC5424" host="localhost" port="514"
+			protocol="UDP" appName="GsmClient" includeMDC="false"
+			mdcId="mdc" facility="USER" enterpriseNumber="18060"
+			newLine="true" messageId="Audit">
+			<LoggerFields>
+				<KeyValuePair key="thread" value="%t" />
+				<KeyValuePair key="priority" value="%p" />
+				<KeyValuePair key="category" value="%c" />
+				<KeyValuePair key="exception" value="%ex" />
+			</LoggerFields>
+		</Syslog>
+	</Appenders>
+	<Loggers>
+		<Root level="debug" additivity="false">
+			<!-- <AppenderRef ref="console"/> -->
+			<AppenderRef ref="reporter" />
+			<!-- <AppenderRef ref="syslog"/> -->
+		</Root>
+	</Loggers>
 </Configuration>
