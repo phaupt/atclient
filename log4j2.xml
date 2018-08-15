@@ -35,7 +35,7 @@
 		<Root level="debug" additivity="false">
 			<!-- <AppenderRef ref="console"/> -->
 			<AppenderRef ref="reporter" />
-			<!-- <AppenderRef ref="syslog"/> -->
+			<AppenderRef ref="syslog"/>
 		</Root>
 	</Loggers>
 	
