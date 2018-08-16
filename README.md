@@ -58,21 +58,26 @@ pi@raspberypi:~/atclient $ java -Dlog.file=GsmClient.log -Dlog4j.configurationFi
 
 *** GSM AT Client ***
 
-Usage: GsmClient [<MODE>] [<PORT>]
+Usage: GsmClient [<MODE>]
 
-<PORT>	Serial Port
 <MODE>	Switch operation mode:
-	ER	Switch to Explicit Response (ER) and shutdown. Requires <PORT> argument.
-	AR	Switch to Automatic Response (AR) and shutdown. Requires <PORT> argument.
+	ER	Switch to Explicit Response (ER) and shutdown.
+	AR	Switch to Automatic Response (AR) and shutdown.
 
-Default: User emulation with automatic port detection. Requires prior switch to ER operation mode.
+If no <MODE> argument found: Run user emulation with automatic serial port detection (ER operation mode only)
+
+Optional system properties with example values:
+	-Dlog.file=GsmClient.log               # Application log file
+	-Dlog4j.configurationFile=log4j2.xml   # Location of log4j.xml configuration file
+	-DtargetMsisdn=+41791234567            # Target phone number to forward text sms content
+	-Dserial.port=COM16                    # Select specific serial port (no automatic port detection)
 ```
 
 ##### Switch to Explicit Response (ER) mode
 
 As a first step, you must switch the terminal from factory default Automatic Response (AR) mode to Explicit Response (ER) mode.
 
-`pi@raspberypi:~/atclient $ java -Dlog.file=GsmClient.log -Dlog4j.configurationFile=log4j2.xml -cp "./class:./lib/*" com.swisscom.atclient.GsmClient ER /dev/ttyACM1 `
+`pi@raspberypi:~/atclient $ java -Dserial.port=/dev/ttyACM1 -Dlog.file=GsmClient.log -Dlog4j.configurationFile=log4j2.xml -cp "./class:./lib/*" com.swisscom.atclient.GsmClient ER`
 
 ##### User Emulation
 
@@ -80,7 +85,7 @@ Once your terminal is in Explicit Response (ER) mode you can run the application
 
 Serial port is auto detected at start and re-initialized in case of communication interruption.
 
-Note that any GET-INPUT proactive STK commands will be responded with default code '123456'.
+Note that any GET-INPUT proactive STK commands will always be responded with the value '123456'.
 
 `pi@raspberypi:~/atclient $ java -Dlog.file=GsmClient.log -Dlog4j.configurationFile=log4j2.xml -cp "./class:./lib/*" com.swisscom.atclient.GsmClient`
 
