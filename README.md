@@ -12,7 +12,7 @@ This setup can be useful for automated e2e Mobile ID signature monitoring purpos
 ### What you will need (recommended)
 
 - [Mobile ID SIM card](https://mobileid.ch)
-- [Raspberry PI 3 B+](https://www.raspberrypi.org/products/raspberry-pi-3-model-b-plus) ~ EUR 35.-
+- [Raspberry PI 3 B+](https://www.raspberrypi.org/products/raspberry-pi-3-model-b-plus) running latest RASPBIAN ~ EUR 35.-
 - [SIM based wireless terminal](http://electronicshcp.com/product/hit-u4-lte) ~ EUR 100.-
 
 ### Wireless terminal
