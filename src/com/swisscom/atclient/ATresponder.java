@@ -548,9 +548,9 @@ public class ATresponder extends Thread {
 						} else if (rx.toUpperCase().startsWith("+CNUM: ")) {
 							// <<< RX +CNUM: ,"+41797373717",145
 
-							msisdn = Arrays.asList(rx.split(",")).get(1);
+							msisdn = Arrays.asList(rx.split(",")).get(1).replace("\"", "");
 							Thread.currentThread().setName(Thread.currentThread().getName() + " " + msisdn);
-							
+
 						} else if (rx.toUpperCase().startsWith("+COPS: ")) {
 							value = Integer.parseInt( Arrays.asList(rx.split(",")).get(3) ); // +COPS: 0,0,"Swisscom",7
 							switch (value) {
