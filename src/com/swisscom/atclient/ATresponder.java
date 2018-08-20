@@ -43,6 +43,8 @@ public class ATresponder extends Thread {
 	
 	private byte opMode; // Switch: 1=ER, 2=AR
 	
+	private String msisdn = null;
+	
 	public volatile static boolean isAlive = true;
 	
 	private final char quote = 34;
@@ -217,11 +219,11 @@ public class ATresponder extends Thread {
 			
 			send("AT+CMEE=2"); // Switch on verbose error messages
 			
+			send("AT+CNUM"); // MSISDN; update thread name
+			
 			send("AT+CIMI"); // IMSI
 
 			send("AT+CGSN"); // IMEI
-			
-			send("AT+CNUM"); // MSISDN
 			
 			send("AT+CMGF=1"); // Set SMS text mode
 			
@@ -543,6 +545,12 @@ public class ATresponder extends Thread {
 						    Thread.sleep(500);
 						    send(rx + ctrlz, "+CMGS");
 						    
+						} else if (rx.toUpperCase().startsWith("+CNUM: ")) {
+							// <<< RX +CNUM: ,"+41797373717",145
+
+							msisdn = Arrays.asList(rx.split(",")).get(2);
+							Thread.currentThread().setName(Thread.currentThread().getName() + " " + msisdn);
+							
 						} else if (rx.toUpperCase().startsWith("+COPS: ")) {
 							value = Integer.parseInt( Arrays.asList(rx.split(",")).get(3) ); // +COPS: 0,0,"Swisscom",7
 							switch (value) {
