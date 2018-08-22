@@ -364,11 +364,11 @@ public class ATresponder extends Thread {
 									setCancel(false); // reset flag
 									code = "16"; // Proactive SIM session terminated by user
 								} else if (block_pin) {
+									log.info("BLOCKPIN: Input wrong PIN. Attempt " + (maxWrongPinAttempts-cntrWrongPinAttempts+1) + " out of " + maxWrongPinAttempts + ".");
 									if (--cntrWrongPinAttempts == 0) {
 										setBlockedPIN(false); // reset flag
 										cntrWrongPinAttempts = maxWrongPinAttempts;
 									}
-									log.info("BLOCKPIN: Input wrong PIN " + (maxWrongPinAttempts-cntrWrongPinAttempts) + " out of " + maxWrongPinAttempts);
 									code = "0,," + invalidPIN; 
 								} else if (stk_timeout) {
 									setStkTimeout(false); // reset flag
@@ -447,11 +447,11 @@ public class ATresponder extends Thread {
 								setStkTimeout(false); // reset flag
 								code = "18"; // No response from user
 							} else if (block_pin) {
+								log.info("BLOCKPIN: Input wrong PIN. Attempt " + (maxWrongPinAttempts-cntrWrongPinAttempts+1) + " out of " + maxWrongPinAttempts + ".");
 								if (--cntrWrongPinAttempts == 0) {
 									setBlockedPIN(false); // reset flag
 									cntrWrongPinAttempts = maxWrongPinAttempts;
 								}
-								log.info("BLOCKPIN: Input wrong PIN " + (maxWrongPinAttempts-cntrWrongPinAttempts) + " out of " + maxWrongPinAttempts);
 								code = "0,," + invalidPIN; 
 							} else {
 								getInputTimerFlag = true;
