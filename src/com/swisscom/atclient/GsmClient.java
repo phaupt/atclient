@@ -13,6 +13,8 @@ public class GsmClient {
 		 * 
 		 * 'STKTIMEOUT' : TerminalResponse '18' - No response from user
 		 * 
+		 * 'BLOCKPIN'   : Wrong PIN input. Mobile ID PIN will be blocked.
+		 * 
 		 */
 		
 		ATresponder atClient = null;

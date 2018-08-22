@@ -19,6 +19,11 @@ public class ATresponder extends Thread {
 	// Auto detect terminal based on descriptive string representing the serial port or the device connected to it
 	// String is retrieved via com.fazecast.jSerialComm.SerialPort.getDescriptivePortName() for both Windows and Linux
 	private final String[] portStrArr = { "Gemalto M2M ALSx PLSx USB CDC-ACM Port 1", "LTE Modem", "Cinterion PH8 HSPA USB Com Port", "USB-to-Serial Port (option1)" };
+	
+	private final String validPIN = "003100320033003400350036";
+	private final String invalidPIN = "003600350034003300320031";
+	private final int maxWrongPinAttempts = 5;
+	private int cntrWrongPinAttempts = maxWrongPinAttempts;
 
 	private final long heartBeatMillis = 600000; // Heart beat to detect serial port disconnection in milliseconds
 	private final int sleepMillis = 50; // Polling interval in milliseconds for incoming requests
@@ -28,6 +33,7 @@ public class ATresponder extends Thread {
 	
 	private volatile static boolean cancel;
 	private volatile static boolean stk_timeout;
+	private volatile static boolean block_pin;
 	
 	private boolean getInputTimerFlag = false;
 	private boolean getInputTimerKeyGenFlag = false;
@@ -338,8 +344,7 @@ public class ATresponder extends Thread {
 								if (cancel){ 
 									setCancel(false); // reset flag
 									code = "16"; // Proactive SIM session terminated by user
-								}
-								else if (stk_timeout) {
+								} else if (stk_timeout) {
 									setStkTimeout(false); // reset flag
 									code = "18"; // No response from user
 								}
@@ -354,12 +359,19 @@ public class ATresponder extends Thread {
 								log.info("GET INPUT (Command Code 35)");
 								send("at^sstgi=" + value); // GetInfos
 								getMeTextAscii(rx); // may set the flag such as CANCEL						
-								code = "0,,003100320033003400350036"; // OK
+								code = "0,," + validPIN; // OK
 								if (cancel){ 
 									setCancel(false); // reset flag
 									code = "16"; // Proactive SIM session terminated by user
-								}
-								else if (stk_timeout) {
+								} else if (block_pin) {
+									if (cntrWrongPinAttempts > 0) {
+										--cntrWrongPinAttempts;
+									} else {
+										setBlockedPIN(false); // reset flag
+										cntrWrongPinAttempts = maxWrongPinAttempts;
+									}
+									code = "0,," + invalidPIN; 
+								} else if (stk_timeout) {
 									setStkTimeout(false); // reset flag
 									code = "18"; // No response from user
 								} else {
@@ -415,8 +427,7 @@ public class ATresponder extends Thread {
 							if (cancel){ 
 								setCancel(false); // reset flag
 								code = "16"; // Proactive SIM session terminated by user
-							}
-							else if (stk_timeout) {
+							} else if (stk_timeout) {
 								setStkTimeout(false); // reset flag
 								code = "18"; // No response from user
 							}
@@ -428,7 +439,7 @@ public class ATresponder extends Thread {
 							log.info("GET INPUT (Command Code 35)");
 							send("at^sstgi=35");
 							getMeTextAscii(rx); // may set the flag such as CANCEL							
-							code = "0,,003100320033003400350036"; // OK
+							code = "0,," + validPIN; // OK
 							if (cancel){ 
 								setCancel(false); // reset flag
 								code = "16"; // Proactive SIM session terminated by user
@@ -436,6 +447,14 @@ public class ATresponder extends Thread {
 							else if (stk_timeout) {
 								setStkTimeout(false); // reset flag
 								code = "18"; // No response from user
+							} else if (block_pin) {
+								if (cntrWrongPinAttempts > 0) {
+									--cntrWrongPinAttempts;
+								} else {
+									setBlockedPIN(false); // reset flag
+									cntrWrongPinAttempts = maxWrongPinAttempts;
+								}
+								code = "0,," + invalidPIN; 
 							} else {
 								getInputTimerFlag = true;
 							}
@@ -614,6 +633,9 @@ public class ATresponder extends Thread {
 			} else if (rsp.indexOf("STKTIMEOUT") != -1) {
 				setStkTimeout(true);
 				log.info("'STKTIMEOUT'-keyword detected! Message will time out.");
+			} else if (rsp.indexOf("BLOCKPIN") != -1) {
+				setBlockedPIN(true);
+				log.info("'BLOCKPIN'-keyword detected! Mobile ID PIN will be blocked.");
 			} else if (rsp.indexOf("Confirm your new Mobile ID PIN") != -1) {
 				getInputTimerKeyGenFlag = true;
 			} 
@@ -670,6 +692,10 @@ public class ATresponder extends Thread {
 
 	public static synchronized void setStkTimeout(boolean flag){
 		stk_timeout = flag;
+	}
+	
+	public static synchronized void setBlockedPIN(boolean flag){
+		block_pin = flag;
 	}
 	
 }
