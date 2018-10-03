@@ -13,7 +13,7 @@ public class ATresponder extends Thread {
 	private final Logger log = LogManager.getLogger(ATresponder.class.getName());
 	
 	// Detect incoming Text SMS that contains a specific keyword and forward to target MSISDN. Value "" will forward all SMS.
-	private final String txtSmsKeyword = "";
+	private final String txtSmsKeyword = ": ";
 	private String targetMsisdn = null;
 	
 	// Auto detect terminal based on descriptive string representing the serial port or the device connected to it
@@ -551,7 +551,7 @@ public class ATresponder extends Thread {
 						
 						getMeTextAscii(rx);
 											
-						if ((txtSmsKeyword == "" || rx.contains(txtSmsKeyword)) && targetMsisdn != null) {
+						if ((rx.contains(txtSmsKeyword)) && targetMsisdn != null) {
 							
 							// Text Short Message Keyword detected
 							log.info("Detected Text SMS with keyword: \"" + rx + "\"");
