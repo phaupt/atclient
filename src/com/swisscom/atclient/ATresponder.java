@@ -4,6 +4,8 @@ import com.fazecast.jSerialComm.*;
 import java.io.*;
 import java.lang.management.ManagementFactory;
 import java.util.Arrays;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -13,7 +15,7 @@ public class ATresponder extends Thread {
 	private final Logger log = LogManager.getLogger(ATresponder.class.getName());
 	
 	// Detect incoming Text SMS that contains a specific keyword and forward to target MSISDN. Value "" will forward all SMS.
-	private final String txtSmsKeyword = ": ";
+	private final String txtSmsPattern = "^.*: [A-Z0-9]{4}\\. .*$";
 	private String targetMsisdn = null;
 	
 	// Auto detect terminal based on descriptive string representing the serial port or the device connected to it
@@ -530,6 +532,9 @@ public class ATresponder extends Thread {
 			
 			if (timeout == 0)
 				timeout = 5000; // default
+			
+			Pattern pattern = Pattern.compile(txtSmsPattern);
+			Matcher matcher = null;
 
 			while (true) {
 				
@@ -550,8 +555,10 @@ public class ATresponder extends Thread {
 						log.debug("<<< RX " + rx);
 						
 						getMeTextAscii(rx);
+						
+						matcher = pattern.matcher(rx);
 											
-						if ((rx.contains(txtSmsKeyword)) && targetMsisdn != null) {
+						if (matcher.matches() && targetMsisdn != null) {
 							
 							// Text Short Message Keyword detected
 							log.info("Detected Text SMS with keyword: \"" + rx + "\"");
