@@ -101,7 +101,7 @@ With the default log4j configuration you can pass the log file name as a command
 
 #### Example logfile output
 
-Example log in case of a Mobile ID signature processing. It's lightning fast (less than a second).
+Example log in case of a Mobile ID signature processing.
 ```
 2019-04-15 15:50:13,856 872@raspberrypi /dev/ttyACM11 +41797373717 [DBG] <<< RX ^SSTN: 33
 2019-04-15 15:50:13,857 872@raspberrypi /dev/ttyACM11 +41797373717 [INF] DISPLAY TEXT (Command Code 33)
