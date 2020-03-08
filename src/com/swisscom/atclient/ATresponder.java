@@ -564,7 +564,11 @@ public class ATresponder extends Thread {
 							log.info("Detected Text SMS with keyword: \"" + rx + "\"");
 							log.info("Forward Text SMS to " + targetMsisdn);
 
+							// Forward SMS to configured target MSISDN
 						    send("AT+CMGS=" + quote + targetMsisdn + quote + ",145"); 
+						    
+						    // Call URL to store the SMS value
+						    // TODO: ...
 						    
 						    Thread.sleep(500);
 						    send(rx + ctrlz, "+CMGS");
