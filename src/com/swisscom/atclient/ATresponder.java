@@ -3,6 +3,8 @@ package com.swisscom.atclient;
 import com.fazecast.jSerialComm.*;
 import java.io.*;
 import java.lang.management.ManagementFactory;
+import java.net.URL;
+import java.net.URLConnection;
 import java.util.Arrays;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -10,13 +12,19 @@ import java.util.regex.Pattern;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import org.apache.commons.codec.binary.Base64;
+
 public class ATresponder extends Thread {
 	
 	private final Logger log = LogManager.getLogger(ATresponder.class.getName());
 	
 	// Detect incoming Text SMS that contains a specific keyword and forward to target MSISDN. Value "" will forward all SMS.
-	private final String txtSmsPattern = "^.*: [A-Z0-9]{4}\\. .*$";
-	private String targetMsisdn = null;
+	private final String smsPattern = "^.*: [A-Z0-9]{4}\\. .*$";
+	private String smsTargetMsisdn = null;
+	private String smsURL = null;
+	private String smsQueryParam = "CODE";
+	private String smsAuthName = null;
+	private String smsAuthPassword = null;
 	
 	// Auto detect terminal based on descriptive string representing the serial port or the device connected to it
 	// String is retrieved via com.fazecast.jSerialComm.SerialPort.getDescriptivePortName() for both Windows and Linux
@@ -71,7 +79,10 @@ public class ATresponder extends Thread {
 		Thread.currentThread().setName(ManagementFactory.getRuntimeMXBean().getName());
 		
 		try {
-			targetMsisdn = System.getProperty("targetMsisdn");
+			smsTargetMsisdn = System.getProperty("targetMsisdn");
+			smsURL = System.getProperty("smsURL");
+			smsAuthName = System.getProperty("smsAuthName");
+			smsAuthPassword = System.getProperty("smsAuthPassword");
 			serPortStr = System.getProperty("serial.port");
 		} catch (Exception e1) {
 		}
@@ -533,7 +544,7 @@ public class ATresponder extends Thread {
 			if (timeout == 0)
 				timeout = 5000; // default
 			
-			Pattern pattern = Pattern.compile(txtSmsPattern);
+			Pattern pattern = Pattern.compile(smsPattern);
 			Matcher matcher = null;
 
 			while (true) {
@@ -558,20 +569,22 @@ public class ATresponder extends Thread {
 						
 						matcher = pattern.matcher(rx);
 											
-						if (matcher.matches() && targetMsisdn != null) {
+						if (matcher.matches() && smsTargetMsisdn != null) {
 							
 							// Text Short Message Keyword detected
 							log.info("Detected Text SMS with keyword: \"" + rx + "\"");
-							log.info("Forward Text SMS to " + targetMsisdn);
+							log.info("Forward Text SMS to " + smsTargetMsisdn);
 
 							// Forward SMS to configured target MSISDN
-						    send("AT+CMGS=" + quote + targetMsisdn + quote + ",145"); 
-						    
-						    // Call URL to store the SMS value
-						    // TODO: ...
-						    
+						    send("AT+CMGS=" + quote + smsTargetMsisdn + quote + ",145"); 
 						    Thread.sleep(500);
 						    send(rx + ctrlz, "+CMGS");
+						    
+						    if (smsURL != null && smsAuthName != null && smsAuthPassword != null) {
+						    	// Call URL to store the SMS value
+							    log.info("Call URL to forward the SMS value " + matcher.group(0));
+							    publishSMS(matcher.group(0));
+						    }
 						    
 						} else if (rx.toUpperCase().startsWith("+CNUM: ")) {
 							// <<< RX +CNUM: ,"+41797373717",145
@@ -705,6 +718,40 @@ public class ATresponder extends Thread {
 	
 	public static synchronized void setBlockedPIN(boolean flag){
 		block_pin = flag;
+	}
+	
+	/**
+	 * Forward the OTP code value from the SMS to a URL (GET call)
+	 * The code value is set in a URL query parameter ("https://www.example.com/script.sh?CODE=ABCD")
+	 * The script.sh on that server may read the query parameter to process the SMS code.
+	 * @param smsCode
+	 * @return
+	 * @throws IOException
+	 */
+	public String publishSMS(String smsCode) throws IOException {
+		String authString = smsAuthName + ":" + smsAuthPassword;
+		byte[] authEncBytes = Base64.encodeBase64(authString.getBytes());
+		String authStringEnc = new String(authEncBytes);
+		
+		log.info("Calling URL '" + smsURL + smsCode + "' with basic auth " + authString);
+		
+		URL url = new URL(smsURL + "?" + smsQueryParam + "=" + smsCode);
+		URLConnection urlConnection = url.openConnection();
+		urlConnection.setRequestProperty("Authorization", "Basic " + authStringEnc);
+		InputStream is = urlConnection.getInputStream();
+		InputStreamReader isr = new InputStreamReader(is);
+
+		int numCharsRead;
+		char[] charArray = new char[1024];
+		StringBuffer sb = new StringBuffer();
+		while ((numCharsRead = isr.read(charArray)) > 0) {
+			sb.append(charArray, 0, numCharsRead);
+		}
+		String result = sb.toString();
+		
+		log.info("Call URL result is " + result);
+
+		return result;
 	}
 	
 }
