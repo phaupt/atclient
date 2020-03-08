@@ -22,7 +22,7 @@ public class ATresponder extends Thread {
 	private final String smsPattern = "^.*: [A-Z0-9]{4}\\. .*$";
 	private String smsTargetMsisdn = null;
 	private String smsURL = null;
-	private String smsQueryParam = "CODE";
+	private String smsQueryParam = "TXT";
 	private String smsAuthName = null;
 	private String smsAuthPassword = null;
 	
@@ -581,9 +581,9 @@ public class ATresponder extends Thread {
 						    send(rx + ctrlz, "+CMGS");
 						    
 						    if (smsURL != null && smsAuthName != null && smsAuthPassword != null) {
-						    	// Call URL to store the SMS value
-							    log.info("Call URL to forward the SMS value " + matcher.group(0));
-							    publishSMS(matcher.group(0));
+						    	// Call URL to forward full SMS content
+							    log.info("Call URL to forward the SMS value " + rx);
+							    publishSMS(rx); // any potential whitespace will be replaced with &nbsp;
 						    }
 						    
 						} else if (rx.toUpperCase().startsWith("+CNUM: ")) {
@@ -722,20 +722,20 @@ public class ATresponder extends Thread {
 	
 	/**
 	 * Forward the OTP code value from the SMS to a URL (GET call)
-	 * The code value is set in a URL query parameter ("https://www.example.com/script.sh?CODE=ABCD")
+	 * The code value is set in a URL query parameter ("https://www.example.com/script.sh?TXT=Hello&nbsp;World")
 	 * The script.sh on that server may read the query parameter to process the SMS code.
-	 * @param smsCode
-	 * @return
+	 * @param smsContent Any whitespace will be replaced with '&nbsp'
+	 * @return result is the server response
 	 * @throws IOException
 	 */
-	public String publishSMS(String smsCode) throws IOException {
+	public String publishSMS(String smsContent) throws IOException {
 		String authString = smsAuthName + ":" + smsAuthPassword;
 		byte[] authEncBytes = Base64.encodeBase64(authString.getBytes());
 		String authStringEnc = new String(authEncBytes);
 		
-		log.info("Calling URL '" + smsURL + smsCode + "' with basic auth " + authString);
+		log.info("Calling URL '" + smsURL + smsContent + "' with basic auth " + authString);
 		
-		URL url = new URL(smsURL + "?" + smsQueryParam + "=" + smsCode);
+		URL url = new URL(smsURL + "?" + smsQueryParam + "=" + smsContent.replaceAll(" ", "&nbsp;"));
 		URLConnection urlConnection = url.openConnection();
 		urlConnection.setRequestProperty("Authorization", "Basic " + authStringEnc);
 		InputStream is = urlConnection.getInputStream();
@@ -749,7 +749,7 @@ public class ATresponder extends Thread {
 		}
 		String result = sb.toString();
 		
-		log.info("Call URL result is " + result);
+		log.info("Server response was '" + result + "'");
 
 		return result;
 	}
