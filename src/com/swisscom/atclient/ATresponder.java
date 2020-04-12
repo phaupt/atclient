@@ -6,6 +6,7 @@ import java.lang.management.ManagementFactory;
 import java.net.URL;
 import java.net.URLConnection;
 import java.util.Arrays;
+import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -16,21 +17,17 @@ import org.apache.commons.codec.binary.Base64;
 
 public class ATresponder extends Thread {
 	
-	//TODO: Set 3G technology as option
-	
 	private final Logger log = LogManager.getLogger(ATresponder.class.getName());
 	
 	// Detect incoming Text SMS that contains a specific keyword and forward to target MSISDN. Value "" will forward all SMS.
-	private final String smsPattern = "^.*: [A-Z0-9]{4}\\. .*$";
+	private String smsPattern = null;
 	private String smsTargetMsisdn = null;
 	private String smsURL = null;
-	private String smsQueryParam = "TXT";
+	private String smsQueryParam = null;
 	private String smsAuthName = null;
 	private String smsAuthPassword = null;
 	
-	// Auto detect terminal based on descriptive string representing the serial port or the device connected to it
-	// String is retrieved via com.fazecast.jSerialComm.SerialPort.getDescriptivePortName() for both Windows and Linux
-	private final String[] portStrArr = { "Gemalto M2M ALSx PLSx LTE USB serial Port", "LTE Modem" };
+	private String portStrArr[] = new String[1];
 	
 	private final String validPIN = "003100320033003400350036";
 	private final String invalidPIN = "003600350034003300320031";
@@ -41,7 +38,7 @@ public class ATresponder extends Thread {
 	 * Heart beat to detect serial port disconnection in milliseconds
 	 * Any other incoming RX data (e.g. STK even from a Mobile ID signature) will reset the heart beat timer
 	 **/
-	private final long heartBeatMillis = 30000;
+	private long heartBeatMillis;
 	private final int sleepMillis = 50; // Polling interval in milliseconds for incoming requests
 	
 	private BufferedReader buffReader;
@@ -58,11 +55,15 @@ public class ATresponder extends Thread {
 	private String serPortStr = null;
 	private SerialPort serPort;
 	
-	private final int safetySleepTime = 1000; // set to 10000 (10s) for production use
-	private final int baudrate = 9600;
-	private final int databits = 8;
-	private final int stopbits = 1;
-	private final int parity = 0;
+	private final int safetySleepTime = 1000;
+	private int baudrate;
+	private int databits;
+	private int stopbits;
+	private int parity;
+	
+	private int atTimeout;
+	
+	private String copsMode;
 	
 	private byte opMode; // Switch: 1=ER, 2=AR
 	
@@ -86,12 +87,76 @@ public class ATresponder extends Thread {
 		Thread.currentThread().setName(ManagementFactory.getRuntimeMXBean().getName());
 		
 		try {
-			smsTargetMsisdn = System.getProperty("targetMsisdn");
-			smsURL = System.getProperty("smsURL");
-			smsAuthName = System.getProperty("smsAuthName");
-			smsAuthPassword = System.getProperty("smsAuthPassword");
 			serPortStr = System.getProperty("serial.port");
-		} catch (Exception e1) {
+			
+			Properties prop = readPropertiesFile("atclient.cfg");
+					
+			if (System.getProperty("os.name").toLowerCase().contains("win")) {
+				portStrArr[0] = prop.getProperty("port.name.windows");
+				log.debug("Property port.name.windows set to " + portStrArr[0]);
+			} else {
+				portStrArr[0] = prop.getProperty("port.name.linux");
+				log.debug("Property port.name.linux set to " + portStrArr[0]);
+			}
+			
+			baudrate = Integer.parseInt(prop.getProperty("port.baudrate").trim());
+			log.debug("Property port.baudrate set to " + baudrate);
+			databits = Integer.parseInt(prop.getProperty("port.databits").trim());
+			log.debug("Property port.databits set to " + databits);
+			stopbits = Integer.parseInt(prop.getProperty("port.stopbits").trim());
+			log.debug("Property port.stopbits set to " + stopbits);
+			parity = Integer.parseInt(prop.getProperty("port.parity").trim());
+			log.debug("Property port.parity set to " + parity);
+			
+			atTimeout = Integer.parseInt(prop.getProperty("port.communication.timeout").trim());
+			log.debug("Property port.communication.timeout set to " + atTimeout);
+			
+			heartBeatMillis = Integer.parseInt(prop.getProperty("atclient.atcommand.heartbeat").trim());
+			log.debug("Property atclient.atcommand.heartbeat set to " + heartBeatMillis);
+			
+			if (prop.getProperty("cops.mode").trim().length() == 1) {
+				copsMode = prop.getProperty("cops.mode").trim();
+				log.debug("Property cops.mode set to " + copsMode);
+			} else {
+				copsMode = null;
+				log.debug("Property cops.mode set to automatic");
+			}
+			
+			if (prop.getProperty("textsms.forward.enable").trim().equals("true")) {
+				smsTargetMsisdn = prop.getProperty("textsms.forward.msisdn").trim();
+				log.debug("Property textsms.forward.msisdn set to " + smsTargetMsisdn);
+				smsPattern = prop.getProperty("textsms.forward.pattern");
+				log.debug("Property textsms.forward.pattern set to " + smsPattern);
+			} else {
+				smsTargetMsisdn = null;
+				smsPattern = null;
+				log.debug("Property textsms.forward disabled");
+			}
+			
+			if (prop.getProperty("textsms.publish.enable").trim().equals("true")) {
+				smsURL = prop.getProperty("textsms.publish.url").trim();
+				log.debug("Property textsms.publish.url set to " + smsURL);
+				smsQueryParam = prop.getProperty("textsms.publish.queryparam").trim();
+				log.debug("Property textsms.publish.queryparam set to " + smsQueryParam);
+				
+				if (prop.getProperty("textsms.publish.basicauth.enabled").trim().equals("true")) {
+					smsAuthName = prop.getProperty("textsms.publish.basicauth.user").trim();
+					log.debug("Property textsms.publish.basicauth.user set to " + smsAuthName);
+					smsAuthPassword = prop.getProperty("textsms.publish.basicauth.pwd").trim();
+					log.debug("Property textsms.publish.basicauth.pwd set to " + smsAuthPassword);
+				} else {
+					smsAuthName = null;
+					smsAuthPassword = null;
+					log.debug("Property textsms.publish.basicauth disabled");
+				}
+			} else {
+				smsURL = null;
+				smsQueryParam = null;
+				log.debug("Property textsms.publish disabled");
+			}
+			
+		} catch (IOException e1) {
+			e1.printStackTrace();
 		}
 
 		log.info("Application started...");
@@ -115,6 +180,23 @@ public class ATresponder extends Thread {
 		
 		log.info("Exiting Application");
 	}
+	
+	public static Properties readPropertiesFile(String fileName) throws IOException {
+	      FileInputStream fis = null;
+	      Properties prop = null;
+	      try {
+	         fis = new FileInputStream(fileName);
+	         prop = new Properties();
+	         prop.load(fis);
+	      } catch(FileNotFoundException fnfe) {
+	         fnfe.printStackTrace();
+	      } catch(IOException ioe) {
+	         ioe.printStackTrace();
+	      } finally {
+	         fis.close();
+	      }
+	      return prop;
+	   }
 	
 	public void attachShutDownHook() {
 		Runtime.getRuntime().addShutdownHook(new Thread() {
@@ -186,15 +268,15 @@ public class ATresponder extends Thread {
 	}
 	
 	private boolean openPort() throws IOException {
-		log.debug(serPortStr + ": Set port parameters (" + baudrate + ", " + databits + ", " + stopbits + ", " + parity + ")");
+		log.debug(serPortStr + " set port parameters (" + baudrate + ", " + databits + ", " + stopbits + ", " + parity + ")");
 		serPort = SerialPort.getCommPort(serPortStr);
 		if (System.getProperty("os.name").toLowerCase().contains("win")) serPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 500, 0); // only available on Windows systems
 		serPort.setComPortParameters(baudrate, databits, stopbits, parity);
-		log.debug(serPortStr + ": Set state of the DTR line to 1");
+		log.debug(serPortStr + " set state of the DTR line to 1");
 		serPort.setDTR();
 		
 		// Try to open port..
-		log.debug(serPortStr + ": trying to open");
+		log.debug(serPortStr + " trying to open");
 		if (!serPort.openPort(safetySleepTime)) {
 			// Port not available
 			log.error(serPortStr + " is currently not available.");
@@ -264,36 +346,27 @@ public class ATresponder extends Thread {
 			
 			send("AT+CREG?"); // Network registration
 			
+			if (copsMode != null && copsMode.length() == 1) {
+				// Force the mobile terminal to select and register a specific network
+				// AT+COPS=<mode>[, <format>[, <opName>][, <rat>]]
+				// mode 0: Automatic mode; <opName> field is ignored
+				// rat:
+				// 0 GSM (2G)
+				// 2 UTRAN (3G)
+				// 3 GSM w/EGPRS (2G)
+				// 4 UTRAN w/HSDPA (3G)
+				// 6 UTRAN w/HSDPA and HSUPA (3G)
+				// 7 E-UTRAN (4G/LTE)
+				send("AT+COPS=0,2,22801," + copsMode, "OK", 30000, true); // increased timeout for this call
+			} else {
+				// Set automatic mode
+				send("AT+COPS=0", "OK", 30000, true);
+			}
+			
 			send("AT+COPS?"); // Provider + access technology
-			
+
 			send("AT+CSQ"); // Signal Strength
-			
-			
-			// AT+COPS=<mode>[, <format>[, <opName>][, <rat>]]
-			// mode 0: Automatic mode; <opName> field is ignored
-			// rat:
-			// 0 GSM (2G)
-			// 2 UTRAN (3G)
-			// 3 GSM w/EGPRS (2G)
-			// 4 UTRAN w/HSDPA (3G)
-			// 6 UTRAN w/HSDPA and HSUPA (3G)
-			// 7 E-UTRAN (4G/LTE)
-			
-//			// SET TO 3G (permanent!)
-//			send("AT+COPS=0,2,22801,2", "OK", 30000, true); // increased timeout for this call
-//			send("AT+COPS?"); // Provider + access technology
-//			send("AT+CSQ"); // Signal Strength
-//
-////			// SET TO 4G (permanent!)
-////			send("AT+COPS=0,2,22801,7", "OK", 30000, true); // increased timeout for this call
-////			send("AT+COPS?"); // Provider + access technology
-////			send("AT+CSQ"); // Signal Strength
-//
-//			// SET TO AUTOMATIC COPS SELECTION (but it will keep actual selection until terminal reboot)
-//			send("AT+COPS=0", "OK", 30000, true);
-//			send("AT+COPS?"); // Provider + access technology
-//			send("AT+CSQ"); // Signal Strength
-			
+							
 			// Start listening...
 			send("AT^SSTR?", null); // Check for STK Menu initialization 
 			
@@ -592,10 +665,13 @@ public class ATresponder extends Thread {
 			int value;
 			
 			if (timeout == 0)
-				timeout = 5000; // default
+				timeout = atTimeout; // default
 			
-			Pattern pattern = Pattern.compile(smsPattern);
+			Pattern pattern = null;
 			Matcher matcher = null;
+			if (smsPattern != null) {
+				pattern = Pattern.compile(smsPattern);
+			}
 
 			while (true) {
 				
@@ -617,8 +693,9 @@ public class ATresponder extends Thread {
 						
 						getMeTextAscii(rx);
 						
-						matcher = pattern.matcher(rx);
-											
+						if (pattern != null)
+							matcher = pattern.matcher(rx);
+						
 						if (matcher.matches() && smsTargetMsisdn != null) {
 							
 							// Text Short Message Keyword detected
@@ -630,7 +707,7 @@ public class ATresponder extends Thread {
 						    Thread.sleep(500);
 						    send(rx + ctrlz, "+CMGS");
 						    
-						    if (smsURL != null && smsAuthName != null && smsAuthPassword != null) {
+						    if (smsURL != null) {
 						    	// Call URL to forward full SMS content
 							    log.info("Call URL to forward the SMS value " + rx);
 							    publishSMS(rx); // any potential whitespace will be replaced with &nbsp;
@@ -790,15 +867,19 @@ public class ATresponder extends Thread {
 	 * @throws IOException
 	 */
 	public String publishSMS(String smsContent) throws IOException {
-		String authString = smsAuthName + ":" + smsAuthPassword;
-		byte[] authEncBytes = Base64.encodeBase64(authString.getBytes());
-		String authStringEnc = new String(authEncBytes);
-		
-		log.info("Calling URL '" + smsURL + smsContent + "' with basic auth " + authString);
-		
 		URL url = new URL(smsURL + "?" + smsQueryParam + "=" + smsContent.replaceAll(" ", "&nbsp;"));
 		URLConnection urlConnection = url.openConnection();
-		urlConnection.setRequestProperty("Authorization", "Basic " + authStringEnc);
+		log.info("Calling URL '" + smsURL + smsContent);
+		
+		if (smsAuthName != null && smsAuthPassword != null) {
+			String authString = smsAuthName + ":" + smsAuthPassword;
+			byte[] authEncBytes = Base64.encodeBase64(authString.getBytes());
+			String authStringEnc = new String(authEncBytes);
+			
+			urlConnection.setRequestProperty("Authorization", "Basic " + authStringEnc);
+			log.info("Basic Authentication used");
+		} 
+			
 		InputStream is = urlConnection.getInputStream();
 		InputStreamReader isr = new InputStreamReader(is);
 
