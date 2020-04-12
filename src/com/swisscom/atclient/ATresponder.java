@@ -162,8 +162,6 @@ public class ATresponder extends Thread {
 					}
 					if (portSuccess)
 						break; // success, break iteration for available serial ports
-					else
-						log.debug("Unknown serial port: " + port.getSystemPortName() + " " + portDesc);
 					
 					Thread.sleep(100); // wait before to proceed with next available port in list
 				}
@@ -280,7 +278,7 @@ public class ATresponder extends Thread {
 			// 6 UTRAN w/HSDPA and HSUPA (3G)
 			// 7 E-UTRAN (4G/LTE)
 			
-			send("AT+COPS=0,0,\"CUSTOM\",2"); 
+			send("AT+COPS=0,2,2"); 
 			send("AT+COPS?"); // Provider + access technology
 			send("AT+CSQ"); // Signal Strength
 
