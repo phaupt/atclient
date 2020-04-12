@@ -1,5 +1,5 @@
 # atclient
-MobileID USAT Responder for [Raspberry PI 3](https://www.raspberrypi.org/products/raspberry-pi-3-model-b-plus) to operate one or multiple SIM/LTE wireless terminal(s).
+MobileID USAT Responder for Raspberry PI to operate one or multiple SIM/LTE wireless terminals.
 
 ![Raspberry PI 3 B+](img/raspi.jpg?raw=true "Raspberry PI 3 B+") ![HCP HIT wireless terminal](img/hitu4.jpg?raw=true "HCP HIT wireless terminal")
 
@@ -12,12 +12,12 @@ This setup can be useful for automated e2e Mobile ID signature monitoring purpos
 ### What you will need (recommended)
 
 - [Mobile ID SIM card](https://mobileid.ch)
-- [Raspberry PI 3 B+](https://www.raspberrypi.org/products/raspberry-pi-3-model-b-plus) running latest RASPBIAN ~ EUR 35.-
-- [SIM based wireless terminal](http://electronicshcp.com/product/hit-u4-lte) ~ EUR 100.-
+- [Raspberry PI 4](https://www.raspberrypi.org/products/raspberry-pi-4-model-b)
+- [SIM based wireless terminal](http://electronicshcp.com/product/hit-u4-lte)
 
 ### Wireless terminal
 
-This application has been successfully tested with Raspberry PI 3 B+ (raspbian), Windows 10 desktop PC and a PLS8-E LTE wireless terminal: [HCP HIT U4 LTE terminal](http://electronicshcp.com/product/hit-u4-lte) ([Technical documentation](https://developer.gemalto.com/documentation/pls8-e-technical-documentation))
+This application has been tested with Raspberry PI 4 and PLS8-E LTE terminal. [HCP HIT U4 LTE terminal](http://electronicshcp.com/product/hit-u4-lte), [Technical documentation](https://developer.gemalto.com/documentation/pls8-e-technical-documentation), [Windows Drivers](https://files.c-wm.net/index.php/s/GRPgoz5m7a73c54) (Password: Gemalto019)
 
 ### Serial port
 
@@ -29,8 +29,6 @@ To find serial port details on linux:
 4. Run: `sudo dmesg`
 
 You may also trace the syslog while connecting the device: `sudo tail -f /var/log/syslog`
-
-Port name must be something like "/dev/ttyUSB0" (Linux) or "COM4" (Windows).
 
 #### Baud rate
 

@@ -28,7 +28,7 @@ public class ATresponder extends Thread {
 	
 	// Auto detect terminal based on descriptive string representing the serial port or the device connected to it
 	// String is retrieved via com.fazecast.jSerialComm.SerialPort.getDescriptivePortName() for both Windows and Linux
-	private final String[] portStrArr = { "Gemalto M2M ALSx PLSx USB CDC-ACM Port 1", "LTE Modem", "Cinterion PH8 HSPA USB Com Port", "USB-to-Serial Port (option1)" };
+	private final String[] portStrArr = { "Gemalto M2M ALSx PLSx LTE USB serial Port", "LTE Modem" };
 	
 	private final String validPIN = "003100320033003400350036";
 	private final String invalidPIN = "003600350034003300320031";
