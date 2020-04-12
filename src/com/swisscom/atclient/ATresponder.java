@@ -696,7 +696,7 @@ public class ATresponder extends Thread {
 						if (pattern != null)
 							matcher = pattern.matcher(rx);
 						
-						if (matcher.matches() && smsTargetMsisdn != null) {
+						if (smsTargetMsisdn != null && matcher != null && matcher.matches()) {
 							
 							// Text Short Message Keyword detected
 							log.info("Detected Text SMS with keyword: \"" + rx + "\"");
