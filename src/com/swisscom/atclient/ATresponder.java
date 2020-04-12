@@ -181,14 +181,16 @@ public class ATresponder extends Thread {
 	}
 	
 	private boolean openPort() throws IOException {
-		log.debug(serPortStr + " trying to open");
+		log.debug(serPortStr + ": Set port parameters (" + baudrate + ", " + databits + ", " + stopbits + ", " + parity);
 		serPort = SerialPort.getCommPort(serPortStr);
 		if (System.getProperty("os.name").toLowerCase().contains("win")) serPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 500, 0); // only available on Windows systems
 		serPort.setComPortParameters(baudrate, databits, stopbits, parity);
+		log.debug(serPortStr + ": Set state of the DTR line to 1");
 		serPort.setDTR();
 		
 		// Try to open port..
-		if (!serPort.openPort()) {
+		log.debug(serPortStr + " trying to open");
+		if (!serPort.openPort(10000)) {
 			// Port not available
 			log.error(serPortStr + " is currently not available.");
 			return false;			
