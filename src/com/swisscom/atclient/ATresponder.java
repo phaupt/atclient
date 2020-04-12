@@ -259,12 +259,6 @@ public class ATresponder extends Thread {
 			
 			send("AT+CGSN"); // Module serial number / IMEI
 			
-			send("AT+CSUB"); // Module revision
-			
-			send("AT+CGMR"); // Firmware revision	
-			
-			send("AT+CPSI?"); // UE system info
-			
 			send("AT+CIMI"); // IMSI
 			
 			send("AT+CPIN?"); // SIM Card status
