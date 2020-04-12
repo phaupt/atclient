@@ -20,9 +20,9 @@
 			</PatternLayout>
 			<Policies>
 				<TimeBasedTriggeringPolicy />
-				<SizeBasedTriggeringPolicy size="50 MB" />
+				<SizeBasedTriggeringPolicy size="100 MB" />
 			</Policies>
-			<DefaultRolloverStrategy max="4" />
+			<DefaultRolloverStrategy max="10" />
 		</RollingFile>
 
 		<Socket name="syslogsocket" host="localhost" port="514"	protocol="UDP">
@@ -34,7 +34,7 @@
 		<Root level="debug" additivity="false">
 			<!-- <AppenderRef ref="console"/> -->
 			<AppenderRef ref="reporter" />
-			<AppenderRef ref="syslogsocket"/>
+			<!-- <AppenderRef ref="syslogsocket"/> -->
 		</Root>
 	</Loggers>
 	
