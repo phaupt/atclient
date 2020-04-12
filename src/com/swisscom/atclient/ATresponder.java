@@ -58,6 +58,7 @@ public class ATresponder extends Thread {
 	private String serPortStr = null;
 	private SerialPort serPort;
 	
+	private final int safetySleepTime = 1000; // set to 10000 (10s) for production use
 	private final int baudrate = 9600;
 	private final int databits = 8;
 	private final int stopbits = 1;
@@ -194,7 +195,7 @@ public class ATresponder extends Thread {
 		
 		// Try to open port..
 		log.debug(serPortStr + ": trying to open");
-		if (!serPort.openPort(10000)) {
+		if (!serPort.openPort(safetySleepTime)) {
 			// Port not available
 			log.error(serPortStr + " is currently not available.");
 			return false;			
@@ -278,12 +279,24 @@ public class ATresponder extends Thread {
 			// 6 UTRAN w/HSDPA and HSUPA (3G)
 			// 7 E-UTRAN (4G/LTE)
 			
-			send("AT+COPS=0,2,2"); 
-			send("AT+COPS?"); // Provider + access technology
-			send("AT+CSQ"); // Signal Strength
-
+//			// SET TO 3G (permanent!)
+//			send("AT+COPS=0,2,22801,2", "OK", 30000, true); // increased timeout for this call
+//			send("AT+COPS?"); // Provider + access technology
+//			send("AT+CSQ"); // Signal Strength
+//
+////			// SET TO 4G (permanent!)
+////			send("AT+COPS=0,2,22801,7", "OK", 30000, true); // increased timeout for this call
+////			send("AT+COPS?"); // Provider + access technology
+////			send("AT+CSQ"); // Signal Strength
+//
+//			// SET TO AUTOMATIC COPS SELECTION (but it will keep actual selection until terminal reboot)
+//			send("AT+COPS=0", "OK", 30000, true);
+//			send("AT+COPS?"); // Provider + access technology
+//			send("AT+CSQ"); // Signal Strength
+			
 			// Start listening...
 			send("AT^SSTR?", null); // Check for STK Menu initialization 
+			
 		}
 	}
 	
@@ -515,6 +528,11 @@ public class ATresponder extends Thread {
 							break;
 						case 254:
 							log.info("SIM Applet returns to main menu (Command Code 254)");
+							
+							// STK Process completed. Let's do some regular checks:
+							send("AT+COPS?"); // Provider + access technology
+							send("AT+CSQ"); // Signal Strength
+							
 							break;
 						default:
 							break;
@@ -526,6 +544,7 @@ public class ATresponder extends Thread {
 				// Ignore the ^SSTR: 19,0,"" cases
 			} 
 		}
+		
 	}
 	
 	public boolean send(String cmd, long timeout, boolean sstr) {
@@ -627,28 +646,28 @@ public class ATresponder extends Thread {
 							value = Integer.parseInt( Arrays.asList(rx.split(",")).get(3) ); // +COPS: 0,0,"Swisscom",7
 							switch (value) {
 							case 0: 
-								log.info("Radio Access Technology: GSM (2G)");
+								log.info("Radio Access Technology: GSM = 2G");
 								break;
 							case 1: 
-								log.info("Radio Access Technology: GSM Compact (2G)");
+								log.info("Radio Access Technology: GSM Compact = 2G");
 								break;
 							case 2: 
-								log.info("Radio Access Technology: UTRAN (3G)");
+								log.info("Radio Access Technology: UTRAN = 3G");
 								break;
 							case 3: 
-								log.info("Radio Access Technology: GSM w/EGPRS (2G)");
+								log.info("Radio Access Technology: GSM w/EGPRS = 2G");
 								break;
 							case 4: 
-								log.info("Radio Access Technology: UTRAN w/HSDPA (3G)");
+								log.info("Radio Access Technology: UTRAN w/HSDPA = 3G");
 								break;
 							case 5: 
-								log.info("Radio Access Technology: UTRAN w/HSUPA (3G)");
+								log.info("Radio Access Technology: UTRAN w/HSUPA = 3G");
 								break;
 							case 6: 
-								log.info("Radio Access Technology: UTRAN w/HSDPA and HSUPA (3G)");
+								log.info("Radio Access Technology: UTRAN w/HSDPA and HSUPA = 3G");
 								break;
 							case 7: 
-								log.info("Radio Access Technology: E-UTRAN (4G/LTE)");
+								log.info("Radio Access Technology: E-UTRAN = 4G/LTE");
 								break;
 							default:
 								break;
@@ -656,13 +675,13 @@ public class ATresponder extends Thread {
 						} else if (rx.toUpperCase().startsWith("+CSQ: ")) {
 							value = Integer.parseInt( rx.substring(6, rx.indexOf(",")) ); // +CSQ: 14,99
 							if (value <= 9) {
-								log.info("Signal strength: MARGINAL (value '" + value + "' is in marginal range 1-9 of 31)");
+								log.info("Signal strength: " + value + "/1-9/31 = MARGINAL");
 							} else if (value >= 10 && value <= 14) {
-								log.info("Signal strength: OK (value '" + value + "' is in ok range 10-14 of 31)");
+								log.info("Signal strength: " + value + "/10-4/31 = OK");
 							} else if (value >= 15 && value <= 19) {
-								log.info("Signal strength: GOOD (value '" + value + "' is in good range 15-19 of 31)");;
+								log.info("Signal strength: " + value + "/15-19/31 = GOOD"); 
 							} else if (value >= 20 && value <= 31) {
-								log.info("Signal strength: EXCELLENT (value '" + value + "' is in excellent range 20-31 of 31)");
+								log.info("Signal strength: " + value + "/19-31/31 = EXCELLENT");
 							}
 						} else if (rx.toUpperCase().trim().contains(compareStr)) {		
 							if (getInputTimerFlag && getInputTimerKeyGenFlag)
