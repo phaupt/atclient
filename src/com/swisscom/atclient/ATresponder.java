@@ -35,7 +35,7 @@ public class ATresponder extends Thread {
 	private final int maxWrongPinAttempts = 5;
 	private int cntrWrongPinAttempts = maxWrongPinAttempts;
 
-	private final long heartBeatMillis = 600000; // Heart beat to detect serial port disconnection in milliseconds
+	private final long heartBeatMillis = 30000; // Heart beat to detect serial port disconnection in milliseconds
 	private final int sleepMillis = 50; // Polling interval in milliseconds for incoming requests
 	
 	private BufferedReader buffReader;
@@ -183,7 +183,7 @@ public class ATresponder extends Thread {
 	private boolean openPort() throws IOException {
 		log.debug(serPortStr + " trying to open");
 		serPort = SerialPort.getCommPort(serPortStr);
-		serPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 500, 0);
+		if (System.getProperty("os.name").toLowerCase().contains("win")) serPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 500, 0); // only available on Windows systems
 		serPort.setComPortParameters(baudrate, databits, stopbits, parity);
 		serPort.setDTR();
 		
