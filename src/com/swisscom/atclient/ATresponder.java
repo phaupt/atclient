@@ -644,7 +644,7 @@ public class ATresponder extends Thread {
 								break;
 							}
 						} else if (rx.toUpperCase().startsWith("+CSQ: ")) {
-							value = Integer.parseInt( rx.substring(6, rx.indexOf(",") + 1) ); // +CSQ: 14,99
+							value = Integer.parseInt( rx.substring(6, rx.indexOf(",")) ); // +CSQ: 14,99
 							if (value <= 9) {
 								log.info("Signal strength: MARGINAL (value '" + value + "' is in marginal range 1-9 of 31)");
 							} else if (value >= 10 && value <= 14) {
