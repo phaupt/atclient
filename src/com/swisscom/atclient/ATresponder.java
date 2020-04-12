@@ -35,7 +35,11 @@ public class ATresponder extends Thread {
 	private final int maxWrongPinAttempts = 5;
 	private int cntrWrongPinAttempts = maxWrongPinAttempts;
 
-	private final long heartBeatMillis = 30000; // Heart beat to detect serial port disconnection in milliseconds
+	/**
+	 * Heart beat to detect serial port disconnection in milliseconds
+	 * Any other incoming RX data (e.g. STK even from a Mobile ID signature) will reset the heart beat timer
+	 **/
+	private final long heartBeatMillis = 30000;
 	private final int sleepMillis = 50; // Polling interval in milliseconds for incoming requests
 	
 	private BufferedReader buffReader;
@@ -181,7 +185,7 @@ public class ATresponder extends Thread {
 	}
 	
 	private boolean openPort() throws IOException {
-		log.debug(serPortStr + ": Set port parameters (" + baudrate + ", " + databits + ", " + stopbits + ", " + parity);
+		log.debug(serPortStr + ": Set port parameters (" + baudrate + ", " + databits + ", " + stopbits + ", " + parity + ")");
 		serPort = SerialPort.getCommPort(serPortStr);
 		if (System.getProperty("os.name").toLowerCase().contains("win")) serPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 500, 0); // only available on Windows systems
 		serPort.setComPortParameters(baudrate, databits, stopbits, parity);
@@ -189,7 +193,7 @@ public class ATresponder extends Thread {
 		serPort.setDTR();
 		
 		// Try to open port..
-		log.debug(serPortStr + " trying to open");
+		log.debug(serPortStr + ": trying to open");
 		if (!serPort.openPort(10000)) {
 			// Port not available
 			log.error(serPortStr + " is currently not available.");
@@ -232,28 +236,47 @@ public class ATresponder extends Thread {
 			return; // exit
 		} else {
 			
-			// User Emulation operation mode
-			
-			send("AT+CGMM"); // Request model identification
-			
-			send("ATE0"); // Turn off echo mode
-			
-			send("AT+CMEE=2"); // Switch on verbose error messages
+			// CONFIGURATION
 			
 			send("AT+CNUM"); // MSISDN; update thread name
 			
-			send("AT+CIMI"); // IMSI
-
-			send("AT+CGSN"); // IMEI
+			send("ATE0"); // Echo Mode On(1)/Off(0)
+			
+			send("AT+CMEE=2"); // Enable reporting of me errors
 			
 			send("AT+CMGF=1"); // Set SMS text mode
 			
 			send("AT+CNMI=1,1"); // Activate the display of a URC on every received SMS
 			
-			send("AT+CSQ"); // Signal Strength
+			
+			// OPTIONAL TEST COMMANDS:
+			
+			send("AT", "OK"); // AT test command
+
+			send("AT+CGMI"); // Module manufacturers
+			
+			send("AT+CGMM"); // Module model
+			
+			send("AT+CGSN"); // Module serial number / IMEI
+			
+			send("AT+CSUB"); // Module revision
+			
+			send("AT+CGMR"); // Firmware revision	
+			
+			send("AT+CPSI?"); // UE system info
+			
+			send("AT+CIMI"); // IMSI
+			
+			send("AT+CPIN?"); // SIM Card status
+			
+			send("AT+CREG?"); // Network registration
 			
 			send("AT+COPS?"); // Provider + access technology
 			
+			send("AT+CSQ"); // Signal Strength
+			
+
+			// Start listening...
 			send("AT^SSTR?", null); // Check for STK Menu initialization 
 		}
 	}
@@ -277,7 +300,7 @@ public class ATresponder extends Thread {
 			if ((System.currentTimeMillis() - heartBeatTimerCurrent) >= heartBeatMillis){
 				// Check every x milliseconds of inactivity
 				
-				log.debug(serPortStr + " heart beat test");
+				//log.debug(serPortStr + " heart beat test");
 				
 				send("AT", null); // Send "AT". Next RX shall be received in this thread as it could be some other event coming in.
 				
