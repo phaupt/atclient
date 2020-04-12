@@ -16,6 +16,8 @@ import org.apache.commons.codec.binary.Base64;
 
 public class ATresponder extends Thread {
 	
+	//TODO: Set 3G technology as option
+	
 	private final Logger log = LogManager.getLogger(ATresponder.class.getName());
 	
 	// Detect incoming Text SMS that contains a specific keyword and forward to target MSISDN. Value "" will forward all SMS.
@@ -640,6 +642,17 @@ public class ATresponder extends Thread {
 								break;
 							default:
 								break;
+							}
+						} else if (rx.toUpperCase().startsWith("+CSQ: ")) {
+							value = Integer.parseInt( Arrays.asList(rx.split(",")).get(0) ); // +CSQ: 14,99
+							if (value <= 9) {
+								log.info("Signal strength: MARGINAL (value '" + value + "' is in marginal range 1-9 of 31)");
+							} else if (value >= 10 && value <= 14) {
+								log.info("Signal strength: OK (value '" + value + "' is in ok range 10-14 of 31)");
+							} else if (value >= 15 && value <= 19) {
+								log.info("Signal strength: GOOD (value '" + value + "' is in good range 15-19 of 31)");;
+							} else if (value >= 20 && value <= 31) {
+								log.info("Signal strength: EXCELLENT (value '" + value + "' is in excellent range 20-31 of 31)");
 							}
 						} else if (rx.toUpperCase().trim().contains(compareStr)) {		
 							if (getInputTimerFlag && getInputTimerKeyGenFlag)
