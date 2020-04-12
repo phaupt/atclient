@@ -251,9 +251,7 @@ public class ATresponder extends Thread {
 			send("AT+CNMI=1,1"); // Activate the display of a URC on every received SMS
 			
 			
-			// OPTIONAL TEST COMMANDS:
-			
-			send("AT", "OK"); // AT test command
+			// OPTIONAL INFO:
 
 			send("AT+CGMI"); // Module manufacturers
 			
@@ -271,6 +269,20 @@ public class ATresponder extends Thread {
 			
 			send("AT+CSQ"); // Signal Strength
 			
+			
+			// AT+COPS=<mode>[, <format>[, <opName>][, <rat>]]
+			// mode 0: Automatic mode; <opName> field is ignored
+			// rat:
+			// 0 GSM (2G)
+			// 2 UTRAN (3G)
+			// 3 GSM w/EGPRS (2G)
+			// 4 UTRAN w/HSDPA (3G)
+			// 6 UTRAN w/HSDPA and HSUPA (3G)
+			// 7 E-UTRAN (4G/LTE)
+			
+			send("AT+COPS=0,0,\"CUSTOM\",2"); 
+			send("AT+COPS?"); // Provider + access technology
+			send("AT+CSQ"); // Signal Strength
 
 			// Start listening...
 			send("AT^SSTR?", null); // Check for STK Menu initialization 
