@@ -74,13 +74,13 @@ If no <MODE> argument found: Run user emulation with automatic serial port detec
 
 As a first step, you must switch the terminal from factory default Automatic Response (AR) mode to Explicit Response (ER) mode.
 
-`pi@raspberypi:~/atclient $ java -Dserial.port=/dev/ttyACM1 -Dlog.file=atclient.log -Dlog4j.configurationFile=log4j2.xml -cp "./class:./lib/*" com.swisscom.atclient.ATClient ER`
+`pi@raspberypi:~/atclient $ java -Dserial.port=/dev/ttyACM1 -Dconfig.file=atclient.cfg -Dlog.file=atclient.log -Dlog4j.configurationFile=log4j2.xml -cp "./class:./lib/*" com.swisscom.atclient.ATClient ER`
 
 ##### User Emulation
 
 Once your terminal is in Explicit Response (ER) mode you can run the application in continuous User Emulation mode.
 
-`pi@raspberypi:~/atclient $ java -Dlog.file=atclient.log -Dlog4j.configurationFile=log4j2.xml -cp "./class:./lib/*" com.swisscom.atclient.ATClient`
+`pi@raspberypi:~/atclient $ java -Dconfig.file=atclient.cfg -Dlog.file=atclient.log -Dlog4j.configurationFile=log4j2.xml -cp "./class:./lib/*" com.swisscom.atclient.ATClient`
 
 ##### Keywords
 
@@ -96,7 +96,7 @@ This is helpful to simulate a specific user behavior.
 ##### Auto start at boot
 
 There are several ways to autostart ATClient. The easiest way is to edit `/etc/rc.local`. Just before the `exit 0`, add:
-`(/bin/sleep 60 && /usr/bin/java -Dlog.file=/home/pi/atclient/atclient.log -Dlog4j.configurationFile=/home/pi/atclient/log4j2.xml -cp "/home/pi/atclient/class:/home/pi/atclient/lib/*" com.swisscom.atclient.ATClient) &`
+`(/bin/sleep 60 && /usr/bin/java -Dconfig.file=/home/pi/atclient/atclient.cfg -Dlog.file=/home/pi/atclient/atclient.log -Dlog4j.configurationFile=/home/pi/atclient/log4j2.xml -cp "/home/pi/atclient/class:/home/pi/atclient/lib/*" com.swisscom.atclient.ATClient) &`
 
 The sleep of 60 seconds is recommende because the PLS8-E LTE terminal requires 30-40 seconds boot time.
 
