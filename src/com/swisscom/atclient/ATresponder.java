@@ -418,7 +418,12 @@ public class ATresponder extends Thread {
 				// Didn't get any response 
 				log.error(serPortStr + " down? Trying to re-connect.");
 				close(true);
-				lookupSerialPort();
+				if (serPortStr != null) {
+					lookupSerialPort();
+				}
+				else {
+					openPort();
+				}
 				initAtCmd();
 				send("AT^SSTR?", null); // Check for STK Menu initialization 
 				// reset all timers
