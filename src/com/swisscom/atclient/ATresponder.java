@@ -418,7 +418,7 @@ public class ATresponder extends Thread {
 				// Didn't get any response 
 				log.error(serPortStr + " down? Trying to re-connect.");
 				close(true);
-				if (serPortStr != null) {
+				if (serPortStr == null) {
 					lookupSerialPort();
 				}
 				else {
