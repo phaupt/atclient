@@ -89,7 +89,10 @@ public class ATresponder extends Thread {
 		try {
 			serPortStr = System.getProperty("serial.port");
 			
-			Properties prop = readPropertiesFile("atclient.cfg");
+			String currentUsersHomeDir = System.getProperty("user.dir");
+			String propertyFileLoc = currentUsersHomeDir + File.separator + "atclient.cfg";
+			log.debug("Reading Property file at " + propertyFileLoc);
+			Properties prop = readPropertiesFile(propertyFileLoc);
 					
 			if (System.getProperty("os.name").toLowerCase().contains("win")) {
 				portStrArr[0] = prop.getProperty("port.name.windows");
