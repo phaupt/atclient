@@ -52,6 +52,8 @@ public class ATresponder extends Thread {
 	private boolean getInputTimerKeyGenFlag = false;
 	private long getInputTimer = 0;
 
+	private String atclientCfg = null;
+	
 	private String serPortStr = null;
 	private SerialPort serPort;
 	
@@ -89,10 +91,16 @@ public class ATresponder extends Thread {
 		try {
 			serPortStr = System.getProperty("serial.port");
 			
-			String currentUsersHomeDir = System.getProperty("user.dir");
-			String propertyFileLoc = currentUsersHomeDir + File.separator + "atclient.cfg";
-			log.debug("Reading Property file at " + propertyFileLoc);
-			Properties prop = readPropertiesFile(propertyFileLoc);
+			atclientCfg = System.getProperty("config.file");
+			
+			Properties prop = null;
+			if (atclientCfg != null) {
+				log.debug("Reading Property file at " + atclientCfg);
+				prop = readPropertiesFile(atclientCfg);
+			} else {
+				log.debug("Error reading Property file. No -Dconfig.file found.");
+				System.exit(1);
+			}
 					
 			if (System.getProperty("os.name").toLowerCase().contains("win")) {
 				portStrArr[0] = prop.getProperty("port.name.windows");
