@@ -3,15 +3,19 @@ MobileID USAT Responder for Raspberry PI to operate one or many PLS8-E LTE termi
 
 ![Raspberry PI](img/raspi.jpg?raw=true "Raspberry PI") ![PLS8-E LTE terminal](img/hitu4.jpg?raw=true "HCP HIT wireless terminal")
 
-ATClient application can be used to auto-respond to SIM Toolkit requests from the Mobile ID application. 
+#### Features
 
-Serial port is auto detected at startup and re-initialized in case of communication interruption.
+* Auto-respond SIM Toolkit requests, for example a [Mobile ID](https://mobileid.ch) authentication request (using PIN 123456)
+* USB serial port auto-detection
+* Automatic or forced selection of radio access technology(4G/3G/2G)
+* Forward incoming Text SMS to MSISDN (optional)
+* Publish incoming Text SMS to URL (optional)
 
 ### What you will need
 Recommended setup:
-- [Mobile ID SIM card](https://mobileid.ch)
-- [Raspberry PI 4](https://www.raspberrypi.org/products/raspberry-pi-4-model-b)
-- [PLS8-E LTE terminal](http://electronicshcp.com/product/hit-u4-lte)
+* [Mobile ID SIM card](https://mobileid.ch)
+* [Raspberry PI 4](https://www.raspberrypi.org/products/raspberry-pi-4-model-b)
+* [PLS8-E LTE terminal](http://electronicshcp.com/product/hit-u4-lte)
 
 ### Wireless terminal
 
@@ -35,9 +39,7 @@ We recommend to keep default baud rate 9600.
 ### How To
 
 #### Clone GIT repository
-```
-pi@raspberypi:~ $ git clone https://github.com/phaupt/atclient.git
-```
+`pi@raspberypi:~ $ git clone https://github.com/phaupt/atclient.git`
 
 #### Compile java source
 ```
@@ -45,15 +47,17 @@ pi@raspberypi:~/atclient $ mkdir class
 pi@raspberypi:~/atclient $ javac -d ./class -cp "./lib/*" ./src/com/swisscom/atclient/*.java
 ```
 
+#### ATClient Configuration
+
+Edit the `atclient.cfg` according to your needs.
+
 #### Run the application
 
 ##### Application help
 ```
-pi@raspberypi:~/atclient $ java -Dlog.file=atclient.log -Dlog4j.configurationFile=log4j2.xml -cp "./class:./lib/*" com.swisscom.atclient.ATClient --help
+*** AT Client ***
 
-*** GSM AT Client ***
-
-Usage: GsmClient [<MODE>]
+Usage: ATClient [<MODE>]
 
 <MODE>	Switch operation mode:
 	ER	Switch to Explicit Response (ER) and shutdown.
@@ -61,11 +65,9 @@ Usage: GsmClient [<MODE>]
 
 If no <MODE> argument found: Run user emulation with automatic serial port detection (ER operation mode only)
 
-Optional system properties with example values:
-	-Dlog.file=GsmClient.log               # Application log file
+	-Dlog.file=atclient.log                # Application log file
 	-Dlog4j.configurationFile=log4j2.xml   # Location of log4j.xml configuration file
-	-DtargetMsisdn=+41791234567            # Target phone number to forward text sms content
-	-Dserial.port=COM16                    # Select specific serial port (no automatic port detection)
+	-Dserial.port=/dev/ttyACM1             # Select specific serial port (no automatic port detection)
 ```
 
 ##### Switch to Explicit Response (ER) mode
@@ -78,17 +80,25 @@ As a first step, you must switch the terminal from factory default Automatic Res
 
 Once your terminal is in Explicit Response (ER) mode you can run the application in continuous User Emulation mode.
 
-Serial port is auto detected at start and re-initialized in case of communication interruption.
-
-Note that any GET-INPUT proactive STK commands will always be responded with the value '123456'.
-
 `pi@raspberypi:~/atclient $ java -Dlog.file=atclient.log -Dlog4j.configurationFile=log4j2.xml -cp "./class:./lib/*" com.swisscom.atclient.ATClient`
+
+##### Keywords
+
+If a keyword (case sensitive) is found in the Mobile ID authentication message, the ATClient will invoke specific actions.
+This is helpful to simulate a specific user behavior.
+
+`'CANCEL'     : TerminalResponse '16' - Proactive SIM session terminated by user.`
+
+`'STKTIMEOUT' : TerminalResponse '18' - No response from user.`
+
+`'BLOCKPIN'   : Mobile ID PIN will be blocked.`
 
 ##### Auto start at boot
 
 There are several ways to autostart ATClient. The easiest way is to edit `/etc/rc.local`. Just before the `exit 0`, add:
-`(/bin/sleep 60 && /usr/bin/java -Dlog.file=/home/pi/atclient/atclient.log -Dlog4j.configurationFile=/home/pi/atclient/log4j2.xml -cp "/home/pi/atclient/class:/home/pi/atclient/lib/*" com.swisscom.atclient.GsmClient) &`
+`(/bin/sleep 60 && /usr/bin/java -Dlog.file=/home/pi/atclient/atclient.log -Dlog4j.configurationFile=/home/pi/atclient/log4j2.xml -cp "/home/pi/atclient/class:/home/pi/atclient/lib/*" com.swisscom.atclient.ATClient) &`
 
+The sleep of 60 seconds is recommende because the PLS8-E LTE terminal requires 30-40 seconds boot time.
 
 ### Logfile
 
@@ -100,39 +110,39 @@ With the default log4j configuration you can pass the log file name as a command
 
 Example log for a Mobile ID signature response:
 ```
-2020-04-12 20:04:45,222 16768@DESKTOP-JOULENUKE /dev/ttyACM1 +41791234567 [DBG] <<< RX ^SSTN: 33
-2020-04-12 20:04:45,222 16768@DESKTOP-JOULENUKE /dev/ttyACM1 +41791234567 [INF] DISPLAY TEXT (Command Code 33)
-2020-04-12 20:04:45,222 16768@DESKTOP-JOULENUKE /dev/ttyACM1 +41791234567 [DBG] >>> TX at^sstgi=33
-2020-04-12 20:04:45,272 16768@DESKTOP-JOULENUKE /dev/ttyACM1 +41791234567 [DBG] <<< RX ^SSTGI: 33,129,"0074006500730074002E0063006F006D003A00200044006F00200079006F0075002000770061006E007400200074006F0020006C006F00670069006E00200074006F00200063006F00720070006F0072006100740065002000560050004E003F002000280038003100700051005200780029",0,1,0
-2020-04-12 20:04:45,273 16768@DESKTOP-JOULENUKE /dev/ttyACM1 +41791234567 [INF] TEXT: "test.com: Do you want to login to corporate VPN? (81pQRx)"
-2020-04-12 20:04:45,273 16768@DESKTOP-JOULENUKE /dev/ttyACM1 +41791234567 [DBG] <<< RX OK
-2020-04-12 20:04:45,273 16768@DESKTOP-JOULENUKE /dev/ttyACM1 +41791234567 [DBG] >>> TX at^sstr=33,0
-2020-04-12 20:04:45,324 16768@DESKTOP-JOULENUKE /dev/ttyACM1 +41791234567 [DBG] <<< RX OK
-2020-04-12 20:04:45,374 16768@DESKTOP-JOULENUKE /dev/ttyACM1 +41791234567 [DBG] <<< RX ^SSTN: 35
-2020-04-12 20:04:45,374 16768@DESKTOP-JOULENUKE /dev/ttyACM1 +41791234567 [INF] GET INPUT (Command Code 35)
-2020-04-12 20:04:45,374 16768@DESKTOP-JOULENUKE /dev/ttyACM1 +41791234567 [DBG] >>> TX at^sstgi=35
-2020-04-12 20:04:45,424 16768@DESKTOP-JOULENUKE /dev/ttyACM1 +41791234567 [DBG] <<< RX ^SSTGI: 35,4,"00410075007400680065006E0074006900630061007400650020007700690074006800200079006F007500720020004D006F00620069006C0065002000490044002000500049004E",1,15,"",1,0
-2020-04-12 20:04:45,424 16768@DESKTOP-JOULENUKE /dev/ttyACM1 +41791234567 [INF] TEXT: "Authenticate with your Mobile ID PIN"
-2020-04-12 20:04:45,424 16768@DESKTOP-JOULENUKE /dev/ttyACM1 +41791234567 [DBG] <<< RX OK
-2020-04-12 20:04:45,424 16768@DESKTOP-JOULENUKE /dev/ttyACM1 +41791234567 [DBG] >>> TX at^sstr=35,0,,003100320033003400350036
-2020-04-12 20:04:45,475 16768@DESKTOP-JOULENUKE /dev/ttyACM1 +41791234567 [DBG] <<< RX OK
-2020-04-12 20:04:45,778 16768@DESKTOP-JOULENUKE /dev/ttyACM1 +41791234567 [DBG] <<< RX ^SSTN: 19
-2020-04-12 20:04:45,778 16768@DESKTOP-JOULENUKE /dev/ttyACM1 +41791234567 [INF] SEND MESSAGE (Command Code 19)
-2020-04-12 20:04:45,778 16768@DESKTOP-JOULENUKE /dev/ttyACM1 +41791234567 [DBG] >>> TX at^sstgi=19
-2020-04-12 20:04:45,828 16768@DESKTOP-JOULENUKE /dev/ttyACM1 +41791234567 [DBG] <<< RX ^SSTGI: 19,0,"",1,0
-2020-04-12 20:04:45,828 16768@DESKTOP-JOULENUKE /dev/ttyACM1 +41791234567 [DBG] <<< RX OK
-2020-04-12 20:04:45,828 16768@DESKTOP-JOULENUKE /dev/ttyACM1 +41791234567 [DBG] >>> TX at^sstr=19,0
-2020-04-12 20:04:46,079 16768@DESKTOP-JOULENUKE /dev/ttyACM1 +41791234567 [DBG] <<< RX ^SSTR: 19,0,""
-2020-04-12 20:04:46,079 16768@DESKTOP-JOULENUKE /dev/ttyACM1 +41791234567 [DBG] <<< RX OK
-2020-04-12 20:04:46,130 16768@DESKTOP-JOULENUKE /dev/ttyACM1 +41791234567 [DBG] <<< RX ^SSTN: 254
-2020-04-12 20:04:46,130 16768@DESKTOP-JOULENUKE /dev/ttyACM1 +41791234567 [INF] SIM Applet returns to main menu (Command Code 254)
-2020-04-12 20:04:46,130 16768@DESKTOP-JOULENUKE /dev/ttyACM1 +41791234567 [DBG] >>> TX AT+COPS?
-2020-04-12 20:04:46,180 16768@DESKTOP-JOULENUKE /dev/ttyACM1 +41791234567 [DBG] <<< RX +COPS: 0,2,"22801",7
-2020-04-12 20:04:46,180 16768@DESKTOP-JOULENUKE /dev/ttyACM1 +41791234567 [INF] Radio Access Technology: E-UTRAN = 4G/LTE
-2020-04-12 20:04:46,180 16768@DESKTOP-JOULENUKE /dev/ttyACM1 +41791234567 [DBG] <<< RX OK
-2020-04-12 20:04:46,180 16768@DESKTOP-JOULENUKE /dev/ttyACM1 +41791234567 [DBG] >>> TX AT+CSQ
-2020-04-12 20:04:46,231 16768@DESKTOP-JOULENUKE /dev/ttyACM1 +41791234567 [DBG] <<< RX +CSQ: 15,99
-2020-04-12 20:04:46,231 16768@DESKTOP-JOULENUKE /dev/ttyACM1 +41791234567 [INF] Signal strength: 15/15-19/31 = GOOD
-2020-04-12 20:04:46,231 16768@DESKTOP-JOULENUKE /dev/ttyACM1 +41791234567 [DBG] <<< RX OK
+2020-04-12 20:04:45,222 16768@DESKTOP-JOULENUKE ttyACM1 +41791234567 [DBG] <<< RX ^SSTN: 33
+2020-04-12 20:04:45,222 16768@DESKTOP-JOULENUKE ttyACM1 +41791234567 [INF] DISPLAY TEXT (Command Code 33)
+2020-04-12 20:04:45,222 16768@DESKTOP-JOULENUKE ttyACM1 +41791234567 [DBG] >>> TX at^sstgi=33
+2020-04-12 20:04:45,272 16768@DESKTOP-JOULENUKE ttyACM1 +41791234567 [DBG] <<< RX ^SSTGI: 33,129,"0074006500730074002E0063006F006D003A00200044006F00200079006F0075002000770061006E007400200074006F0020006C006F00670069006E00200074006F00200063006F00720070006F0072006100740065002000560050004E003F002000280038003100700051005200780029",0,1,0
+2020-04-12 20:04:45,273 16768@DESKTOP-JOULENUKE ttyACM1 +41791234567 [INF] TEXT: "test.com: Do you want to login to corporate VPN? (81pQRx)"
+2020-04-12 20:04:45,273 16768@DESKTOP-JOULENUKE ttyACM1 +41791234567 [DBG] <<< RX OK
+2020-04-12 20:04:45,273 16768@DESKTOP-JOULENUKE ttyACM1 +41791234567 [DBG] >>> TX at^sstr=33,0
+2020-04-12 20:04:45,324 16768@DESKTOP-JOULENUKE ttyACM1 +41791234567 [DBG] <<< RX OK
+2020-04-12 20:04:45,374 16768@DESKTOP-JOULENUKE ttyACM1 +41791234567 [DBG] <<< RX ^SSTN: 35
+2020-04-12 20:04:45,374 16768@DESKTOP-JOULENUKE ttyACM1 +41791234567 [INF] GET INPUT (Command Code 35)
+2020-04-12 20:04:45,374 16768@DESKTOP-JOULENUKE ttyACM1 +41791234567 [DBG] >>> TX at^sstgi=35
+2020-04-12 20:04:45,424 16768@DESKTOP-JOULENUKE ttyACM1 +41791234567 [DBG] <<< RX ^SSTGI: 35,4,"00410075007400680065006E0074006900630061007400650020007700690074006800200079006F007500720020004D006F00620069006C0065002000490044002000500049004E",1,15,"",1,0
+2020-04-12 20:04:45,424 16768@DESKTOP-JOULENUKE ttyACM1 +41791234567 [INF] TEXT: "Authenticate with your Mobile ID PIN"
+2020-04-12 20:04:45,424 16768@DESKTOP-JOULENUKE ttyACM1 +41791234567 [DBG] <<< RX OK
+2020-04-12 20:04:45,424 16768@DESKTOP-JOULENUKE ttyACM1 +41791234567 [DBG] >>> TX at^sstr=35,0,,003100320033003400350036
+2020-04-12 20:04:45,475 16768@DESKTOP-JOULENUKE ttyACM1 +41791234567 [DBG] <<< RX OK
+2020-04-12 20:04:45,778 16768@DESKTOP-JOULENUKE ttyACM1 +41791234567 [DBG] <<< RX ^SSTN: 19
+2020-04-12 20:04:45,778 16768@DESKTOP-JOULENUKE ttyACM1 +41791234567 [INF] SEND MESSAGE (Command Code 19)
+2020-04-12 20:04:45,778 16768@DESKTOP-JOULENUKE ttyACM1 +41791234567 [DBG] >>> TX at^sstgi=19
+2020-04-12 20:04:45,828 16768@DESKTOP-JOULENUKE ttyACM1 +41791234567 [DBG] <<< RX ^SSTGI: 19,0,"",1,0
+2020-04-12 20:04:45,828 16768@DESKTOP-JOULENUKE ttyACM1 +41791234567 [DBG] <<< RX OK
+2020-04-12 20:04:45,828 16768@DESKTOP-JOULENUKE ttyACM1 +41791234567 [DBG] >>> TX at^sstr=19,0
+2020-04-12 20:04:46,079 16768@DESKTOP-JOULENUKE ttyACM1 +41791234567 [DBG] <<< RX ^SSTR: 19,0,""
+2020-04-12 20:04:46,079 16768@DESKTOP-JOULENUKE ttyACM1 +41791234567 [DBG] <<< RX OK
+2020-04-12 20:04:46,130 16768@DESKTOP-JOULENUKE ttyACM1 +41791234567 [DBG] <<< RX ^SSTN: 254
+2020-04-12 20:04:46,130 16768@DESKTOP-JOULENUKE ttyACM1 +41791234567 [INF] SIM Applet returns to main menu (Command Code 254)
+2020-04-12 20:04:46,130 16768@DESKTOP-JOULENUKE ttyACM1 +41791234567 [DBG] >>> TX AT+COPS?
+2020-04-12 20:04:46,180 16768@DESKTOP-JOULENUKE ttyACM1 +41791234567 [DBG] <<< RX +COPS: 0,2,"22801",7
+2020-04-12 20:04:46,180 16768@DESKTOP-JOULENUKE ttyACM1 +41791234567 [INF] Radio Access Technology: E-UTRAN = 4G/LTE
+2020-04-12 20:04:46,180 16768@DESKTOP-JOULENUKE ttyACM1 +41791234567 [DBG] <<< RX OK
+2020-04-12 20:04:46,180 16768@DESKTOP-JOULENUKE ttyACM1 +41791234567 [DBG] >>> TX AT+CSQ
+2020-04-12 20:04:46,231 16768@DESKTOP-JOULENUKE ttyACM1 +41791234567 [DBG] <<< RX +CSQ: 15,99
+2020-04-12 20:04:46,231 16768@DESKTOP-JOULENUKE ttyACM1 +41791234567 [INF] Signal strength: 15/15-19/31 = GOOD
+2020-04-12 20:04:46,231 16768@DESKTOP-JOULENUKE ttyACM1 +41791234567 [DBG] <<< RX OK
 
 ```
