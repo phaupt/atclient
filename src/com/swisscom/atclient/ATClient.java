@@ -6,17 +6,6 @@ public class ATClient {
 
     public static void main(String[] args) throws InterruptedException {
 
-        /**
-         * DisplayText message may contain following keywords to invoke specific terminal responses.
-         *
-         * 'CANCEL'     : TerminalResponse '16' - Proactive SIM session terminated by user
-         *
-         * 'STKTIMEOUT' : TerminalResponse '18' - No response from user
-         *
-         * 'BLOCKPIN'   : Wrong PIN input. Mobile ID PIN will be blocked.
-         *
-         */
-
         ATresponder atClient = null;
 
         if (args.length == 1 && args[0].toUpperCase().equals("ER")) {

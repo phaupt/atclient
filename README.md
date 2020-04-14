@@ -91,7 +91,10 @@ This is helpful to simulate a specific user behavior.
 
 `'STKTIMEOUT' : TerminalResponse '18' - No response from user.`
 
+`'USERDELAY'  : TerminalResponse will be delayed by 5 seconds each.`
+
 `'BLOCKPIN'   : Mobile ID PIN will be blocked.`
+
 
 ##### Auto start at boot
 

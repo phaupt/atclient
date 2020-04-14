@@ -47,6 +47,7 @@ public class ATresponder extends Thread {
 	private volatile static boolean cancel;
 	private volatile static boolean stk_timeout;
 	private volatile static boolean block_pin;
+	private volatile static boolean user_delay;
 	
 	private boolean getInputTimerFlag = false;
 	private boolean getInputTimerKeyGenFlag = false;
@@ -496,6 +497,9 @@ public class ATresponder extends Thread {
 								} else if (stk_timeout) {
 									setStkTimeout(false); // reset flag
 									code = "18"; // No response from user
+								} else if (user_delay) {
+									setUserDelay(false); // reset flag
+									sleep(5000);
 								}
 								
 								send("at^sstr=" + value + "," + code); // Confirm
@@ -522,6 +526,9 @@ public class ATresponder extends Thread {
 								} else if (stk_timeout) {
 									setStkTimeout(false); // reset flag
 									code = "18"; // No response from user
+								} else if (user_delay) {
+									setUserDelay(false); // reset flag
+									sleep(5000);
 								} else {
 									getInputTimerFlag = true;
 								}
@@ -578,6 +585,9 @@ public class ATresponder extends Thread {
 							} else if (stk_timeout) {
 								setStkTimeout(false); // reset flag
 								code = "18"; // No response from user
+							} else if (user_delay) {
+								setUserDelay(false); // reset flag
+								sleep(5000);
 							}
 
 							send("at^sstr=33," + code); // Confirm
@@ -602,6 +612,9 @@ public class ATresponder extends Thread {
 									cntrWrongPinAttempts = maxWrongPinAttempts;
 								}
 								code = "0,," + invalidPIN; 
+							} else if (user_delay) {
+								setUserDelay(false); // reset flag
+								sleep(5000);
 							} else {
 								getInputTimerFlag = true;
 							}
@@ -815,6 +828,9 @@ public class ATresponder extends Thread {
 			} else if (rsp.indexOf("BLOCKPIN") != -1) {
 				setBlockedPIN(true);
 				log.info("'BLOCKPIN'-keyword detected! Mobile ID PIN will be blocked.");
+			} else if (rsp.indexOf("USERDELAY") != -1) {
+				setUserDelay(true);
+				log.info("'USERDELAY'-keyword detected! DisplayText and GetInput will be delayed by 5 seconds each.");
 			} else if (rsp.indexOf("Confirm your new Mobile ID PIN") != -1) {
 				getInputTimerKeyGenFlag = true;
 			} 
@@ -875,6 +891,10 @@ public class ATresponder extends Thread {
 	
 	public static synchronized void setBlockedPIN(boolean flag){
 		block_pin = flag;
+	}
+	
+	public static synchronized void setUserDelay(boolean flag){
+		user_delay = flag;
 	}
 	
 	/**
