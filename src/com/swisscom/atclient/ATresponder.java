@@ -834,7 +834,7 @@ public class ATresponder extends Thread {
 					user_delay_millis = Integer.parseInt(rsp.substring(rsp.indexOf("USERDELAY=") + 10, rsp.indexOf("USERDELAY=") + 11)) * 1000; // example: 'USERDELAY=5' -> 5000 ms
 					if (user_delay_millis >= 1000 && user_delay_millis <= 9000) {
 						setUserDelay(true);
-						log.info("'USERDELAY=" + user_delay_millis + "'-keyword detected! The current TerminalResponse will be delayed by " + user_delay_millis + " seconds.");
+						log.info("'USERDELAY=" + (user_delay_millis/1000) + "'-keyword detected! The current TerminalResponse will be delayed by " + (user_delay_millis/1000) + " seconds.");
 					} 
 				} catch (Exception e) {
 					// silently ignore...
