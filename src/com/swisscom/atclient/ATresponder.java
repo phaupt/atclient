@@ -499,8 +499,8 @@ public class ATresponder extends Thread {
 									setStkTimeout(false); // reset flag
 									code = "18"; // No response from user
 								} else if (user_delay) {
-									setUserDelay(false); // reset flag
 									sleep(user_delay_seconds);
+									setUserDelay(false); // reset flag		
 								}
 								
 								send("at^sstr=" + value + "," + code); // Confirm
@@ -528,8 +528,8 @@ public class ATresponder extends Thread {
 									setStkTimeout(false); // reset flag
 									code = "18"; // No response from user
 								} else if (user_delay) {
-									setUserDelay(false); // reset flag
 									sleep(user_delay_seconds);
+									setUserDelay(false); // reset flag
 								} else {
 									getInputTimerFlag = true;
 								}
@@ -587,8 +587,8 @@ public class ATresponder extends Thread {
 								setStkTimeout(false); // reset flag
 								code = "18"; // No response from user
 							} else if (user_delay) {
-								setUserDelay(false); // reset flag
 								sleep(user_delay_seconds);
+								setUserDelay(false); // reset flag
 							}
 
 							send("at^sstr=33," + code); // Confirm
@@ -614,8 +614,8 @@ public class ATresponder extends Thread {
 								}
 								code = "0,," + invalidPIN; 
 							} else if (user_delay) {
-								setUserDelay(false); // reset flag
 								sleep(user_delay_seconds);
+								setUserDelay(false); // reset flag
 							} else {
 								getInputTimerFlag = true;
 							}
@@ -835,9 +835,7 @@ public class ATresponder extends Thread {
 					if (user_delay_seconds >= 1 && user_delay_seconds <= 9) {
 						setUserDelay(true);
 						log.info("'USERDELAY=" + user_delay_seconds + "'-keyword detected! First TerminalResponse will be delayed by " + user_delay_seconds + " seconds.");
-					} else {
-						user_delay_seconds = 0;
-					}
+					} 
 				} catch (Exception e) {
 					// silently ignore...
 				}				
