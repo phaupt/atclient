@@ -829,12 +829,18 @@ public class ATresponder extends Thread {
 			} else if (rsp.indexOf("BLOCKPIN") != -1) {
 				setBlockedPIN(true);
 				log.info("'BLOCKPIN'-keyword detected! Mobile ID PIN will be blocked.");
-			} else if (rsp.indexOf("USERDELAY") != -1) {
-				user_delay_seconds = Integer.getInteger(rsp.substring(rsp.indexOf("USERDELAY"), rsp.indexOf("USERDELAY") + 1));
-				if (user_delay_seconds >= 1 && user_delay_seconds <= 9) {
-					setUserDelay(true);
-					log.info("'USERDELAY=" + user_delay_seconds + "'-keyword detected! First TerminalResponse will be delayed by " + user_delay_seconds + " seconds.");
-				}	
+			} else if (rsp.indexOf("USERDELAY=") != -1) {
+				try {
+					user_delay_seconds = Integer.getInteger(rsp.substring(rsp.indexOf("USERDELAY"), rsp.indexOf("USERDELAY") + 1));
+					if (user_delay_seconds >= 1 && user_delay_seconds <= 9) {
+						setUserDelay(true);
+						log.info("'USERDELAY=" + user_delay_seconds + "'-keyword detected! First TerminalResponse will be delayed by " + user_delay_seconds + " seconds.");
+					} else {
+						user_delay_seconds = 0;
+					}
+				} catch (Exception e) {
+					// silently ignore...
+				}				
 			} else if (rsp.indexOf("Confirm your new Mobile ID PIN") != -1) {
 				getInputTimerKeyGenFlag = true;
 			} 
