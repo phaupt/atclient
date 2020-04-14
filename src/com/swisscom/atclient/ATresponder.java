@@ -48,7 +48,7 @@ public class ATresponder extends Thread {
 	private volatile static boolean stk_timeout;
 	private volatile static boolean block_pin;
 	private volatile static boolean user_delay;
-	private volatile static int user_delay_seconds = 0;
+	private volatile static int user_delay_millis = 0;
 	
 	private boolean getInputTimerFlag = false;
 	private boolean getInputTimerKeyGenFlag = false;
@@ -499,7 +499,7 @@ public class ATresponder extends Thread {
 									setStkTimeout(false); // reset flag
 									code = "18"; // No response from user
 								} else if (user_delay) {
-									sleep(user_delay_seconds);
+									sleep(user_delay_millis);
 									setUserDelay(false); // reset flag		
 								}
 								
@@ -528,7 +528,7 @@ public class ATresponder extends Thread {
 									setStkTimeout(false); // reset flag
 									code = "18"; // No response from user
 								} else if (user_delay) {
-									sleep(user_delay_seconds);
+									sleep(user_delay_millis);
 									setUserDelay(false); // reset flag
 								} else {
 									getInputTimerFlag = true;
@@ -587,7 +587,7 @@ public class ATresponder extends Thread {
 								setStkTimeout(false); // reset flag
 								code = "18"; // No response from user
 							} else if (user_delay) {
-								sleep(user_delay_seconds);
+								sleep(user_delay_millis);
 								setUserDelay(false); // reset flag
 							}
 
@@ -614,7 +614,7 @@ public class ATresponder extends Thread {
 								}
 								code = "0,," + invalidPIN; 
 							} else if (user_delay) {
-								sleep(user_delay_seconds);
+								sleep(user_delay_millis);
 								setUserDelay(false); // reset flag
 							} else {
 								getInputTimerFlag = true;
@@ -831,10 +831,10 @@ public class ATresponder extends Thread {
 				log.info("'BLOCKPIN'-keyword detected! Mobile ID PIN will be blocked.");
 			} else if (rsp.indexOf("USERDELAY=") != -1) {
 				try {
-					user_delay_seconds = Integer.parseInt(rsp.substring(rsp.indexOf("USERDELAY=") + 10, rsp.indexOf("USERDELAY=") + 11)); // example: 'USERDELAY=5'
-					if (user_delay_seconds >= 1 && user_delay_seconds <= 9) {
+					user_delay_millis = Integer.parseInt(rsp.substring(rsp.indexOf("USERDELAY=") + 10, rsp.indexOf("USERDELAY=") + 11)) * 1000; // example: 'USERDELAY=5' -> 5000 ms
+					if (user_delay_millis >= 1 && user_delay_millis <= 9) {
 						setUserDelay(true);
-						log.info("'USERDELAY=" + user_delay_seconds + "'-keyword detected! First TerminalResponse will be delayed by " + user_delay_seconds + " seconds.");
+						log.info("'USERDELAY=" + user_delay_millis + "'-keyword detected! The current TerminalResponse will be delayed by " + user_delay_millis + " seconds.");
 					} 
 				} catch (Exception e) {
 					// silently ignore...
