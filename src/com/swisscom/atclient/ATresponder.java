@@ -48,6 +48,7 @@ public class ATresponder extends Thread {
 	private volatile static boolean stk_timeout;
 	private volatile static boolean block_pin;
 	private volatile static boolean user_delay;
+	private volatile static int user_delay_seconds = 0;
 	
 	private boolean getInputTimerFlag = false;
 	private boolean getInputTimerKeyGenFlag = false;
@@ -829,8 +830,11 @@ public class ATresponder extends Thread {
 				setBlockedPIN(true);
 				log.info("'BLOCKPIN'-keyword detected! Mobile ID PIN will be blocked.");
 			} else if (rsp.indexOf("USERDELAY") != -1) {
-				setUserDelay(true);
-				log.info("'USERDELAY'-keyword detected! DisplayText and GetInput will be delayed by 5 seconds each.");
+				user_delay_seconds = Integer.getInteger(rsp.substring(rsp.indexOf("USERDELAY"), rsp.indexOf("USERDELAY") + 1));
+				if (user_delay_seconds >= 1 && user_delay_seconds <= 9) {
+					setUserDelay(true);
+					log.info("'USERDELAY=" + user_delay_seconds + "'-keyword detected! First TerminalResponse will be delayed by " + user_delay_seconds + " seconds.");
+				}	
 			} else if (rsp.indexOf("Confirm your new Mobile ID PIN") != -1) {
 				getInputTimerKeyGenFlag = true;
 			} 

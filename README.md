@@ -87,13 +87,13 @@ Once your terminal is in Explicit Response (ER) mode you can run the application
 If a keyword (case sensitive) is found in the Mobile ID authentication message, the ATClient will invoke specific actions.
 This is helpful to simulate a specific user behavior.
 
-`'CANCEL'     : TerminalResponse '16' - Proactive SIM session terminated by user.`
+`'CANCEL'       : TerminalResponse '16' - Proactive SIM session terminated by user.`
 
-`'STKTIMEOUT' : TerminalResponse '18' - No response from user.`
+`'STKTIMEOUT'   : TerminalResponse '18' - No response from user.`
 
-`'USERDELAY'  : TerminalResponse will be delayed by 5 seconds each.`
+`'USERDELAY=x'  : The very first TerminalResponse will be delayed by x seconds (supported values are 1 to 9).`
 
-`'BLOCKPIN'   : Mobile ID PIN will be blocked.`
+`'BLOCKPIN'     : Mobile ID PIN will be blocked.`
 
 
 ##### Auto start at boot
