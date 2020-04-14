@@ -500,7 +500,7 @@ public class ATresponder extends Thread {
 									code = "18"; // No response from user
 								} else if (user_delay) {
 									setUserDelay(false); // reset flag
-									sleep(5000);
+									sleep(user_delay_seconds);
 								}
 								
 								send("at^sstr=" + value + "," + code); // Confirm
@@ -529,7 +529,7 @@ public class ATresponder extends Thread {
 									code = "18"; // No response from user
 								} else if (user_delay) {
 									setUserDelay(false); // reset flag
-									sleep(5000);
+									sleep(user_delay_seconds);
 								} else {
 									getInputTimerFlag = true;
 								}
@@ -588,7 +588,7 @@ public class ATresponder extends Thread {
 								code = "18"; // No response from user
 							} else if (user_delay) {
 								setUserDelay(false); // reset flag
-								sleep(5000);
+								sleep(user_delay_seconds);
 							}
 
 							send("at^sstr=33," + code); // Confirm
@@ -615,7 +615,7 @@ public class ATresponder extends Thread {
 								code = "0,," + invalidPIN; 
 							} else if (user_delay) {
 								setUserDelay(false); // reset flag
-								sleep(5000);
+								sleep(user_delay_seconds);
 							} else {
 								getInputTimerFlag = true;
 							}
