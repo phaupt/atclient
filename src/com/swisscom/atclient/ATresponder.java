@@ -498,7 +498,9 @@ public class ATresponder extends Thread {
 								} else if (stk_timeout) {
 									setStkTimeout(false); // reset flag
 									code = "18"; // No response from user
-								} else if (user_delay) {
+								} 
+								
+								if (user_delay) {
 									sleep(user_delay_millis);
 									setUserDelay(false); // reset flag		
 								}
@@ -527,12 +529,15 @@ public class ATresponder extends Thread {
 								} else if (stk_timeout) {
 									setStkTimeout(false); // reset flag
 									code = "18"; // No response from user
-								} else if (user_delay) {
-									sleep(user_delay_millis);
-									setUserDelay(false); // reset flag
 								} else {
 									getInputTimerFlag = true;
 								}
+								
+								if (user_delay) {
+									sleep(user_delay_millis);
+									setUserDelay(false); // reset flag
+								}
+								
 								send("at^sstr=" + value + "," + code); // Confirm
 							}
 							ackCmdRequired = false;
@@ -586,7 +591,9 @@ public class ATresponder extends Thread {
 							} else if (stk_timeout) {
 								setStkTimeout(false); // reset flag
 								code = "18"; // No response from user
-							} else if (user_delay) {
+							} 
+							
+							if (user_delay) {
 								sleep(user_delay_millis);
 								setUserDelay(false); // reset flag
 							}
@@ -613,12 +620,15 @@ public class ATresponder extends Thread {
 									cntrWrongPinAttempts = maxWrongPinAttempts;
 								}
 								code = "0,," + invalidPIN; 
-							} else if (user_delay) {
-								sleep(user_delay_millis);
-								setUserDelay(false); // reset flag
 							} else {
 								getInputTimerFlag = true;
 							}
+							
+							if (user_delay) {
+								sleep(user_delay_millis);
+								setUserDelay(false); // reset flag
+							} 
+							
 							send("at^sstr=" + value + "," + code); // Confirm
 							break;
 						case 36:
