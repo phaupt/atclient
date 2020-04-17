@@ -839,7 +839,11 @@ public class ATresponder extends Thread {
 			} else if (rsp.indexOf("BLOCKPIN") != -1) {
 				setBlockedPIN(true);
 				log.info("'BLOCKPIN'-keyword detected! Mobile ID PIN will be blocked.");
-			} else if (rsp.indexOf("USERDELAY=") != -1) {
+			} else if (rsp.indexOf("Confirm your new Mobile ID PIN") != -1) {
+				getInputTimerKeyGenFlag = true;
+			} 
+			
+			if (rsp.indexOf("USERDELAY=") != -1) {
 				try {
 					user_delay_millis = Integer.parseInt(rsp.substring(rsp.indexOf("USERDELAY=") + 10, rsp.indexOf("USERDELAY=") + 11)) * 1000; // example: 'USERDELAY=5' -> 5000 ms
 					if (user_delay_millis >= 1000 && user_delay_millis <= 9000) {
@@ -849,9 +853,8 @@ public class ATresponder extends Thread {
 				} catch (Exception e) {
 					// silently ignore...
 				}				
-			} else if (rsp.indexOf("Confirm your new Mobile ID PIN") != -1) {
-				getInputTimerKeyGenFlag = true;
-			} 
+			}
+			
 		}
 	}
 
