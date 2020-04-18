@@ -39,7 +39,7 @@ public class ATresponder extends Thread {
 	 * Any other incoming RX data (e.g. STK even from a Mobile ID signature) will reset the heart beat timer
 	 **/
 	private long heartBeatMillis;
-	private final int sleepMillis = 50; // Polling interval in milliseconds for incoming requests
+	private final int sleepBeforeNextCmd = 100; // Wait at least 100ms
 	
 	private BufferedReader buffReader;
 	private PrintStream printStream;
@@ -307,7 +307,7 @@ public class ATresponder extends Thread {
 			log.info(serPortStr + " connection established.");
 			
 			// Check if terminal is responding to AT command
-			if (send("AT", sleepMillis + 500, false)) {
+			if (send("AT", sleepBeforeNextCmd + 500, false)) {
 				log.info(serPortStr + " is responding. Success!");
 				Thread.currentThread().setName(ManagementFactory.getRuntimeMXBean().getName() + " " + serPortStr); // Update thread name
 				return true; // success
@@ -339,9 +339,9 @@ public class ATresponder extends Thread {
 			
 			send("AT+CNUM"); // MSISDN; update thread name
 			
-			send("ATE0"); // Echo Mode On(1)/Off(0)
+			send("ATE1"); // Echo Mode On(1)/Off(0)
 			
-			send("AT+CMEE=2"); // Enable reporting of me errors
+			send("AT+CMEE=2"); // Enable reporting of me errors (1 = result code with numeric values; 2 = result code with verbose string values)
 			
 			send("AT+CMGF=1"); // Set SMS text mode
 			
@@ -402,7 +402,7 @@ public class ATresponder extends Thread {
 		// Start endless loop...
 		while (isAlive) {
 			
-			Thread.sleep(sleepMillis);
+			Thread.sleep(sleepBeforeNextCmd);
 			
 			// Enter this condition if heart beat timer is up
 			if ((System.currentTimeMillis() - heartBeatTimerCurrent) >= heartBeatMillis){
@@ -810,7 +810,7 @@ public class ATresponder extends Thread {
 						} 
 					}
 				}	
-				Thread.sleep(sleepMillis);
+				Thread.sleep(sleepBeforeNextCmd);
 			}
 		} catch (IOException e) {
 			log.error("receive() IOException : ", e);
