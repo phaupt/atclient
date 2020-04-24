@@ -458,8 +458,13 @@ public class ATresponder extends Thread {
 					
 					// Watchdog: Write/update local file
 					if (watchdogFile != null && watchdogWriter != null) {
-						watchdogWriter.write("Alive");
-						watchdogWriter.close();
+						try {
+							watchdogWriter.write("Alive");
+							watchdogWriter.close();
+						} catch (IOException e) {
+							log.error("Failed to update watchdog file at" + watchdogFile);
+							e.printStackTrace();
+						}
 					}
 
 					log.debug("<<< RX " + rx);
