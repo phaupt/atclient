@@ -351,7 +351,7 @@ public class ATresponder extends Thread {
 			
 			send("AT+CNUM"); // MSISDN; update thread name
 			
-			send("ATE1"); // Echo Mode On(1)/Off(0)
+			send("ATE0"); // Echo Mode On(1)/Off(0)
 			
 			send("AT+CMEE=2"); // Enable reporting of me errors (1 = result code with numeric values; 2 = result code with verbose string values)
 			
