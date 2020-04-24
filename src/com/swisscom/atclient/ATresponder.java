@@ -174,8 +174,6 @@ public class ATresponder extends Thread {
 			if (prop.getProperty("watchdog.enable").trim().equals("true")) {
 				watchdogFile = prop.getProperty("watchdog.filename").trim();
 				log.debug("Property watchdog.filename set to " + watchdogFile);
-				
-				watchdogWriter = new BufferedWriter(new FileWriter(watchdogFile));
 			} else {
 				watchdogFile = null;
 				watchdogWriter = null;
@@ -457,15 +455,8 @@ public class ATresponder extends Thread {
 					heartBeatTimerCurrent = rspTimerCurrent;
 					
 					// Watchdog: Write/update local file
-					if (watchdogFile != null && watchdogWriter != null) {
-						try {
-							watchdogWriter.write("Alive");
-							watchdogWriter.close();
-						} catch (IOException e) {
-							log.error("Failed to update watchdog file at" + watchdogFile);
-							e.printStackTrace();
-						}
-					}
+					if (watchdogFile != null)
+						updateWatchdog();
 
 					log.debug("<<< RX " + rx);
 	
@@ -979,4 +970,15 @@ public class ATresponder extends Thread {
 		return result;
 	}
 	
+	public void updateWatchdog() {
+		try {
+			watchdogWriter = new BufferedWriter(new FileWriter(watchdogFile));
+			watchdogWriter.write("Alive");
+			watchdogWriter.close();
+		} catch (IOException e) {
+			log.error("Failed to update watchdog file at" + watchdogFile);
+			e.printStackTrace();
+		}
+	}
+
 }
