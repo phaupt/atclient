@@ -299,10 +299,9 @@ public class ATresponder extends Thread {
 		
 		log.debug(serPortStr + " set port parameters (" + baudrate + ", " + databits + ", " + stopbits + ", " + parity + ")");
 		serPort.setComPortParameters(baudrate, databits, stopbits, parity);
-		serPort.setDTR();
 		
-		//log.debug(serPortStr + " set state of the DTR line to 1");
-		//serPort.setDTR();
+		log.debug(serPortStr + " set state of the DTR line to 1");
+		serPort.setDTR();
 		
 		// Try to open port..
 		log.debug(serPortStr + " trying to open");
