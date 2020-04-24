@@ -33,6 +33,9 @@ public class ATresponder extends Thread {
 	private final String invalidPIN = "003600350034003300320031";
 	private final int maxWrongPinAttempts = 5;
 	private int cntrWrongPinAttempts = maxWrongPinAttempts;
+	
+	private BufferedWriter watchdogWriter = null;
+	private String watchdogFile = null;
 
 	/**
 	 * Heart beat to detect serial port disconnection in milliseconds
@@ -166,6 +169,17 @@ public class ATresponder extends Thread {
 				smsURL = null;
 				smsQueryParam = null;
 				log.debug("Property textsms.publish disabled");
+			}
+			
+			if (prop.getProperty("watchdog.enable").trim().equals("true")) {
+				watchdogFile = prop.getProperty("watchdog.filename").trim();
+				log.debug("Property watchdog.filename set to " + watchdogFile);
+				
+				watchdogWriter = new BufferedWriter(new FileWriter(watchdogFile));
+			} else {
+				watchdogFile = null;
+				watchdogWriter = null;
+				log.debug("Property watchdog disabled");
 			}
 			
 		} catch (IOException e1) {
@@ -407,9 +421,7 @@ public class ATresponder extends Thread {
 			// Enter this condition if heart beat timer is up
 			if ((System.currentTimeMillis() - heartBeatTimerCurrent) >= heartBeatMillis){
 				// Check every x milliseconds of inactivity
-				
-				//log.debug(serPortStr + " heart beat test");
-				
+						
 				send("AT", null); // Send "AT". Next RX shall be received in this thread as it could be some other event coming in.
 				
 				heartBeatTimerCurrent = System.currentTimeMillis();
@@ -444,6 +456,12 @@ public class ATresponder extends Thread {
 					rspTimerCurrent = System.currentTimeMillis();
 					heartBeatTimerCurrent = rspTimerCurrent;
 					
+					// Watchdog: Write/update local file
+					if (watchdogFile != null && watchdogWriter != null) {
+						watchdogWriter.write("Alive");
+						watchdogWriter.close();
+					}
+
 					log.debug("<<< RX " + rx);
 	
 					getMeTextAscii(rx); // may set the flag such as CANCEL	
