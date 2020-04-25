@@ -427,14 +427,15 @@ public class ATresponder extends Thread {
 				log.error(serPortStr + " down! Trying to find the terminal on a different serial port...");
 				close(true);
 				
-				lookupSerialPort();
+				lookupSerialPort(); // try to find and init the new port
 
 				// reset all timers
 				rspTimerCurrent = System.currentTimeMillis();
 				heartBeatTimerCurrent = rspTimerCurrent;
 
-				initAtCmd();
-				listenForRx();
+				initAtCmd(); // try to init the AT commands
+				
+				// now continue in this listenForRx() loop...
 			}
 			
 			// Listening for incoming notifications (SIM->ME)
