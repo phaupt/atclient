@@ -52,7 +52,7 @@ public class ATresponder extends Thread {
 	private volatile static boolean block_pin;
 	private volatile static boolean user_delay;
 	private volatile static int user_delay_millis = 0;
-	
+
 	private String atclientCfg = null;
 	
 	private String serPortStr = null;
@@ -567,10 +567,10 @@ public class ATresponder extends Thread {
 
 						// Check Proactive Command Type
 						switch (value) {
-						case 19:							
+						case 19:
 							// SEND MESSAGE
 							log.info("SEND MESSAGE (Command Code 19)");
-							send("at^sstgi=" + value); // GetInfos
+							send("at^sstgi=" + value); // GetInfos		
 							send("at^sstr=" + value + ",0"); // Confirm
 							break;
 						case 32:
@@ -620,7 +620,7 @@ public class ATresponder extends Thread {
 									cntrWrongPinAttempts = maxWrongPinAttempts;
 								}
 								code = "0,," + invalidPIN; 
-							} 
+							}
 							
 							if (user_delay) {
 								sleep(user_delay_millis);
@@ -679,13 +679,9 @@ public class ATresponder extends Thread {
 	
 	public boolean send(String cmd, String expectedRsp, long timeout, boolean sstr) {
 		try {
-			
-			try {
-				sleep(50);
-			} catch (InterruptedException e) {
-				log.error("Failed to sleep()");
-			}
-			
+	
+			sleep(25); // Ensure that there is enough time for the terminal to process previous command.
+	
 			log.debug(">>> TX1 " + cmd);
 			printStream.write((cmd + "\r\n").getBytes());
 			
@@ -696,11 +692,20 @@ public class ATresponder extends Thread {
 		} catch (IOException e) {
 			log.error("send() IOException : ", e);
 			return false;
+		} catch (InterruptedException e) {
+			log.error("sleep() IOException : ", e);
+			return false;
 		}
 	}
 
 	private boolean getRx(String expectedRx, long timeout, boolean sstr) {
 		try {
+			String compareStr;
+			if (expectedRx == null)
+				compareStr = "OK";
+			else
+				compareStr = expectedRx.toUpperCase();
+
 			long startTime = System.currentTimeMillis();
 
 			String rx;
@@ -802,6 +807,8 @@ public class ATresponder extends Thread {
 							} else if (value >= 20 && value <= 31) {
 								log.info("Signal strength: " + value + "/19-31/31 = EXCELLENT");
 							}
+						} else if (rx.toUpperCase().trim().contains(compareStr)) {		
+							return true; // Got the expected response
 						} 
 					}
 				}	
