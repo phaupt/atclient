@@ -454,7 +454,7 @@ public class ATresponder extends Thread {
 					if (watchdogFile != null)
 						updateWatchdog();
 
-					log.debug("<<< RX1 " + rx);
+					log.debug("RX1 <<< " + rx);
 	
 					getMeTextAscii(rx); // may set the flag such as CANCEL	
 	
@@ -682,7 +682,7 @@ public class ATresponder extends Thread {
 	
 			sleep(10); // Ensure that there is enough time for the terminal to process previous command.
 	
-			log.debug(">>> TX1 " + cmd);
+			log.debug("TX0 >>> " + cmd);
 			printStream.write((cmd + "\r\n").getBytes());
 			
 			if (expectedRsp != null)
@@ -738,7 +738,7 @@ public class ATresponder extends Thread {
 					// Data is available. Read it all.
 					
 					if (rx.length() > 0) {
-						log.debug("<<< RX2 " + rx);
+						log.debug("RX2 <<< " + rx);
 						
 						getMeTextAscii(rx);
 						
@@ -763,7 +763,7 @@ public class ATresponder extends Thread {
 						    }
 						    
 						} else if (rx.toUpperCase().startsWith("+CNUM: ")) {
-							// <<< RX2 +CNUM: ,"+41797373717",145
+							// +CNUM: ,"+41797373717",145
 
 							msisdn = Arrays.asList(rx.split(",")).get(1).replace("\"", "");
 							Thread.currentThread().setName(Thread.currentThread().getName() + " " + msisdn);
