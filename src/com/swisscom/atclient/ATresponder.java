@@ -315,7 +315,7 @@ public class ATresponder extends Thread {
 			log.info(serPortStr + " connection established.");
 			
 			// Check if terminal is responding to AT command
-			if (send("AT", sleepWhile + 500, false)) {
+			if (send("AT", 1000, false)) {
 				log.info(serPortStr + " is responding. Success!");
 				Thread.currentThread().setName(ManagementFactory.getRuntimeMXBean().getName() + " " + serPortStr); // Update thread name
 				return true; // success
@@ -347,7 +347,7 @@ public class ATresponder extends Thread {
 			
 			send("AT+CNUM"); // MSISDN; update thread name
 			
-			send("ATE0"); // Echo Mode On(1)/Off(0)
+			send("ATE1"); // Echo Mode On(1)/Off(0)
 			
 			send("AT+CMEE=2"); // Enable reporting of me errors (1 = result code with numeric values; 2 = result code with verbose string values)
 			
