@@ -13,14 +13,14 @@
 		</Console>
 
 		<RollingFile name="reporter" fileName="${sys:log.file}"
-			filePattern="${sys:log.file}-%d{MM-dd-yyyy}-%i.log">
+			filePattern="${sys:log.file}-%d{MM-dd-yyyy}-%i">
 			<PatternLayout>
 				<Pattern>%d %t [%level{WARN=WRN, DEBUG=DBG, ERROR=ERR,
 					TRACE=TRC,INFO=INF}] %m%n</Pattern>
 			</PatternLayout>
 			<Policies>
 				<TimeBasedTriggeringPolicy />
-				<SizeBasedTriggeringPolicy size="100 MB" />
+				<SizeBasedTriggeringPolicy size="500 MB" />
 			</Policies>
 			<DefaultRolloverStrategy max="10" />
 		</RollingFile>

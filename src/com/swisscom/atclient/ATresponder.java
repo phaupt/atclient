@@ -680,7 +680,7 @@ public class ATresponder extends Thread {
 	public boolean send(String cmd, String expectedRsp, long timeout, boolean sstr) {
 		try {
 	
-			sleep(25); // Ensure that there is enough time for the terminal to process previous command.
+			sleep(10); // Ensure that there is enough time for the terminal to process previous command.
 	
 			log.debug(">>> TX1 " + cmd);
 			printStream.write((cmd + "\r\n").getBytes());
