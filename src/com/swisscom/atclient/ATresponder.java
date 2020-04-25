@@ -42,7 +42,7 @@ public class ATresponder extends Thread {
 	 * Any other incoming RX data (e.g. STK even from a Mobile ID signature) will reset the heart beat timer
 	 **/
 	private long heartBeatMillis;
-	private final int sleepBeforeNextCmd = 100; // Wait at least 100ms
+	private final int sleepBeforeNextCmd = 50; 
 	
 	private BufferedReader buffReader;
 	private PrintStream printStream;
@@ -458,7 +458,7 @@ public class ATresponder extends Thread {
 					if (watchdogFile != null)
 						updateWatchdog();
 
-					log.debug("<<< RX " + rx);
+					log.debug("<<< RX1 " + rx);
 	
 					getMeTextAscii(rx); // may set the flag such as CANCEL	
 	
@@ -695,7 +695,7 @@ public class ATresponder extends Thread {
 	
 	public boolean send(String cmd, String expectedRsp, long timeout, boolean sstr) {
 		try {
-			log.debug(">>> TX " + cmd);
+			log.debug(">>> TX1 " + cmd);
 			printStream.write((cmd + "\r\n").getBytes());
 			
 			if (expectedRsp != null)
@@ -746,7 +746,7 @@ public class ATresponder extends Thread {
 					// Data is available. Read it all.
 					
 					if (rx.length() > 0) {
-						log.debug("<<< RX " + rx);
+						log.debug("<<< RX2 " + rx);
 						
 						getMeTextAscii(rx);
 						
@@ -771,7 +771,7 @@ public class ATresponder extends Thread {
 						    }
 						    
 						} else if (rx.toUpperCase().startsWith("+CNUM: ")) {
-							// <<< RX +CNUM: ,"+41797373717",145
+							// <<< RX2 +CNUM: ,"+41797373717",145
 
 							msisdn = Arrays.asList(rx.split(",")).get(1).replace("\"", "");
 							Thread.currentThread().setName(Thread.currentThread().getName() + " " + msisdn);
