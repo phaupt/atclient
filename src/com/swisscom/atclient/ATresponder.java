@@ -424,19 +424,17 @@ public class ATresponder extends Thread {
 			// Condition below should only occur if no RX received even after heart beat timer
 			else if ((System.currentTimeMillis() - rspTimerCurrent) >= (heartBeatMillis + 5000)) {
 				// Didn't get any response 
-				log.error(serPortStr + " down? Trying to re-connect.");
+				log.error(serPortStr + " down! Trying to find the terminal on a different serial port...");
 				close(true);
-				if (serPortStr == null) {
-					lookupSerialPort();
-				}
-				else {
-					openPort();
-				}
-				initAtCmd();
-				send("AT^SSTR?", null); // Check for STK Menu initialization 
+				
+				lookupSerialPort();
+
 				// reset all timers
 				rspTimerCurrent = System.currentTimeMillis();
-				heartBeatTimerCurrent = rspTimerCurrent;	
+				heartBeatTimerCurrent = rspTimerCurrent;
+
+				initAtCmd();
+				listenForRx();
 			}
 			
 			// Listening for incoming notifications (SIM->ME)
