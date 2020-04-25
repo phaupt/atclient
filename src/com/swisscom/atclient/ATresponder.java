@@ -53,10 +53,6 @@ public class ATresponder extends Thread {
 	private volatile static boolean user_delay;
 	private volatile static int user_delay_millis = 0;
 	
-	private boolean getInputTimerFlag = false;
-	private boolean getInputTimerKeyGenFlag = false;
-	private long getInputTimer = 0;
-
 	private String atclientCfg = null;
 	
 	private String serPortStr = null;
@@ -543,9 +539,7 @@ public class ATresponder extends Thread {
 								} else if (stk_timeout) {
 									setStkTimeout(false); // reset flag
 									code = "18"; // No response from user
-								} else {
-									getInputTimerFlag = true;
-								}
+								} 
 								
 								if (user_delay) {
 									sleep(user_delay_millis);
@@ -573,18 +567,10 @@ public class ATresponder extends Thread {
 
 						// Check Proactive Command Type
 						switch (value) {
-						case 19:
-							if (getInputTimerFlag && getInputTimerKeyGenFlag) {
-								long timer = System.currentTimeMillis() - getInputTimer;
-								int seconds = (int) (timer/1000);
-								long millis = timer - seconds * 1000;
-								log.info("KeyGen took " + String.format("%02d", seconds) + "," + String.format("%03d", millis) + " seconds");
-								getInputTimerFlag = getInputTimerKeyGenFlag = false;
-							}
-							
+						case 19:							
 							// SEND MESSAGE
 							log.info("SEND MESSAGE (Command Code 19)");
-							send("at^sstgi=" + value); // GetInfos		
+							send("at^sstgi=" + value); // GetInfos
 							send("at^sstr=" + value + ",0"); // Confirm
 							break;
 						case 32:
@@ -634,9 +620,7 @@ public class ATresponder extends Thread {
 									cntrWrongPinAttempts = maxWrongPinAttempts;
 								}
 								code = "0,," + invalidPIN; 
-							} else {
-								getInputTimerFlag = true;
-							}
+							} 
 							
 							if (user_delay) {
 								sleep(user_delay_millis);
@@ -695,6 +679,13 @@ public class ATresponder extends Thread {
 	
 	public boolean send(String cmd, String expectedRsp, long timeout, boolean sstr) {
 		try {
+			
+			try {
+				sleep(50);
+			} catch (InterruptedException e) {
+				log.error("Failed to sleep()");
+			}
+			
 			log.debug(">>> TX1 " + cmd);
 			printStream.write((cmd + "\r\n").getBytes());
 			
@@ -710,12 +701,6 @@ public class ATresponder extends Thread {
 
 	private boolean getRx(String expectedRx, long timeout, boolean sstr) {
 		try {
-			String compareStr;
-			if (expectedRx == null)
-				compareStr = "OK";
-			else
-				compareStr = expectedRx.toUpperCase();
-
 			long startTime = System.currentTimeMillis();
 
 			String rx;
@@ -817,10 +802,6 @@ public class ATresponder extends Thread {
 							} else if (value >= 20 && value <= 31) {
 								log.info("Signal strength: " + value + "/19-31/31 = EXCELLENT");
 							}
-						} else if (rx.toUpperCase().trim().contains(compareStr)) {		
-							if (getInputTimerFlag && getInputTimerKeyGenFlag)
-								getInputTimer = System.currentTimeMillis();
-							return true; // Got the expected response
 						} 
 					}
 				}	
@@ -853,8 +834,6 @@ public class ATresponder extends Thread {
 			} else if (rsp.indexOf("BLOCKPIN") != -1) {
 				setBlockedPIN(true);
 				log.info("'BLOCKPIN'-keyword detected! Mobile ID PIN will be blocked.");
-			} else if (rsp.indexOf("Confirm your new Mobile ID PIN") != -1) {
-				getInputTimerKeyGenFlag = true;
 			} 
 			
 			if (rsp.indexOf("USERDELAY=") != -1) {
