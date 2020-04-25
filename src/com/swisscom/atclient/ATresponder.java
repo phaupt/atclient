@@ -42,7 +42,7 @@ public class ATresponder extends Thread {
 	 * Any other incoming RX data (e.g. STK even from a Mobile ID signature) will reset the heart beat timer
 	 **/
 	private long heartBeatMillis;
-	private final int sleepBeforeNextCmd = 50; 
+	private final int sleepWhile = 50; 
 	
 	private BufferedReader buffReader;
 	private PrintStream printStream;
@@ -315,7 +315,7 @@ public class ATresponder extends Thread {
 			log.info(serPortStr + " connection established.");
 			
 			// Check if terminal is responding to AT command
-			if (send("AT", sleepBeforeNextCmd + 500, false)) {
+			if (send("AT", sleepWhile + 500, false)) {
 				log.info(serPortStr + " is responding. Success!");
 				Thread.currentThread().setName(ManagementFactory.getRuntimeMXBean().getName() + " " + serPortStr); // Update thread name
 				return true; // success
@@ -410,7 +410,7 @@ public class ATresponder extends Thread {
 		// Start endless loop...
 		while (isAlive) {
 			
-			Thread.sleep(sleepBeforeNextCmd);
+			Thread.sleep(sleepWhile);
 			
 			// Enter this condition if heart beat timer is up
 			if ((System.currentTimeMillis() - heartBeatTimerCurrent) >= heartBeatMillis){
@@ -481,7 +481,7 @@ public class ATresponder extends Thread {
 							if (ackCmdRequired) {
 								// SEND MESSAGE
 								log.info("SEND MESSAGE (Command Code 19)");
-								send("at^sstgi=" + value); // GetInfos		
+								send("at^sstgi=" + value); // GetInfos
 								send("at^sstr=" + value + ",0"); // Confirm
 							}
 							ackCmdRequired = false;
@@ -719,6 +719,8 @@ public class ATresponder extends Thread {
 			if (smsPattern != null) {
 				pattern = Pattern.compile(smsPattern);
 			}
+			
+			log.debug("Start waiting for response '" + expectedRx + "'");
 
 			while (true) {
 				
@@ -811,8 +813,9 @@ public class ATresponder extends Thread {
 							return true; // Got the expected response
 						} 
 					}
+					Thread.sleep(sleepWhile);
 				}	
-				Thread.sleep(sleepBeforeNextCmd);
+				Thread.sleep(sleepWhile);
 			}
 		} catch (IOException e) {
 			log.error("receive() IOException : ", e);
