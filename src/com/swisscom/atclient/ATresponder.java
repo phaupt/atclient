@@ -190,7 +190,7 @@ public class ATresponder extends Thread {
 				openPort();
 			}
 			initAtCmd();
-			listenForRx();
+			listenForRx(); // program will stay in the while loop inside this method...
 		} catch (UnsupportedEncodingException e) {
 			e.printStackTrace();
 		} catch (IOException e) {
@@ -199,7 +199,9 @@ public class ATresponder extends Thread {
 			e.printStackTrace();
 		}
 		
+		// The while loop has been normally terminated.
 		log.info("Exiting Application");
+		System.exit(0);
 	}
 	
 	public static Properties readPropertiesFile(String fileName) throws IOException {
@@ -225,6 +227,7 @@ public class ATresponder extends Thread {
 				Thread.currentThread().setName("ShutdownHook");
 				log.debug("Executing Shutdown Hook");
 				isAlive = false; // will exit the while loop and terminate the application	
+				System.exit(0);
 			}
 		});
 	}
