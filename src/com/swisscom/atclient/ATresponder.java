@@ -96,84 +96,84 @@ public class ATresponder extends Thread {
 			
 			Properties prop = null;
 			if (atclientCfg != null) {
-				log.debug("Reading Property file at " + atclientCfg);
+				log.info("Reading Property file at " + atclientCfg);
 				prop = readPropertiesFile(atclientCfg);
 			} else {
-				log.debug("Error reading Property file. No -Dconfig.file found.");
+				log.error("Error reading Property file. No -Dconfig.file found.");
 				System.exit(1);
 			}
 					
 			if (System.getProperty("os.name").toLowerCase().contains("win")) {
 				portStrArr[0] = prop.getProperty("port.name.windows");
-				log.debug("Property port.name.windows set to " + portStrArr[0]);
+				log.info("Property port.name.windows set to " + portStrArr[0]);
 			} else {
 				portStrArr[0] = prop.getProperty("port.name.linux");
-				log.debug("Property port.name.linux set to " + portStrArr[0]);
+				log.info("Property port.name.linux set to " + portStrArr[0]);
 			}
 			
 			baudrate = Integer.parseInt(prop.getProperty("port.baudrate").trim());
-			log.debug("Property port.baudrate set to " + baudrate);
+			log.info("Property port.baudrate set to " + baudrate);
 			databits = Integer.parseInt(prop.getProperty("port.databits").trim());
-			log.debug("Property port.databits set to " + databits);
+			log.info("Property port.databits set to " + databits);
 			stopbits = Integer.parseInt(prop.getProperty("port.stopbits").trim());
-			log.debug("Property port.stopbits set to " + stopbits);
+			log.info("Property port.stopbits set to " + stopbits);
 			parity = Integer.parseInt(prop.getProperty("port.parity").trim());
-			log.debug("Property port.parity set to " + parity);
+			log.info("Property port.parity set to " + parity);
 			
 			atTimeout = Integer.parseInt(prop.getProperty("port.communication.timeout").trim());
-			log.debug("Property port.communication.timeout set to " + atTimeout);
+			log.info("Property port.communication.timeout set to " + atTimeout);
 			
 			heartBeatMillis = Integer.parseInt(prop.getProperty("atclient.atcommand.heartbeat").trim());
-			log.debug("Property atclient.atcommand.heartbeat set to " + heartBeatMillis);
+			log.info("Property atclient.atcommand.heartbeat set to " + heartBeatMillis);
 			
 			if (prop.getProperty("cops.mode").trim().length() == 1) {
 				copsMode = prop.getProperty("cops.mode").trim();
-				log.debug("Property cops.mode set to " + copsMode);
+				log.info("Property cops.mode set to " + copsMode);
 			} else {
 				copsMode = null;
-				log.debug("Property cops.mode set to automatic");
+				log.info("Property cops.mode set to automatic");
 			}
 			
 			if (prop.getProperty("textsms.forward.enable").trim().equals("true")) {
 				smsTargetMsisdn = prop.getProperty("textsms.forward.msisdn").trim();
-				log.debug("Property textsms.forward.msisdn set to " + smsTargetMsisdn);
+				log.info("Property textsms.forward.msisdn set to " + smsTargetMsisdn);
 				smsPattern = prop.getProperty("textsms.forward.pattern");
-				log.debug("Property textsms.forward.pattern set to " + smsPattern);
+				log.info("Property textsms.forward.pattern set to " + smsPattern);
 			} else {
 				smsTargetMsisdn = null;
 				smsPattern = null;
-				log.debug("Property textsms.forward disabled");
+				log.info("Property textsms.forward disabled");
 			}
 			
 			if (prop.getProperty("textsms.publish.enable").trim().equals("true")) {
 				smsURL = prop.getProperty("textsms.publish.url").trim();
-				log.debug("Property textsms.publish.url set to " + smsURL);
+				log.info("Property textsms.publish.url set to " + smsURL);
 				smsQueryParam = prop.getProperty("textsms.publish.queryparam").trim();
-				log.debug("Property textsms.publish.queryparam set to " + smsQueryParam);
+				log.info("Property textsms.publish.queryparam set to " + smsQueryParam);
 				
 				if (prop.getProperty("textsms.publish.basicauth.enabled").trim().equals("true")) {
 					smsAuthName = prop.getProperty("textsms.publish.basicauth.user").trim();
-					log.debug("Property textsms.publish.basicauth.user set to " + smsAuthName);
+					log.info("Property textsms.publish.basicauth.user set to " + smsAuthName);
 					smsAuthPassword = prop.getProperty("textsms.publish.basicauth.pwd").trim();
-					log.debug("Property textsms.publish.basicauth.pwd set to " + smsAuthPassword);
+					log.info("Property textsms.publish.basicauth.pwd set to " + smsAuthPassword);
 				} else {
 					smsAuthName = null;
 					smsAuthPassword = null;
-					log.debug("Property textsms.publish.basicauth disabled");
+					log.info("Property textsms.publish.basicauth disabled");
 				}
 			} else {
 				smsURL = null;
 				smsQueryParam = null;
-				log.debug("Property textsms.publish disabled");
+				log.info("Property textsms.publish disabled");
 			}
 			
 			if (prop.getProperty("watchdog.enable").trim().equals("true")) {
 				watchdogFile = prop.getProperty("watchdog.filename").trim();
-				log.debug("Property watchdog.filename set to " + watchdogFile);
+				log.info("Property watchdog.filename set to " + watchdogFile);
 			} else {
 				watchdogFile = null;
 				watchdogWriter = null;
-				log.debug("Property watchdog disabled");
+				log.info("Property watchdog disabled");
 			}
 			
 		} catch (IOException e1) {
@@ -227,7 +227,6 @@ public class ATresponder extends Thread {
 				isAlive = false; // will exit the while loop and terminate the application	
 			}
 		});
-		log.debug("Attached Shutdown Hook");
 	}
 	
 	public void shutdownAndExit(){
@@ -237,7 +236,7 @@ public class ATresponder extends Thread {
 	}
 
 	private void lookupSerialPort() throws UnsupportedEncodingException, IOException, InterruptedException {
-		log.info("Init serial port.");
+		log.info("Start serial port initialization.");
 		
 		SerialPort[] ports; 
 		
@@ -255,7 +254,7 @@ public class ATresponder extends Thread {
 					for (String portStr : portStrArr) {
 						// Check for known terminal (port string)
 						if (portDesc.contains(portStr)) {
-							log.debug("Found a serial port: " + port.getSystemPortName() + " " + portDesc);
+							log.info("Found a serial port: " + port.getSystemPortName() + " " + portDesc);
 							serPortStr = port.getSystemPortName();
 
 							// Found a port with matching name... trying to open it
@@ -303,7 +302,7 @@ public class ATresponder extends Thread {
 		log.debug(serPortStr + " trying to open");
 		if (!serPort.openPort(safetySleepTime)) {
 			// Port not available
-			log.error(serPortStr + " is currently not available.");
+			log.debug(serPortStr + " is currently not available.");
 			return false;			
 		} else {
 			// Port available
@@ -312,7 +311,7 @@ public class ATresponder extends Thread {
 			buffReader = new BufferedReader(new InputStreamReader(serPort.getInputStream(), "UTF-8"));
 			printStream = new PrintStream(serPort.getOutputStream(), true, "UTF-8");
 
-			log.info(serPortStr + " connection established.");
+			log.info(serPortStr + " connection established. Let's see if it responds to AT commands.");
 			
 			// Check if terminal is responding to AT command
 			if (send("AT", 1000, false)) {
@@ -320,7 +319,7 @@ public class ATresponder extends Thread {
 				Thread.currentThread().setName(ManagementFactory.getRuntimeMXBean().getName() + " " + serPortStr); // Update thread name
 				return true; // success
 			} else {
-				log.error(serPortStr + " wasn't responding.");
+				log.info(serPortStr + " wasn't responding. Closing this port.");
 				close(false);
 				return false; // failed. terminal wasn't responding.
 			}
@@ -719,7 +718,7 @@ public class ATresponder extends Thread {
 				pattern = Pattern.compile(smsPattern);
 			}
 			
-			log.debug("Start waiting for response '" + expectedRx + "'");
+			log.trace("Start waiting for response '" + expectedRx + "'");
 
 			while (true) {
 				
@@ -939,7 +938,7 @@ public class ATresponder extends Thread {
 			String authStringEnc = new String(authEncBytes);
 			
 			urlConnection.setRequestProperty("Authorization", "Basic " + authStringEnc);
-			log.info("Basic Authentication used");
+			log.debug("Basic Authentication used");
 		} 
 			
 		InputStream is = urlConnection.getInputStream();
@@ -953,7 +952,7 @@ public class ATresponder extends Thread {
 		}
 		String result = sb.toString();
 		
-		log.info("Server response was '" + result + "'");
+		log.debug("Server response was '" + result + "'");
 
 		return result;
 	}
