@@ -100,7 +100,7 @@ public class ATresponder extends Thread {
 				prop = readPropertiesFile(atclientCfg);
 			} else {
 				log.error("Error reading Property file. No -Dconfig.file found.");
-				System.exit(1);
+				return;
 			}
 					
 			if (System.getProperty("os.name").toLowerCase().contains("win")) {
@@ -201,7 +201,6 @@ public class ATresponder extends Thread {
 		
 		// The while loop has been normally terminated.
 		log.info("Exiting Application");
-		System.exit(0);
 	}
 	
 	public static Properties readPropertiesFile(String fileName) throws IOException {
@@ -227,7 +226,6 @@ public class ATresponder extends Thread {
 				Thread.currentThread().setName("ShutdownHook");
 				log.debug("Executing Shutdown Hook");
 				isAlive = false; // will exit the while loop and terminate the application	
-				System.exit(0);
 			}
 		});
 	}
