@@ -478,7 +478,7 @@ public class ATresponder extends Thread {
 						case 19: // ^SSTR: 3,19
 							if (ackCmdRequired) {
 								// SEND MESSAGE
-								log.info("SEND MESSAGE (Command Code 19)");
+								log.info("STK 19: SEND MESSAGE");
 								send("at^sstgi=" + value); // GetInfos
 								send("at^sstr=" + value + ",0"); // Confirm
 							}
@@ -487,7 +487,7 @@ public class ATresponder extends Thread {
 						case 32: // ^SSTR: 3,32
 							if (ackCmdRequired) {
 								// PLAY TONE
-								log.info("PLAY TONE (Command Code 32)");
+								log.info("STK 32: PLAY TONE");
 								send("at^sstgi=" + value); // GetInfos
 								send("at^sstr=" + value + ",0"); // Confirm
 							}
@@ -496,7 +496,7 @@ public class ATresponder extends Thread {
 						case 33: // ^SSTR: 3,33
 							if (ackCmdRequired) {
 								// DISPLAY TEXT
-								log.info("DISPLAY TEXT (Command Code 33)");
+								log.info("STK 33: DISPLAY TEXT");
 								send("at^sstgi=" + value); // GetInfos
 								getMeTextAscii(rx); // may set the flag such as CANCEL
 								code = "0"; // OK
@@ -520,7 +520,7 @@ public class ATresponder extends Thread {
 						case 35: // ^SSTR: 3,35
 							if (ackCmdRequired) {
 								// GET INPUT
-								log.info("GET INPUT (Command Code 35)");
+								log.info("STK 35: GET INPUT");
 								send("at^sstgi=" + value); // GetInfos
 								getMeTextAscii(rx); // may set the flag such as CANCEL						
 								code = "0,," + validPIN; // OK
@@ -551,7 +551,7 @@ public class ATresponder extends Thread {
 						case 37: // ^SSTR: 3,37
 							if (ackCmdRequired) {
 								// SET UP MENU
-								log.info("SET UP MENU (Command Code 37)");
+								log.info("STK 37: SET UP MENU");
 								send("at^sstgi=" + value, "SSTGI"); // GetInfos
 								send("at^sstr=" + value + ",0"); // Confirm
 							}
@@ -567,19 +567,19 @@ public class ATresponder extends Thread {
 						switch (value) {
 						case 19:
 							// SEND MESSAGE
-							log.info("SEND MESSAGE (Command Code 19)");
+							log.info("STK 19: SEND MESSAGE");
 							send("at^sstgi=" + value); // GetInfos		
 							send("at^sstr=" + value + ",0"); // Confirm
 							break;
 						case 32:
 							// PLAY TONE
-							log.info("PLAY TONE (Command Code 32)");
+							log.info("STK 32: PLAY TONE");
 							send("at^sstgi=32");
 							send("at^sstr=32,0"); // TerminalResponse=0 (OK)
 							break;
 						case 33:
 							// DISPLAY TEXT
-							log.info("DISPLAY TEXT (Command Code 33)");
+							log.info("STK 33: DISPLAY TEXT");
 							send("at^sstgi=33");
 							getMeTextAscii(rx); // may set the flag such as CANCEL
 							code = "0"; // OK
@@ -600,7 +600,7 @@ public class ATresponder extends Thread {
 							break;
 						case 35:
 							// GET INPUT (Input=123456)
-							log.info("GET INPUT (Command Code 35)");
+							log.info("STK 35: GET INPUT");
 							send("at^sstgi=35");
 							getMeTextAscii(rx); // may set the flag such as CANCEL							
 							code = "0,," + validPIN; // OK
@@ -629,17 +629,17 @@ public class ATresponder extends Thread {
 							break;
 						case 36:
 							// SELECT ITEM
-							log.info("SELECT ITEM (Command Code 36)");
+							log.info("STK 36: SELECT ITEM");
 							send("at^sstgi=36"); // GetInformation
 							break;
 						case 37:
 							// SET UP MENU
-							log.info("SET UP MENU (Command Code 37)");
+							log.info("STK 37: SET UP MENU");
 							send("at^sstgi=37"); // Get Information
 							send("at^sstr=37,0"); // Remote-SAT Response
 							break;
 						case 254:
-							log.info("SIM Applet returns to main menu (Command Code 254)");
+							log.info("STK 254: SIM Applet returns to main menu");
 							
 							// STK Process completed. Let's do some regular checks:
 							send("AT+COPS?"); // Provider + access technology
@@ -770,28 +770,28 @@ public class ATresponder extends Thread {
 							value = Integer.parseInt( Arrays.asList(rx.split(",")).get(3) ); // +COPS: 0,0,"Swisscom",7
 							switch (value) {
 							case 0: 
-								log.info("Radio Access Technology: GSM = 2G");
+								log.info("Radio Access Technology: GSM (2G)");
 								break;
 							case 1: 
-								log.info("Radio Access Technology: GSM Compact = 2G");
+								log.info("Radio Access Technology: GSM Compact (2G)");
 								break;
 							case 2: 
-								log.info("Radio Access Technology: UTRAN = 3G");
+								log.info("Radio Access Technology: UTRAN (3G)");
 								break;
 							case 3: 
-								log.info("Radio Access Technology: GSM w/EGPRS = 2G");
+								log.info("Radio Access Technology: GSM w/EGPRS (2G)");
 								break;
 							case 4: 
-								log.info("Radio Access Technology: UTRAN w/HSDPA = 3G");
+								log.info("Radio Access Technology: UTRAN w/HSDPA (3G)");
 								break;
 							case 5: 
-								log.info("Radio Access Technology: UTRAN w/HSUPA = 3G");
+								log.info("Radio Access Technology: UTRAN w/HSUPA (3G)");
 								break;
 							case 6: 
-								log.info("Radio Access Technology: UTRAN w/HSDPA and HSUPA = 3G");
+								log.info("Radio Access Technology: UTRAN w/HSDPA and HSUPA (3G)");
 								break;
 							case 7: 
-								log.info("Radio Access Technology: E-UTRAN = 4G/LTE");
+								log.info("Radio Access Technology: E-UTRAN = (4G/LTE)");
 								break;
 							default:
 								break;
@@ -799,13 +799,13 @@ public class ATresponder extends Thread {
 						} else if (rx.toUpperCase().startsWith("+CSQ: ")) {
 							value = Integer.parseInt( rx.substring(6, rx.indexOf(",")) ); // +CSQ: 14,99
 							if (value <= 9) {
-								log.info("Signal strength: " + value + "/1-9/31 = MARGINAL");
+								log.info("Signal strength: " + value + "/1-9/31 (MARGINAL)");
 							} else if (value >= 10 && value <= 14) {
-								log.info("Signal strength: " + value + "/10-4/31 = OK");
+								log.info("Signal strength: " + value + "/10-4/31 (OK)");
 							} else if (value >= 15 && value <= 19) {
-								log.info("Signal strength: " + value + "/15-19/31 = GOOD"); 
+								log.info("Signal strength: " + value + "/15-19/31 (GOOD)"); 
 							} else if (value >= 20 && value <= 31) {
-								log.info("Signal strength: " + value + "/19-31/31 = EXCELLENT");
+								log.info("Signal strength: " + value + "/19-31/31 (EXCELLENT)");
 							}
 						} else if (rx.toUpperCase().trim().contains(compareStr)) {		
 							return true; // Got the expected response
@@ -830,7 +830,7 @@ public class ATresponder extends Thread {
 
 			rsp = rsp.substring(rsp.indexOf(",\"") + 2, rsp.indexOf("\",", rsp.indexOf(",\"") + 2));
 			rsp = new String(hexToByte(rsp), "UTF-16");
-			log.info("TEXT: \"" + rsp + "\"");
+			log.info("UI TEXT = \"" + rsp + "\"");
 
 			// Check if UI Text contains specific keywords
 			if (rsp.indexOf("CANCEL") != -1) {
