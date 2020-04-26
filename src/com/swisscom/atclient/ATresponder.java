@@ -802,13 +802,13 @@ public class ATresponder extends Thread {
 						} else if (rx.toUpperCase().startsWith("+CSQ: ")) {
 							value = Integer.parseInt( rx.substring(6, rx.indexOf(",")) ); // +CSQ: 14,99
 							if (value <= 9) {
-								log.info("Signal strength: " + value + "/1-9/31 (MARGINAL)");
+								log.info("Signal strength: " + value + "/1-9/31 [#---]");
 							} else if (value >= 10 && value <= 14) {
-								log.info("Signal strength: " + value + "/10-4/31 (OK)");
+								log.info("Signal strength: " + value + "/10-4/31 [##--]");
 							} else if (value >= 15 && value <= 19) {
-								log.info("Signal strength: " + value + "/15-19/31 (GOOD)"); 
+								log.info("Signal strength: " + value + "/15-19/31 [###-]"); 
 							} else if (value >= 20 && value <= 31) {
-								log.info("Signal strength: " + value + "/19-31/31 (EXCELLENT)");
+								log.info("Signal strength: " + value + "/19-31/31 [####]");
 							}
 						} else if (rx.toUpperCase().trim().contains(compareStr)) {		
 							return true; // Got the expected response
@@ -833,7 +833,7 @@ public class ATresponder extends Thread {
 
 			rsp = rsp.substring(rsp.indexOf(",\"") + 2, rsp.indexOf("\",", rsp.indexOf(",\"") + 2));
 			rsp = new String(hexToByte(rsp), "UTF-16");
-			log.info("UI TEXT = \"" + rsp + "\"");
+			log.info("SHOWTEXT = \"" + rsp + "\"");
 
 			// Check if UI Text contains specific keywords
 			if (rsp.indexOf("CANCEL") != -1) {
