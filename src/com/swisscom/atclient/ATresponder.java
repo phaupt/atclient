@@ -777,7 +777,7 @@ public class ATresponder extends Thread {
 							// Be sure that we have expected response format
 							if (rx.length() - rx.replaceAll(",","").length() < 3) {
 								if (rx.contentEquals("+COPS: 0"))
-									log.error("It seems there is currently no mobile radio reception... ");
+									log.error("It seems there is currently no mobile radio reception");
 								break;
 							}
 								
@@ -822,6 +822,10 @@ public class ATresponder extends Thread {
 							} else if (value >= 20 && value <= 31) {
 								log.info("Signal strength: " + value + "/19-31/31 [####]");
 							}
+						} else if (rx.toUpperCase().contentEquals("+CME ERROR: SIM PIN required")) {
+							log.error("Please check if SIM is correctly inserted AND there is no SIM PIN active");
+							return false;
+							
 						} else if (rx.toUpperCase().trim().contains(compareStr)) {		
 							return true; // Got the expected response
 						} 
@@ -974,6 +978,7 @@ public class ATresponder extends Thread {
 	
 	public void updateWatchdog() {
 		try {
+			log.trace("Update watchdog file \'" + watchdogFile + "\'");
 			watchdogWriter = new BufferedWriter(new FileWriter(watchdogFile));
 			watchdogWriter.write("Alive");
 			watchdogWriter.close();
