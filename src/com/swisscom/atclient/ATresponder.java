@@ -345,7 +345,8 @@ public class ATresponder extends Thread {
 			
 			// CONFIGURATION
 			
-			send("AT+CNUM"); // MSISDN; update thread name
+			if (!send("AT+CNUM")) // MSISDN; update thread name
+				return;
 			
 			send("ATE1"); // Echo Mode On(1)/Off(0)
 			
