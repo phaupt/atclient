@@ -761,14 +761,28 @@ public class ATresponder extends Thread {
 							    publishSMS(rx); // any potential whitespace will be replaced with &nbsp;
 						    }
 						    
-						} else if (rx.toUpperCase().startsWith("+CNUM: ")) {
+						} else if (rx.toUpperCase().startsWith("+CNUM: ") && rx.length() > 22) {
 							// +CNUM: ,"+41797373717",145
+							
+							// Be sure that we have expected response format
+							if (rx.length() - rx.replaceAll(",","").length() < 2)
+								break;
 
 							msisdn = Arrays.asList(rx.split(",")).get(1).replace("\"", "");
 							Thread.currentThread().setName(Thread.currentThread().getName() + " " + msisdn);
 
 						} else if (rx.toUpperCase().startsWith("+COPS: ")) {
-							value = Integer.parseInt( Arrays.asList(rx.split(",")).get(3) ); // +COPS: 0,0,"Swisscom",7
+							// +COPS: 0,0,"Swisscom",7
+							
+							// Be sure that we have expected response format
+							if (rx.length() - rx.replaceAll(",","").length() < 3) {
+								if (rx.contentEquals("+COPS: 0"))
+									log.error("It seems there is currently no mobile radio reception... ");
+								break;
+							}
+								
+							
+							value = Integer.parseInt( Arrays.asList(rx.split(",")).get(3) ); 
 							switch (value) {
 							case 0: 
 								log.info("Radio Access Technology: GSM (2G)");
