@@ -822,10 +822,9 @@ public class ATresponder extends Thread {
 							} else if (value >= 20 && value <= 31) {
 								log.info("Signal strength: " + value + "/19-31/31 [####]");
 							}
-						} else if (rx.toUpperCase().contentEquals("+CME ERROR: SIM PIN required")) {
+						} else if (rx.toUpperCase().contentEquals("+CME ERROR: SIM PIN REQUIRED")) {
 							log.error("Please check if SIM is correctly inserted AND there is no SIM PIN active");
 							return false;
-							
 						} else if (rx.toUpperCase().trim().contains(compareStr)) {		
 							return true; // Got the expected response
 						} 
