@@ -824,7 +824,7 @@ public class ATresponder extends Thread {
 								log.info("Signal strength: " + value + "/19-31/31 [####]");
 							}
 						} else if (rx.toUpperCase().contentEquals("+CME ERROR: SIM PIN REQUIRED")) {
-							log.error("Please check if SIM is correctly inserted AND there is no SIM PIN active");
+							log.error("Please check if SIM is correctly inserted AND the SIM PIN is disabled");
 							shutdownAndExit();
 							return false;
 						} else if (rx.toUpperCase().trim().contains(compareStr)) {		
