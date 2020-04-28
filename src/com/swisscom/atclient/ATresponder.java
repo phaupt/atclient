@@ -786,28 +786,28 @@ public class ATresponder extends Thread {
 							value = Integer.parseInt( Arrays.asList(rx.split(",")).get(3) ); 
 							switch (value) {
 							case 0: 
-								log.info("Radio Access Technology: GSM (2G)");
+								log.info("RADIOT: GSM (2G)");
 								break;
 							case 1: 
-								log.info("Radio Access Technology: GSM Compact (2G)");
+								log.info("RADIOT: GSM Compact (2G)");
 								break;
 							case 2: 
-								log.info("Radio Access Technology: UTRAN (3G)");
+								log.info("RADIOT: UTRAN (3G)");
 								break;
 							case 3: 
-								log.info("Radio Access Technology: GSM w/EGPRS (2G)");
+								log.info("RADIOT: GSM w/EGPRS (2G)");
 								break;
 							case 4: 
-								log.info("Radio Access Technology: UTRAN w/HSDPA (3G)");
+								log.info("RADIOT: UTRAN w/HSDPA (3G)");
 								break;
 							case 5: 
-								log.info("Radio Access Technology: UTRAN w/HSUPA (3G)");
+								log.info("RADIOT: UTRAN w/HSUPA (3G)");
 								break;
 							case 6: 
-								log.info("Radio Access Technology: UTRAN w/HSDPA and HSUPA (3G)");
+								log.info("RADIOT: UTRAN w/HSDPA and HSUPA (3G)");
 								break;
 							case 7: 
-								log.info("Radio Access Technology: E-UTRAN = (4G/LTE)");
+								log.info("RADIOT: E-UTRAN (4G/LTE)");
 								break;
 							default:
 								break;
@@ -815,13 +815,13 @@ public class ATresponder extends Thread {
 						} else if (rx.toUpperCase().startsWith("+CSQ: ")) {
 							value = Integer.parseInt( rx.substring(6, rx.indexOf(",")) ); // +CSQ: 14,99
 							if (value <= 9) {
-								log.info("Signal strength: " + value + "/1-9/31 [#---]");
+								log.info("SIGNAL: " + value + "/1-9/31 [#---]");
 							} else if (value >= 10 && value <= 14) {
-								log.info("Signal strength: " + value + "/10-4/31 [##--]");
+								log.info("SIGNAL: " + value + "/10-4/31 [##--]");
 							} else if (value >= 15 && value <= 19) {
-								log.info("Signal strength: " + value + "/15-19/31 [###-]"); 
+								log.info("SIGNAL: " + value + "/15-19/31 [###-]"); 
 							} else if (value >= 20 && value <= 31) {
-								log.info("Signal strength: " + value + "/19-31/31 [####]");
+								log.info("SIGNAL: " + value + "/19-31/31 [####]");
 							}
 						} else if (rx.toUpperCase().contentEquals("+CME ERROR: SIM PIN REQUIRED")) {
 							log.error("Please check if SIM is correctly inserted AND the SIM PIN is disabled");
