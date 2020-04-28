@@ -480,7 +480,7 @@ public class ATresponder extends Thread {
 						case 19: // ^SSTR: 3,19
 							if (ackCmdRequired) {
 								// SEND MESSAGE
-								log.info("STK 19: SEND MESSAGE");
+								log.info("STK019: SEND MESSAGE");
 								send("at^sstgi=" + value); // GetInfos
 								send("at^sstr=" + value + ",0"); // Confirm
 							}
@@ -489,7 +489,7 @@ public class ATresponder extends Thread {
 						case 32: // ^SSTR: 3,32
 							if (ackCmdRequired) {
 								// PLAY TONE
-								log.info("STK 32: PLAY TONE");
+								log.info("STK032: PLAY TONE");
 								send("at^sstgi=" + value); // GetInfos
 								send("at^sstr=" + value + ",0"); // Confirm
 							}
@@ -498,7 +498,7 @@ public class ATresponder extends Thread {
 						case 33: // ^SSTR: 3,33
 							if (ackCmdRequired) {
 								// DISPLAY TEXT
-								log.info("STK 33: DISPLAY TEXT");
+								log.info("STK033: DISPLAY TEXT");
 								send("at^sstgi=" + value); // GetInfos
 								getMeTextAscii(rx); // may set the flag such as CANCEL
 								code = "0"; // OK
@@ -522,7 +522,7 @@ public class ATresponder extends Thread {
 						case 35: // ^SSTR: 3,35
 							if (ackCmdRequired) {
 								// GET INPUT
-								log.info("STK 35: GET INPUT");
+								log.info("STK035: GET INPUT");
 								send("at^sstgi=" + value); // GetInfos
 								getMeTextAscii(rx); // may set the flag such as CANCEL						
 								code = "0,," + validPIN; // OK
@@ -553,7 +553,7 @@ public class ATresponder extends Thread {
 						case 37: // ^SSTR: 3,37
 							if (ackCmdRequired) {
 								// SET UP MENU
-								log.info("STK 37: SET UP MENU");
+								log.info("STK037: SET UP MENU");
 								send("at^sstgi=" + value, "SSTGI"); // GetInfos
 								send("at^sstr=" + value + ",0"); // Confirm
 							}
@@ -569,19 +569,19 @@ public class ATresponder extends Thread {
 						switch (value) {
 						case 19:
 							// SEND MESSAGE
-							log.info("STK 19: SEND MESSAGE");
+							log.info("STK019: SEND MESSAGE");
 							send("at^sstgi=" + value); // GetInfos		
 							send("at^sstr=" + value + ",0"); // Confirm
 							break;
 						case 32:
 							// PLAY TONE
-							log.info("STK 32: PLAY TONE");
+							log.info("STK032: PLAY TONE");
 							send("at^sstgi=32");
 							send("at^sstr=32,0"); // TerminalResponse=0 (OK)
 							break;
 						case 33:
 							// DISPLAY TEXT
-							log.info("STK 33: DISPLAY TEXT");
+							log.info("STK033: DISPLAY TEXT");
 							send("at^sstgi=33");
 							getMeTextAscii(rx); // may set the flag such as CANCEL
 							code = "0"; // OK
@@ -602,7 +602,7 @@ public class ATresponder extends Thread {
 							break;
 						case 35:
 							// GET INPUT (Input=123456)
-							log.info("STK 35: GET INPUT");
+							log.info("STK035: GET INPUT");
 							send("at^sstgi=35");
 							getMeTextAscii(rx); // may set the flag such as CANCEL							
 							code = "0,," + validPIN; // OK
@@ -631,17 +631,17 @@ public class ATresponder extends Thread {
 							break;
 						case 36:
 							// SELECT ITEM
-							log.info("STK 36: SELECT ITEM");
+							log.info("STK036: SELECT ITEM");
 							send("at^sstgi=36"); // GetInformation
 							break;
 						case 37:
 							// SET UP MENU
-							log.info("STK 37: SET UP MENU");
+							log.info("STK037: SET UP MENU");
 							send("at^sstgi=37"); // Get Information
 							send("at^sstr=37,0"); // Remote-SAT Response
 							break;
 						case 254:
-							log.info("STK 254: SIM Applet returns to main menu");
+							log.info("STK254: SIM Applet returns to main menu");
 							
 							// STK Process completed. Let's do some regular checks:
 							send("AT+COPS?"); // Provider + access technology
