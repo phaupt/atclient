@@ -850,7 +850,7 @@ public class ATresponder extends Thread {
 
 			rsp = rsp.substring(rsp.indexOf(",\"") + 2, rsp.indexOf("\",", rsp.indexOf(",\"") + 2));
 			rsp = new String(hexToByte(rsp), "UTF-16");
-			log.info("SHOWTEXT = \"" + rsp + "\"");
+			log.info("UI-TXT: \'" + rsp + "\'");
 
 			// Check if UI Text contains specific keywords
 			if (rsp.indexOf("CANCEL") != -1) {
