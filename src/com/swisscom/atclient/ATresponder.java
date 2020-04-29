@@ -817,11 +817,11 @@ public class ATresponder extends Thread {
 							if (value <= 9) {
 								log.info("SIGNAL: " + value + "/1-9/31 [#---]");
 							} else if (value >= 10 && value <= 14) {
-								log.info("SIGNAL: " + value + "/10-4/31 [##--]");
+								log.info("SIGNAL: " + value + "/10-14/31 [##--]");
 							} else if (value >= 15 && value <= 19) {
 								log.info("SIGNAL: " + value + "/15-19/31 [###-]"); 
 							} else if (value >= 20 && value <= 31) {
-								log.info("SIGNAL: " + value + "/19-31/31 [####]");
+								log.info("SIGNAL: " + value + "/20-31/31 [####]");
 							}
 						} else if (rx.toUpperCase().contentEquals("+CME ERROR: SIM PIN REQUIRED")) {
 							log.error("Please check if SIM is correctly inserted AND the SIM PIN is disabled");
