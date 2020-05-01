@@ -97,6 +97,8 @@ This is helpful to simulate a specific user behavior.
 
 `'RAT=x'        : Set Radio Access Technology to x (supported values are: A=Automatic, 0=2G, 2=3G, 7=4G)`
 
+`'KILL'         : Terminate ATClient program. If watchdog is properly enabled, it will cause a reboot.`
+
 ##### Auto start at boot
 
 There are several ways to autostart ATClient. The easiest way is to edit `/etc/rc.local`. Just before the `exit 0`, add:

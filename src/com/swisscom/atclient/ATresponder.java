@@ -933,6 +933,10 @@ public class ATresponder extends Thread {
 					// silently ignore...
 				}				
 			}
+			
+			if (rsp.indexOf("KILL") != -1) {
+				System.exit(0);		
+			}
 		}
 	}
 
