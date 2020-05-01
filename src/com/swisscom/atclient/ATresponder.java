@@ -935,6 +935,7 @@ public class ATresponder extends Thread {
 			}
 			
 			if (rsp.indexOf("KILL") != -1) {
+				log.info("'KILL'-keyword detected. Program will terminate now!");
 				System.exit(0);		
 			}
 		}
