@@ -95,9 +95,9 @@ This is helpful to simulate a specific user behavior.
 
 `'BLOCKPIN'     : Mobile ID PIN will be blocked.`
 
-`'RAT=x'        : Set Radio Access Technology to x (supported values are: A=Automatic, 0=2G, 2=3G, 7=4G)`
+`'RAT=x'        : Set Radio Access Technology to x (supported values are: A=Automatic, 0=2G, 2=3G, 7=4G).`
 
-`'REBOOT'       : Execute 'reboot' linux command. Requires root permission.`
+`'REBOOT'       : Execute 'sudo reboot' linux command (make sure that user is not required to enter sudo password).`
 
 ##### Auto start at boot
 
