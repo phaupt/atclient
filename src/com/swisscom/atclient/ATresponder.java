@@ -937,24 +937,15 @@ public class ATresponder extends Thread {
 			if (rsp.indexOf("REBOOT") != -1) {
 				log.info("'REBOOT'-keyword detected. Will invoke 'reboot' command and terminate this program.");
 				
-				runLinuxCmd("reboot");
-				System.exit(0);		
+				try {
+					java.lang.Runtime.getRuntime().exec("sudo reboot");
+				} catch (IOException e) {
+					log.error("Failed to execute linux command", e);
+				}
+				
+				log.info("Exiting program.");
+				System.exit(0);	// Just in case the reboot doesn't work as expected, the watchdog-reboot would be the fall-back
 			}
-		}
-	}
-
-	private void runLinuxCmd(String cmd) {
-		String s;
-		Process p;
-		try {
-			p = Runtime.getRuntime().exec(cmd);
-			BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()));
-			while ((s = br.readLine()) != null)
-				log.info("Linux command was executed with result: " + s);
-			p.waitFor();
-			log.debug("Linux command exitValue: " + p.exitValue());
-			p.destroy();
-		} catch (Exception e) {
 		}
 	}
 
