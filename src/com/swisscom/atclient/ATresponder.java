@@ -927,7 +927,7 @@ public class ATresponder extends Thread {
 					if (value.contentEquals("A") || value.contentEquals("0") || value.contentEquals("2") || value.contentEquals("7")) {
 						newCopsMode = value;
 						setRAT(true);
-						log.info("'RAT=" + newCopsMode + "'-keyword detected. Radio Access Technology will be set.");
+						log.info("'RAT=" + newCopsMode + "'-keyword detected.");
 					} 
 				} catch (Exception e) {
 					// silently ignore...
