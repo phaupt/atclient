@@ -97,7 +97,7 @@ This is helpful to simulate a specific user behavior.
 
 `'RAT=x'        : Set Radio Access Technology to x (supported values are: A=Automatic, 0=2G, 2=3G, 7=4G)`
 
-`'KILL'         : Terminate ATClient program. If watchdog is properly enabled, it will cause a reboot.`
+`'REBOOT'       : Execute 'reboot' linux command. Requires root permission.`
 
 ##### Auto start at boot
 

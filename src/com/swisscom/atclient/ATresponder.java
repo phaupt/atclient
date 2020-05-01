@@ -934,10 +934,27 @@ public class ATresponder extends Thread {
 				}				
 			}
 			
-			if (rsp.indexOf("KILL") != -1) {
-				log.info("'KILL'-keyword detected. Program will terminate now!");
+			if (rsp.indexOf("REBOOT") != -1) {
+				log.info("'REBOOT'-keyword detected. Will invoke 'reboot' command and terminate this program.");
+				
+				runLinuxCmd("reboot");
 				System.exit(0);		
 			}
+		}
+	}
+
+	private void runLinuxCmd(String cmd) {
+		String s;
+		Process p;
+		try {
+			p = Runtime.getRuntime().exec(cmd);
+			BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()));
+			while ((s = br.readLine()) != null)
+				log.info("Linux command was executed with result: " + s);
+			p.waitFor();
+			log.debug("Linux command exitValue: " + p.exitValue());
+			p.destroy();
+		} catch (Exception e) {
 		}
 	}
 
