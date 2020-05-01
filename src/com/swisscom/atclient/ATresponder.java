@@ -385,10 +385,10 @@ public class ATresponder extends Thread {
 				// 4 UTRAN w/HSDPA (3G)
 				// 6 UTRAN w/HSDPA and HSUPA (3G)
 				// 7 E-UTRAN (4G/LTE)
-				send("AT+COPS=0,2,00000," + actualCopsMode, "OK", 30000, true); // increase the time waiting for "OK" as it usually takes a few seconds to switch the mode
+				send("AT+COPS=0,2,00000," + actualCopsMode, "OK", 60000, true); // increase the time waiting for "OK" as it usually takes a few seconds to switch the mode
 			} else if (actualCopsMode.contentEquals("A")) {
 				// Set automatic mode
-				send("AT+COPS=0", "OK", 30000, true);
+				send("AT+COPS=0", "OK", 60000, true);
 			}
 			
 			send("AT+COPS?"); // Provider + access technology
@@ -673,6 +673,8 @@ public class ATresponder extends Thread {
 				// RAT needs to be changed
 				
 				if (!newCopsMode.contentEquals("A")) {
+					log.info("RADIOT: Force new Radio Access Technology");
+					
 					// Force the mobile terminal to select and register a specific network
 					// AT+COPS=<mode>[, <format>[, <opName>][, <rat>]]
 					// mode 0: Automatic mode; <opName> field is ignored
@@ -683,17 +685,16 @@ public class ATresponder extends Thread {
 					// 4 UTRAN w/HSDPA (3G)
 					// 6 UTRAN w/HSDPA and HSUPA (3G)
 					// 7 E-UTRAN (4G/LTE)
-					send("AT+COPS=0,2,00000," + newCopsMode, "OK", 30000, true); // increase the time waiting for "OK" as it usually takes a few seconds to switch the mode
+					send("AT+COPS=0,2,00000," + newCopsMode, "OK", 60000, true); // increase the time waiting for "OK" as it usually takes a few seconds to switch the mode
 					actualCopsMode = newCopsMode;
-					
-					log.info("RADIOT: Force new Radio Access Technology");
-					
+	
 				} else if (newCopsMode.contentEquals("A")) {
+					log.info("RADIOT: Set Radio Access Technology to automatic mode");
+					
 					// Set automatic mode
-					send("AT+COPS=0", "OK", 30000, true);
+					send("AT+COPS=0", "OK", 60000, true);
 					actualCopsMode = newCopsMode; 
 					
-					log.info("RADIOT: Set Radio Access Technology to automatic mode");
 				}
 				
 			}
