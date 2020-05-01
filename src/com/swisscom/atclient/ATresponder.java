@@ -50,7 +50,9 @@ public class ATresponder extends Thread {
 	private volatile static boolean cancel;
 	private volatile static boolean stk_timeout;
 	private volatile static boolean block_pin;
+	private volatile static boolean rat;
 	private volatile static boolean user_delay;
+	
 	private volatile static int user_delay_millis = 0;
 
 	private String atclientCfg = null;
@@ -66,7 +68,8 @@ public class ATresponder extends Thread {
 	
 	private int atTimeout;
 	
-	private String copsMode;
+	private String actualCopsMode;
+	private String newCopsMode;
 	
 	private byte opMode; // Switch: 1=ER, 2=AR
 	
@@ -127,10 +130,10 @@ public class ATresponder extends Thread {
 			log.info("Property atclient.atcommand.heartbeat set to " + heartBeatMillis);
 			
 			if (prop.getProperty("cops.mode").trim().length() == 1) {
-				copsMode = prop.getProperty("cops.mode").trim();
-				log.info("Property cops.mode set to " + copsMode);
+				actualCopsMode = prop.getProperty("cops.mode").trim();
+				log.info("Property cops.mode set to " + actualCopsMode);
 			} else {
-				copsMode = null;
+				actualCopsMode = "A";
 				log.info("Property cops.mode set to automatic");
 			}
 			
@@ -371,7 +374,7 @@ public class ATresponder extends Thread {
 			
 			send("AT+CREG?"); // Network registration
 			
-			if (copsMode != null && copsMode.length() == 1) {
+			if (!actualCopsMode.contentEquals("A") && actualCopsMode.length() == 1) {
 				// Force the mobile terminal to select and register a specific network
 				// AT+COPS=<mode>[, <format>[, <opName>][, <rat>]]
 				// mode 0: Automatic mode; <opName> field is ignored
@@ -382,14 +385,13 @@ public class ATresponder extends Thread {
 				// 4 UTRAN w/HSDPA (3G)
 				// 6 UTRAN w/HSDPA and HSUPA (3G)
 				// 7 E-UTRAN (4G/LTE)
-				send("AT+COPS=0,2,22801," + copsMode, "OK", 30000, true); // increased timeout for this call
-			} else {
+				send("AT+COPS=0,2,00000," + actualCopsMode, "OK", 30000, true); // increase the time waiting for "OK" as it usually takes a few seconds to switch the mode
+			} else if (actualCopsMode.contentEquals("A")) {
 				// Set automatic mode
 				send("AT+COPS=0", "OK", 30000, true);
 			}
 			
 			send("AT+COPS?"); // Provider + access technology
-
 			send("AT+CSQ"); // Signal Strength
 							
 			// Start listening...
@@ -644,8 +646,7 @@ public class ATresponder extends Thread {
 							log.info("STK254: SIM Applet returns to main menu");
 							
 							// STK Process completed. Let's do some regular checks:
-							send("AT+COPS?"); // Provider + access technology
-							send("AT+CSQ"); // Signal Strength
+							setRAT();
 							
 							break;
 						default:
@@ -659,6 +660,48 @@ public class ATresponder extends Thread {
 			} 
 		}
 		
+	}
+
+	private void setRAT() {
+		if (rat) {
+			setRAT(false); // reset flag
+			
+			// Values can be: A=Automatic, 0=2G, 2=3G, 7=4G
+			// Compare 'actualCopsMode' and 'newCopsMode'
+			
+			if (!actualCopsMode.contentEquals(newCopsMode)) {
+				// RAT needs to be changed
+				
+				if (!newCopsMode.contentEquals("A")) {
+					// Force the mobile terminal to select and register a specific network
+					// AT+COPS=<mode>[, <format>[, <opName>][, <rat>]]
+					// mode 0: Automatic mode; <opName> field is ignored
+					// rat:
+					// 0 GSM (2G)
+					// 2 UTRAN (3G)
+					// 3 GSM w/EGPRS (2G)
+					// 4 UTRAN w/HSDPA (3G)
+					// 6 UTRAN w/HSDPA and HSUPA (3G)
+					// 7 E-UTRAN (4G/LTE)
+					send("AT+COPS=0,2,00000," + newCopsMode, "OK", 30000, true); // increase the time waiting for "OK" as it usually takes a few seconds to switch the mode
+					actualCopsMode = newCopsMode;
+					
+					log.info("RADIOT: Force new Radio Access Technology");
+					
+				} else if (newCopsMode.contentEquals("A")) {
+					// Set automatic mode
+					send("AT+COPS=0", "OK", 30000, true);
+					actualCopsMode = newCopsMode; 
+					
+					log.info("RADIOT: Set Radio Access Technology to automatic mode");
+				}
+				
+			}
+			
+		} 
+		
+		send("AT+COPS?"); // Provider + access technology
+		send("AT+CSQ"); // Signal Strength
 	}
 	
 	public boolean send(String cmd, long timeout, boolean sstr) {
@@ -876,6 +919,19 @@ public class ATresponder extends Thread {
 				}				
 			}
 			
+			if (rsp.indexOf("RAT=") != -1) {
+				try {
+					String value = rsp.substring(rsp.indexOf("RAT=") + 4, rsp.indexOf("RAT=") + 5);
+					// A=Automatic, 0=2G, 2=3G, 7=4G
+					if (value.contentEquals("A") || value.contentEquals("0") || value.contentEquals("2") || value.contentEquals("7")) {
+						newCopsMode = value;
+						setRAT(true);
+						log.info("'RAT=" + newCopsMode + "'-keyword detected. Radio Access Technology will be set.");
+					} 
+				} catch (Exception e) {
+					// silently ignore...
+				}				
+			}
 		}
 	}
 
@@ -933,6 +989,10 @@ public class ATresponder extends Thread {
 	
 	public static synchronized void setBlockedPIN(boolean flag){
 		block_pin = flag;
+	}
+	
+	public static synchronized void setRAT(boolean flag){
+		rat = flag;
 	}
 	
 	public static synchronized void setUserDelay(boolean flag){

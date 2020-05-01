@@ -95,6 +95,7 @@ This is helpful to simulate a specific user behavior.
 
 `'BLOCKPIN'     : Mobile ID PIN will be blocked.`
 
+`'RAT=x'        : Set Radio Access Technology to x (supported values are: A=Automatic, 0=2G, 2=3G, 7=4G)`
 
 ##### Auto start at boot
 
