@@ -348,10 +348,13 @@ public class ATresponder extends Thread {
 			
 			// CONFIGURATION
 			
-			if (!send("AT+CNUM")) // MSISDN; update thread name
+			if (!send("AT+CPIN?")) // Check if SIM is correctly inserted and SIM PIN is ready
 				return;
 			
-			send("ATE1"); // Echo Mode On(1)/Off(0)
+			send("AT+CNUM"); // MSISDN; update thread name
+						
+			if (!send("ATE1")) // Echo Mode On(1)/Off(0)
+				return;
 			
 			send("AT+CMEE=2"); // Enable reporting of me errors (1 = result code with numeric values; 2 = result code with verbose string values)
 			
@@ -867,8 +870,12 @@ public class ATresponder extends Thread {
 							} else if (value >= 20 && value <= 31) {
 								log.info("SIGNAL: " + value + "/20-31/31 [####]");
 							}
-						} else if (rx.toUpperCase().contentEquals("+CME ERROR: SIM PIN REQUIRED")) {
-							log.error("Please check if SIM is correctly inserted AND the SIM PIN is disabled");
+						} else if (rx.toUpperCase().startsWith("+CPIN: SIM")) {
+							log.error("SIM requires PIN authentication. Please disable SIM PIN.");
+							shutdownAndExit();
+							return false;
+						} else if (rx.toUpperCase().startsWith("+CME ERROR: SIM")) {
+							log.error("Please check if SIM is properly inserted.");
 							shutdownAndExit();
 							return false;
 						} else if (rx.toUpperCase().trim().contains(compareStr)) {		
