@@ -186,14 +186,17 @@ public class ATresponder extends Thread {
 		log.info("Application started...");
 		attachShutDownHook();
 		
+		boolean portFound = false;
 		try {
 			if (serPortStr == null) {
-				lookupSerialPort();
+				portFound = lookupSerialPort();
 			} else {
-				openPort();
+				portFound = openPort();
 			}
-			initAtCmd();
-			listenForRx(); // program will stay in the while loop inside this method...
+			if (portFound) {
+				initAtCmd();
+				listenForRx(); // program will stay in the while loop inside this method...
+			}
 		} catch (UnsupportedEncodingException e) {
 			e.printStackTrace();
 		} catch (IOException e) {
@@ -239,7 +242,7 @@ public class ATresponder extends Thread {
 		isAlive = false; // will exit the while loop and terminate the application	
 	}
 
-	private void lookupSerialPort() throws UnsupportedEncodingException, IOException, InterruptedException {
+	private boolean lookupSerialPort() throws UnsupportedEncodingException, IOException, InterruptedException {
 		log.info("Start serial port initialization.");
 		
 		SerialPort[] ports; 
@@ -289,6 +292,7 @@ public class ATresponder extends Thread {
 			}	
 		}	
 		Thread.sleep(2000);
+		return true;
 	}
 	
 	private boolean openPort() throws IOException {
