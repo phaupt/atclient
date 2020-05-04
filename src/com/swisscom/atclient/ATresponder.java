@@ -332,16 +332,27 @@ public class ATresponder extends Thread {
 
 	private void initAtCmd() throws InterruptedException {
 		
-		if (opMode == 1) {
-			// Switch to Explicit Response (ER) and restart device
-			log.info("Switch to Explicit Response (ER)");
+		if (opMode == 1) {	
+			log.info("Switch to Explicit Response (ER) and enable modem usage");
 			send("AT^SSTA=1,1"); // Explicit Response Mode UCS2
+			
+			send("ATI1");
+			send("AT^SCFG?");
+			
+			send("AT^SSRVSET?"); // list possible settings
+			
+			send("AT^SSRVSET=\"actSrvSet\",2"); // set service set number 2 (enables modem usage)
+			
+			send("AT^SSRVSET=\"current\""); // check current setting
+			
 			shutdownAndExit();
 			return; // exit
 		} else if (opMode == 2) {
-			// Switch to Automatic Response (AR) and restart device
-			log.info("Switch to Automatic Response (AR)");
+			log.info("Switch to Automatic Response (AR) and reset AT command settings to factory default values");
 			send("AT^SSTA=0"); // Automatic Response Mode
+			
+			send("AT&F[0]"); // Reset AT Command Settings to Factory Default Values
+			
 			shutdownAndExit();
 			return; // exit
 		} else {
@@ -350,31 +361,21 @@ public class ATresponder extends Thread {
 			
 			if (!send("AT+CPIN?")) // Check if SIM is correctly inserted and SIM PIN is ready
 				return;
-			
+						
 			send("AT+CNUM"); // MSISDN; update thread name
 						
 			if (!send("ATE1")) // Echo Mode On(1)/Off(0)
 				return;
 			
 			send("AT+CMEE=2"); // Enable reporting of me errors (1 = result code with numeric values; 2 = result code with verbose string values)
-			
-			send("AT+CMGF=1"); // Set SMS text mode
-			
+			send("AT+CMGF=1"); // Set SMS text mode			
 			send("AT+CNMI=1,1"); // Activate the display of a URC on every received SMS
 			
-			
-			// OPTIONAL INFO:
-
 			send("AT+CGMI"); // Module manufacturers
-			
-			send("AT+CGMM"); // Module model
-			
-			send("AT+CGSN"); // Module serial number / IMEI
-			
-			send("AT+CIMI"); // IMSI
-			
-			send("AT+CPIN?"); // SIM Card status
-			
+			send("AT+CGMM"); // Module model			
+			send("AT+CGSN"); // Module serial number / IMEI			
+			send("AT+CIMI"); // IMSI		
+			send("AT+CPIN?"); // SIM Card status			
 			send("AT+CREG?"); // Network registration
 			
 			if (!actualCopsMode.contentEquals("A") && actualCopsMode.length() == 1) {
