@@ -17,6 +17,7 @@ Recommended setup:
 * [Mobile ID SIM card](https://mobileid.ch)
 * [Raspberry PI 4](https://www.raspberrypi.org/products/raspberry-pi-4-model-b)
 * [PLS8-E LTE terminal](http://electronicshcp.com/product/hit-u4-lte)
+* [RPi Relay Board](https://www.waveshare.com/wiki/RPi_Relay_Board)
 
 ### Wireless terminal
 
@@ -57,8 +58,8 @@ pi@raspberypi:~ $ /usr/bin/java -Dconfig.file=/home/mid/atclient/atclient.cfg -D
 Usage: ATClient [<MODE>]
 
 <MODE>  Switch operation mode:
-        ER      Switch to Explicit Response (ER) and shutdown.
-        AR      Switch to Automatic Response (AR) and shutdown.
+        ER      Switch to Explicit Response (ER) and enable modem usage.
+        AR      Switch to Automatic Response (AR) and reset AT command settings to factory default values.
 
 If no <MODE> argument found: Run user emulation with automatic serial port detection (ER operation mode only)
 
