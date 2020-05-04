@@ -29,7 +29,7 @@
 	
 	<Loggers>
         <!-- Set log level. Order is ALL, TRACE, DEBUG, INFO, WARN, ERROR, FATAL, OFF -->
-		<Root level="debug" additivity="false">
+		<Root level="INFO" additivity="false">
 			<!-- <AppenderRef ref="console"/> -->
 			<AppenderRef ref="reporter"/>
 			<!-- <AppenderRef ref="syslogsocket"/> -->
