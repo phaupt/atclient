@@ -72,7 +72,7 @@ If no <MODE> argument found: Run user emulation with automatic serial port detec
 
 As a first step, you must switch the terminal from factory default Automatic Response (AR) mode to Explicit Response (ER) mode.
 
-`pi@raspberypi:~ $ /usr/bin/java -Dconfig.file=/home/mid/atclient/atclient.cfg -Dlog.file=/home/mid/atclient/atclient.log -Dlog4j.configurationFile=/home/mid/atclient/log4j2.xml -cp "/home/mid/atclient/class:/home/mid/atclient/lib/*" com.swisscom.atclient.ATClient ER`
+`pi@raspberypi:~ $ /usr/bin/java -Dserial.port=/dev/ttyACM1 -Dconfig.file=/home/mid/atclient/atclient.cfg -Dlog.file=/home/mid/atclient/atclient.log -Dlog4j.configurationFile=/home/mid/atclient/log4j2.xml -cp "/home/mid/atclient/class:/home/mid/atclient/lib/*" com.swisscom.atclient.ATClient ER`
 
 ##### User Emulation
 
