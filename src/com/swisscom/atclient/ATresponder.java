@@ -238,7 +238,8 @@ public class ATresponder extends Thread {
 	
 	public void shutdownAndExit(){
 		log.info("Send SHUTDOWN Command and exit application");
-		send("AT^SMSO"); // Power-off the terminal
+		send("AT^CFUN=1,1"); // force UE restart
+		//send("AT^SMSO"); // Power-off the terminal
 		isAlive = false; // will exit the while loop and terminate the application	
 	}
 
@@ -338,24 +339,29 @@ public class ATresponder extends Thread {
 		
 		if (opMode == 1) {	
 			log.info("Switch to Explicit Response (ER) and enable modem usage");
-			send("AT^SSTA=1,1"); // Explicit Response Mode UCS2
+			send("AT^SSTA=1,1"); // enable Explicit Response (ER) Mode with alphabet type UCS2
 			
-			send("ATI1");
-			send("AT^SCFG?");
+			send("ATI1"); // display product identification information
 			
-			send("AT^SSRVSET?"); // list possible settings
+			send("AT^SCFG?"); // Extended Configuration Settings: read command returns a list of all supported parameters and their current values.
 			
-			send("AT^SSRVSET=\"actSrvSet\",2"); // set service set number 2 (enables modem usage)
+			send("AT^SSRVSET?"); // list possible settings for the Service Interface Configuration
+			send("AT^SSRVSET=\"current\""); // check currently active settings
 			
-			send("AT^SSRVSET=\"current\""); // check current setting
+			// Set 1: MDM=ASC0,MUX0 | APP=USB1,MUX1 | NMEA=USB2,MUX2 | RSA=USB3,MUX3
+			// Set 2: MDM=USB0,MUX0 | APP=USB1,MUX1 | NMEA=USB2,MUX2 | RSA=USB3,MUX3
+			// Set 3: MDM=ASC0,MUX0 | APP=NONE,MUX1 | NMEA=NONE,MUX2 | RSA=NONE,MUX3
+			// ASC0 = UART (async serial interface)
+			// MDM = Modem, APP = Application
+			send("AT^SSRVSET=\"actSrvSet\",2"); // set service set number 2 (USB only; enables modem usage). activated after next UE restart only.
 			
 			shutdownAndExit();
 			return; // exit
 		} else if (opMode == 2) {
 			log.info("Switch to Automatic Response (AR) and reset AT command settings to factory default values");
-			send("AT^SSTA=0"); // Automatic Response Mode
+			send("AT^SSTA=0"); // enable Automatic Response (AR) Mode
 			
-			send("AT&F[0]"); // Reset AT Command Settings to Factory Default Values
+			send("AT&F[0]"); // reset AT Command Settings to Factory Default Values
 			
 			shutdownAndExit();
 			return; // exit
@@ -374,6 +380,10 @@ public class ATresponder extends Thread {
 			send("AT+CMEE=2"); // Enable reporting of me errors (1 = result code with numeric values; 2 = result code with verbose string values)
 			send("AT+CMGF=1"); // Set SMS text mode			
 			send("AT+CNMI=1,1"); // Activate the display of a URC on every received SMS
+			
+			send("ATI1"); // display product identification information
+			send("AT^SCFG?"); // Extended Configuration Settings: read command returns a list of all supported parameters and their current values.
+			send("AT^SSRVSET=\"current\""); // check currently active settings			
 			
 			send("AT+CGMI"); // Module manufacturers
 			send("AT+CGMM"); // Module model			
