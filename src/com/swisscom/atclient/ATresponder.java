@@ -238,7 +238,7 @@ public class ATresponder extends Thread {
 	
 	public void shutdownAndExit(){
 		log.info("Send SHUTDOWN Command and exit application");
-		send("AT^CFUN=1,1"); // force UE restart
+		send("AT+CFUN=1,1"); // force UE restart
 		//send("AT^SMSO"); // Power-off the terminal
 		isAlive = false; // will exit the while loop and terminate the application	
 	}
