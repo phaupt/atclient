@@ -6,6 +6,8 @@ import java.lang.management.ManagementFactory;
 import java.net.URL;
 import java.net.URLConnection;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -253,9 +255,14 @@ public class ATresponder extends Thread {
 		
 		while (!portSuccess) {
 			ports = SerialPort.getCommPorts();
+			
+			// reverse the list to have the matching port first
+			List<SerialPort> list = Arrays.asList(ports);
+		    Collections.reverse(list);
+			
 			if (opMode == 0) {
 				// automatic serial port detection!
-				for (SerialPort port : ports) {
+				for (SerialPort port : list) {
 					
 					portDesc = port.getDescriptivePortName();
 					
