@@ -36,7 +36,7 @@ port.parity   = 0
 port.communication.timeout = 5000
 
 # send AT test command every x milliseconds of inactivity.
-atclient.atcommand.heartbeat = 300000
+atclient.atcommand.heartbeat = 180000
 
 ############################################################################################
 # Radio Access Technology
