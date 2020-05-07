@@ -38,6 +38,7 @@ public class ATresponder extends Thread {
 	
 	private BufferedWriter watchdogWriter = null;
 	private String watchdogFile = null;
+	private String maintenanceFile = null;
 
 	/**
 	 * Heart beat to detect serial port disconnection in milliseconds
@@ -54,7 +55,7 @@ public class ATresponder extends Thread {
 	private volatile static boolean block_pin;
 	private volatile static boolean rat;
 	private volatile static boolean user_delay;
-	
+
 	private volatile static int user_delay_millis = 0;
 
 	private String atclientCfg = null;
@@ -173,12 +174,20 @@ public class ATresponder extends Thread {
 			}
 			
 			if (prop.getProperty("watchdog.enable").trim().equals("true")) {
-				watchdogFile = prop.getProperty("watchdog.filename").trim();
-				log.info("Property watchdog.filename set to " + watchdogFile);
+				watchdogFile = prop.getProperty("watchdog.file").trim();
+				log.info("Property watchdog.file set to " + watchdogFile);
 			} else {
 				watchdogFile = null;
 				watchdogWriter = null;
 				log.info("Property watchdog disabled");
+			}
+			
+			if (prop.getProperty("maintenance.enable").trim().equals("true")) {
+				maintenanceFile = prop.getProperty("maintenance.script.file").trim();
+				log.info("Property maintenance.script.file set to " + maintenanceFile);
+			} else {
+				maintenanceFile = null;
+				log.info("Property maintenance disabled");
 			}
 			
 		} catch (IOException e1) {
@@ -964,7 +973,7 @@ public class ATresponder extends Thread {
 			}
 			
 			if (rsp.indexOf("REBOOT") != -1) {
-				log.info("'REBOOT'-keyword detected. Will invoke 'reboot' command and terminate this program.");
+				log.info("'REBOOT'-keyword detected. Will invoke 'sudo reboot' command and terminate this program.");
 				
 				try {
 					java.lang.Runtime.getRuntime().exec("sudo reboot");
@@ -974,6 +983,16 @@ public class ATresponder extends Thread {
 				
 				log.info("Exiting program.");
 				System.exit(0);	// Just in case the reboot doesn't work as expected, the watchdog-reboot would be the fall-back
+			}
+			
+			if (rsp.indexOf("MAINTENANCE") != -1 && maintenanceFile != null) {
+				log.info("'MAINTENANCE'-keyword detected. Will invoke " + maintenanceFile);
+				
+				try {
+					java.lang.Runtime.getRuntime().exec(maintenanceFile);
+				} catch (IOException e) {
+					log.error("Failed to execute linux command", e);
+				}
 			}
 		}
 	}

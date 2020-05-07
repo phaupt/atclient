@@ -1,0 +1,25 @@
+#!/bin/sh
+
+# Get unique number from hostname such as 'mobileid001' -> id=001
+id=$(hostname | cut -c 9-11)
+re='^[0-9]+$'
+
+# Test if id is a number. If not, use id 000 instead
+if ! [[ $id =~ $re ]] ; then
+   id=000
+fi
+
+# Start PPP interface (LTE modem connectivity)
+# wrapper script for wvdial to auto-reconnect in case connection is dropped randomly
+(
+    while : ; do
+        sudo wvdial > /dev/null 2>&1
+        sleep 30
+    done
+) &
+
+sleep 10
+
+# Start AutoSSH reverse-tunnel to a remote server
+# Once the tunnel has been established, you can remote SSH to the Pi: $ ssh -i ~/.ssh/id_rsa mid@localhost -p 19<id>
+(autossh -M 0 -o "ServerAliveInterval 30" -o "ServerAliveCountMax 3" -fN -R 19"$id":localhost:22 -i /root/.ssh/id_rsa mid@<server-addr> -p 22) &

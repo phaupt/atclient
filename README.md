@@ -82,7 +82,7 @@ Once your terminal is in Explicit Response (ER) mode you can run the ATClient pr
 
 ##### Keywords
 
-If a keyword (note: case sensitive) is found in the Mobile ID authentication message, the ATClient will invoke specific actions.
+If a keyword (case sensitive) is found in the Mobile ID authentication message, the ATClient will invoke specific actions.
 
 `'CANCEL'       : TerminalResponse '16' - Proactive SIM session terminated by user.`
 
@@ -94,7 +94,9 @@ If a keyword (note: case sensitive) is found in the Mobile ID authentication mes
 
 `'RAT=x'        : Set Radio Access Technology to x (supported values are: A=Automatic, 0=2G, 2=3G, 7=4G).`
 
-`'REBOOT'       : Execute 'sudo reboot' linux command (make sure that user is not required to enter sudo password).`
+`'REBOOT'       : Execute 'reboot' linux command. (ATClient must be run as root)`
+
+`'MAINTENANCE'  : Execute maintenance shell script. (ATClient must be run as root)`
 
 ##### Auto start at boot
 
