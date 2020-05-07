@@ -990,8 +990,10 @@ public class ATresponder extends Thread {
 
 				try {
 					ProcessBuilder pb = new ProcessBuilder(maintenanceFile);
-					pb.start();
-				} catch (IOException e) {
+					Process p = pb.start();
+			        p.waitFor();
+			        System.out.println("Script executed..");
+				} catch (IOException | InterruptedException e) {
 					log.error("Failed to execute linux command", e);
 				}
 			}
