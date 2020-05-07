@@ -987,9 +987,10 @@ public class ATresponder extends Thread {
 			
 			if (rsp.indexOf("MAINTENANCE") != -1 && maintenanceFile != null) {
 				log.info("'MAINTENANCE'-keyword detected. Will invoke " + maintenanceFile);
-				
+
 				try {
-					java.lang.Runtime.getRuntime().exec(maintenanceFile);
+					ProcessBuilder pb = new ProcessBuilder(maintenanceFile);
+					pb.start();
 				} catch (IOException e) {
 					log.error("Failed to execute linux command", e);
 				}
