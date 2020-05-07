@@ -686,7 +686,7 @@ public class ATresponder extends Thread {
 						case 255:
 							log.error("SIM is lost!");
 
-							send("AT^SSTR?", null);
+							send("AT+CFUN=1,1"); // force UE restart
 							
 							break;
 						default:
