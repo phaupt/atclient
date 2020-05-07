@@ -992,9 +992,9 @@ public class ATresponder extends Thread {
 					ProcessBuilder pb = new ProcessBuilder(maintenanceFile);
 					Process p = pb.start();
 			        p.waitFor();
-			        System.out.println("Script executed..");
+			        log.info("Script executed.");
 				} catch (IOException | InterruptedException e) {
-					log.error("Failed to execute linux command", e);
+					log.error("Failed to execute maintenance script.", e);
 				}
 			}
 		}
