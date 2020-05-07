@@ -683,6 +683,12 @@ public class ATresponder extends Thread {
 							setRAT();
 							
 							break;
+						case 255:
+							log.error("SIM is lost!");
+
+							send("AT^SSTR?", null);
+							
+							break;
 						default:
 							break;
 						}
