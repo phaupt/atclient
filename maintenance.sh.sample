@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # Get unique number from hostname such as 'mobileid001' -> id=001
 id=$(hostname | cut -c 9-11)
