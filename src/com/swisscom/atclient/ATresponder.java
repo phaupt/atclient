@@ -392,6 +392,8 @@ public class ATresponder extends Thread {
 			send("AT+CMGF=1"); // Set SMS text mode			
 			send("AT+CNMI=1,1"); // Activate the display of a URC on every received SMS
 			
+			send("AT+CMGD=0,4"); // delete all stored short messages
+			
 			send("ATI1"); // display product identification information
 			send("AT^SCFG?"); // Extended Configuration Settings: read command returns a list of all supported parameters and their current values.
 			send("AT^SSRVSET=\"current\""); // check currently active settings			
@@ -825,6 +827,7 @@ public class ATresponder extends Thread {
 							matcher = pattern.matcher(rx);
 						
 						if (smsTargetMsisdn != null && matcher != null && matcher.matches()) {
+							send("AT+CMGD=0,4"); // delete all stored
 							
 							// Text Short Message Keyword detected
 							log.info("Detected Text SMS with keyword: \"" + rx + "\"");
@@ -1082,9 +1085,7 @@ public class ATresponder extends Thread {
 				String authString = smsAuthName + ":" + smsAuthPassword;
 				byte[] authEncBytes = Base64.encodeBase64(authString.getBytes());
 				String authStringEnc = new String(authEncBytes);
-				
 				urlConnection.setRequestProperty("Authorization", "Basic " + authStringEnc);
-				log.debug("Basic Authentication used");
 			} 
 				
 			InputStream is = urlConnection.getInputStream();
