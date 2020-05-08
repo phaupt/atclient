@@ -385,7 +385,7 @@ public class ATresponder extends Thread {
 						
 			send("AT+CNUM"); // MSISDN; update thread name
 						
-			if (!send("ATE1")) // Echo Mode On(1)/Off(0)
+			if (!send("ATE0")) // Echo Mode On(1)/Off(0)
 				return;
 			
 			send("AT+CMEE=2"); // Enable reporting of me errors (1 = result code with numeric values; 2 = result code with verbose string values)
@@ -826,9 +826,7 @@ public class ATresponder extends Thread {
 						if (pattern != null)
 							matcher = pattern.matcher(rx);
 						
-						if (smsTargetMsisdn != null && matcher != null && matcher.matches()) {
-							send("AT+CMGD=0,4"); // delete all stored
-							
+						if (smsTargetMsisdn != null && matcher != null && matcher.matches()) {							
 							// Text Short Message Keyword detected
 							log.info("Detected Text SMS with keyword: \"" + rx + "\"");
 							log.info("Forward Text SMS to " + smsTargetMsisdn);
