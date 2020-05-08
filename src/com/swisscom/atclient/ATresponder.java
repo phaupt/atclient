@@ -3,6 +3,7 @@ package com.swisscom.atclient;
 import com.fazecast.jSerialComm.*;
 import java.io.*;
 import java.lang.management.ManagementFactory;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.util.Arrays;
@@ -190,8 +191,8 @@ public class ATresponder extends Thread {
 				log.info("Property maintenance disabled");
 			}
 			
-		} catch (IOException e1) {
-			e1.printStackTrace();
+		} catch (Exception e) {
+			log.error("Internal error", e);
 		}
 
 		log.info("Application started...");
@@ -208,12 +209,8 @@ public class ATresponder extends Thread {
 				initAtCmd();
 				listenForRx(); // program will stay in the while loop inside this method...
 			}
-		} catch (UnsupportedEncodingException e) {
-			e.printStackTrace();
-		} catch (IOException e) {
-			e.printStackTrace();
-		} catch (InterruptedException e) {
-			e.printStackTrace();
+		} catch (Exception e) {
+			log.error("Internal error", e);
 		}
 		
 		// The while loop has been normally terminated.
@@ -227,10 +224,8 @@ public class ATresponder extends Thread {
 	         fis = new FileInputStream(fileName);
 	         prop = new Properties();
 	         prop.load(fis);
-	      } catch(FileNotFoundException fnfe) {
-	         fnfe.printStackTrace();
-	      } catch(IOException ioe) {
-	         ioe.printStackTrace();
+	      } catch(Exception e) {
+	    	  e.printStackTrace();
 	      } finally {
 	         fis.close();
 	      }
@@ -304,7 +299,7 @@ public class ATresponder extends Thread {
 				try {
 					Thread.sleep(10000); 
 				} catch (InterruptedException e) {
-					e.printStackTrace();
+					log.error("Internal error", e);
 				}
 			}	
 		}	
@@ -842,7 +837,6 @@ public class ATresponder extends Thread {
 						    
 						    if (smsURL != null) {
 						    	// Call URL to forward full SMS content
-							    log.info("Call URL to forward the SMS value " + rx);
 							    publishSMS(rx); // any potential whitespace will be replaced with &nbsp;
 						    }
 						    
@@ -1078,34 +1072,39 @@ public class ATresponder extends Thread {
 	 * @return result is the server response
 	 * @throws IOException
 	 */
-	public String publishSMS(String smsContent) throws IOException {
-		URL url = new URL(smsURL + "?" + smsQueryParam + "=" + smsContent.replaceAll(" ", "&nbsp;"));
-		URLConnection urlConnection = url.openConnection();
-		log.info("Calling URL '" + smsURL + smsContent);
-		
-		if (smsAuthName != null && smsAuthPassword != null) {
-			String authString = smsAuthName + ":" + smsAuthPassword;
-			byte[] authEncBytes = Base64.encodeBase64(authString.getBytes());
-			String authStringEnc = new String(authEncBytes);
+	public String publishSMS(String smsContent) {
+		try {
+			URL url = new URL(smsURL + "?" + smsQueryParam + "=" + smsContent.replaceAll(" ", "&nbsp;"));
+			URLConnection urlConnection = url.openConnection();
+			log.info("Calling URL '" + smsURL + smsContent);
 			
-			urlConnection.setRequestProperty("Authorization", "Basic " + authStringEnc);
-			log.debug("Basic Authentication used");
+			if (smsAuthName != null && smsAuthPassword != null) {
+				String authString = smsAuthName + ":" + smsAuthPassword;
+				byte[] authEncBytes = Base64.encodeBase64(authString.getBytes());
+				String authStringEnc = new String(authEncBytes);
+				
+				urlConnection.setRequestProperty("Authorization", "Basic " + authStringEnc);
+				log.debug("Basic Authentication used");
+			} 
+				
+			InputStream is = urlConnection.getInputStream();
+			InputStreamReader isr = new InputStreamReader(is);
+
+			int numCharsRead;
+			char[] charArray = new char[1024];
+			StringBuffer sb = new StringBuffer();
+			while ((numCharsRead = isr.read(charArray)) > 0) {
+				sb.append(charArray, 0, numCharsRead);
+			}
+			String result = sb.toString();
+			
+			log.debug("Server response was '" + result + "'");
+
+			return result;
+		} catch (Exception e) {
+			log.error("Failed to call URL " + smsURL + smsContent);
 		} 
-			
-		InputStream is = urlConnection.getInputStream();
-		InputStreamReader isr = new InputStreamReader(is);
-
-		int numCharsRead;
-		char[] charArray = new char[1024];
-		StringBuffer sb = new StringBuffer();
-		while ((numCharsRead = isr.read(charArray)) > 0) {
-			sb.append(charArray, 0, numCharsRead);
-		}
-		String result = sb.toString();
-		
-		log.debug("Server response was '" + result + "'");
-
-		return result;
+		return "";
 	}
 	
 	public void updateWatchdog() {
@@ -1115,8 +1114,7 @@ public class ATresponder extends Thread {
 			watchdogWriter.write("Alive");
 			watchdogWriter.close();
 		} catch (IOException e) {
-			log.error("Failed to update watchdog file at" + watchdogFile);
-			e.printStackTrace();
+			log.error("Failed to update watchdog file at" + watchdogFile, e);
 		}
 	}
 
