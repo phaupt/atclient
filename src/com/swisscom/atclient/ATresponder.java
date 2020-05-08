@@ -1074,10 +1074,11 @@ public class ATresponder extends Thread {
 	 * @throws IOException
 	 */
 	public String publishSMS(String smsContent) {
+		String fullURL = smsURL + "?" + smsQueryParam + "=" + smsContent.replaceAll(" ", "&nbsp;");
 		try {
-			URL url = new URL(smsURL + "?" + smsQueryParam + "=" + smsContent.replaceAll(" ", "&nbsp;"));
+			URL url = new URL(fullURL);
 			URLConnection urlConnection = url.openConnection();
-			log.info("Calling URL '" + smsURL + smsContent);
+			log.info("Trying to call URL '" + fullURL);
 			
 			if (smsAuthName != null && smsAuthPassword != null) {
 				String authString = smsAuthName + ":" + smsAuthPassword;
@@ -1101,7 +1102,7 @@ public class ATresponder extends Thread {
 
 			return result;
 		} catch (Exception e) {
-			log.error("Failed to call URL " + smsURL + smsContent);
+			log.error("Failed to call URL " + fullURL);
 		} 
 		return "";
 	}
