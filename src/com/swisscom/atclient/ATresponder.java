@@ -903,7 +903,7 @@ public class ATresponder extends Thread {
 								break;
 							}
 							
-							watchdogList.set(2, Arrays.asList(rx.split(",")).get(2)); // Update provider name
+							watchdogList.set(2, Arrays.asList(rx.split(",")).get(2).replace("\"", "")); // Update provider name
 							 
 						} else if (rx.toUpperCase().startsWith("+CSQ: ")) {
 							value = Integer.parseInt( rx.substring(6, rx.indexOf(",")) ); // +CSQ: 14,99
