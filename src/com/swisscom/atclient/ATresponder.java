@@ -1131,7 +1131,7 @@ public class ATresponder extends Thread {
 			// 2020.05.23 17:28:53, +41791234567, Swisscom, 4G, 83%
 			String content = watchdogList.toString();
 			watchdogWriter = new BufferedWriter(new FileWriter(watchdogFile));
-			watchdogWriter.write(content.substring(1, content.length() - 1).replace("null", "n/a"));
+			watchdogWriter.write(content.substring(1, content.length() - 1).replace("null", "n/a").replace(", ", ","));
 			
 			watchdogWriter.close();
 		} catch (IOException e) {
