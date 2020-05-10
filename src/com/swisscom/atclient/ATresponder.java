@@ -38,7 +38,7 @@ public class ATresponder extends Thread {
 	private final int maxWrongPinAttempts = 5;
 	private int cntrWrongPinAttempts = maxWrongPinAttempts;
 	
-	private List<String> watchdogList = Arrays.asList(new String[5]); // Timestamp, MSISDN, Provider, RAT, Signal Strength
+	private List<String> watchdogList = Arrays.asList(new String[5]); // RAT-Timestamp, MSISDN, Provider, RAT, Signal Strength
 	private BufferedWriter watchdogWriter = null;
 	private String watchdogFile = null;
 	private String maintenanceFile = null;
@@ -904,6 +904,7 @@ public class ATresponder extends Thread {
 							}
 							
 							watchdogList.set(2, Arrays.asList(rx.split(",")).get(2).replace("\"", "")); // Update provider name
+							watchdogList.set(0, new SimpleDateFormat("yyyy.MM.dd HH:mm:ss").format(new Date())); // Update  RAT-timestamp
 							 
 						} else if (rx.toUpperCase().startsWith("+CSQ: ")) {
 							value = Integer.parseInt( rx.substring(6, rx.indexOf(",")) ); // +CSQ: 14,99
@@ -1126,9 +1127,8 @@ public class ATresponder extends Thread {
 		try {
 			log.trace("Update watchdog file \'" + watchdogFile + "\'");
 
-			// Timestamp, MSISDN, Provider, RAT
+			// RAT-Timestamp, MSISDN, Provider, RAT
 			// 2020.05.23 17:28:53, +41791234567, Swisscom, 4G, 83%
-			watchdogList.set(0, new SimpleDateFormat("yyyy.MM.dd HH:mm:ss").format(new Date()));
 			String content = watchdogList.toString();
 			watchdogWriter = new BufferedWriter(new FileWriter(watchdogFile));
 			watchdogWriter.write(content.substring(1, content.length() - 1).replace("null", "n/a"));
