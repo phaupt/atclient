@@ -3,11 +3,12 @@ package com.swisscom.atclient;
 import com.fazecast.jSerialComm.*;
 import java.io.*;
 import java.lang.management.ManagementFactory;
-import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
+import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 import java.util.Properties;
 import java.util.regex.Matcher;
@@ -37,6 +38,7 @@ public class ATresponder extends Thread {
 	private final int maxWrongPinAttempts = 5;
 	private int cntrWrongPinAttempts = maxWrongPinAttempts;
 	
+	private List<String> watchdogList = Arrays.asList(new String[5]); // Timestamp, MSISDN, Provider, RAT, Signal Strength
 	private BufferedWriter watchdogWriter = null;
 	private String watchdogFile = null;
 	private String maintenanceFile = null;
@@ -850,6 +852,7 @@ public class ATresponder extends Thread {
 
 							msisdn = Arrays.asList(rx.split(",")).get(1).replace("\"", "");
 							Thread.currentThread().setName(Thread.currentThread().getName() + " " + msisdn);
+							watchdogList.set(1, msisdn); // Update MSISDN 
 
 						} else if (rx.toUpperCase().startsWith("+COPS: ")) {
 							// +COPS: 0,0,"Swisscom",7
@@ -866,33 +869,45 @@ public class ATresponder extends Thread {
 							switch (value) {
 							case 0: 
 								log.info("RADIOT: GSM (2G)");
+								watchdogList.set(3, "2G"); 
 								break;
 							case 1: 
 								log.info("RADIOT: GSM Compact (2G)");
+								watchdogList.set(3, "2G");
 								break;
 							case 2: 
 								log.info("RADIOT: UTRAN (3G)");
+								watchdogList.set(3, "3G");
 								break;
 							case 3: 
 								log.info("RADIOT: GSM w/EGPRS (2G)");
+								watchdogList.set(3, "2G");
 								break;
 							case 4: 
 								log.info("RADIOT: UTRAN w/HSDPA (3G)");
+								watchdogList.set(3, "3G");
 								break;
 							case 5: 
 								log.info("RADIOT: UTRAN w/HSUPA (3G)");
+								watchdogList.set(3, "3G");
 								break;
 							case 6: 
 								log.info("RADIOT: UTRAN w/HSDPA and HSUPA (3G)");
+								watchdogList.set(3, "3G");
 								break;
 							case 7: 
 								log.info("RADIOT: E-UTRAN (4G/LTE)");
+								watchdogList.set(3, "4G");
 								break;
 							default:
 								break;
 							}
+							
+							watchdogList.set(2, Arrays.asList(rx.split(",")).get(2)); // Update provider name
+							 
 						} else if (rx.toUpperCase().startsWith("+CSQ: ")) {
 							value = Integer.parseInt( rx.substring(6, rx.indexOf(",")) ); // +CSQ: 14,99
+							watchdogList.set(4, Math.round(value * 100 / 31 ) + "%"); // Update signal strength in percentage
 							if (value <= 9) {
 								log.info("SIGNAL: " + value + "/1-9/31 [#---]");
 							} else if (value >= 10 && value <= 14) {
@@ -1110,8 +1125,14 @@ public class ATresponder extends Thread {
 	public void updateWatchdog() {
 		try {
 			log.trace("Update watchdog file \'" + watchdogFile + "\'");
+
+			// Timestamp, MSISDN, Provider, RAT
+			// 2020.05.23 17:28:53, +41791234567, Swisscom, 4G, 83%
+			watchdogList.set(0, new SimpleDateFormat("yyyy.MM.dd HH:mm:ss").format(new Date()));
+			String content = watchdogList.toString();
 			watchdogWriter = new BufferedWriter(new FileWriter(watchdogFile));
-			watchdogWriter.write("Alive");
+			watchdogWriter.write(content.substring(1, content.length() - 1).replace("null", "n/a"));
+			
 			watchdogWriter.close();
 		} catch (IOException e) {
 			log.error("Failed to update watchdog file at" + watchdogFile, e);
