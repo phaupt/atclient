@@ -904,7 +904,7 @@ public class ATresponder extends Thread {
 							}
 							
 							watchdogList.set(2, Arrays.asList(rx.split(",")).get(2).replace("\"", "")); // Update provider name
-							watchdogList.set(0, new SimpleDateFormat("yyyy.MM.dd HH:mm:ss").format(new Date())); // Update  RAT-timestamp
+							watchdogList.set(0, new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date())); // Update  RAT-timestamp
 							 
 						} else if (rx.toUpperCase().startsWith("+CSQ: ")) {
 							value = Integer.parseInt( rx.substring(6, rx.indexOf(",")) ); // +CSQ: 14,99
