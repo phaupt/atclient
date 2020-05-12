@@ -933,6 +933,11 @@ public class ATresponder extends Thread {
 						} else if (rx.toUpperCase().trim().contains(compareStr)) {		
 							return true; // Got the expected response
 						} 
+						
+						// Watchdog: Write/update local file
+						if (watchdogFile != null)
+							updateWatchdog();
+
 					}
 					Thread.sleep(sleepWhile);
 				}	
