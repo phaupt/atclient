@@ -38,7 +38,7 @@ public class ATresponder extends Thread {
 	private final int maxWrongPinAttempts = 5;
 	private int cntrWrongPinAttempts = maxWrongPinAttempts;
 	
-	private List<String> watchdogList = Arrays.asList(new String[5]); // RAT-Timestamp, MSISDN, Provider, RAT, Signal Strength
+	private List<String> watchdogList = Arrays.asList(new String[6]); // RAT-Timestamp, MSISDN, Provider, RAT, Signal Strength Percentage, Signal Strength Icon
 	private BufferedWriter watchdogWriter = null;
 	private String watchdogFile = null;
 	private String maintenanceFile = null;
@@ -910,13 +910,17 @@ public class ATresponder extends Thread {
 							value = Integer.parseInt( rx.substring(6, rx.indexOf(",")) ); // +CSQ: 14,99
 							watchdogList.set(4, Math.round(value * 100 / 31 ) + "%"); // Update signal strength in percentage
 							if (value <= 9) {
-								log.info("SIGNAL: " + value + "/1-9/31 [#---]");
+								log.info("SIGNAL: " + value + "/1-9/31 [+---]");
+								watchdogList.set(5, "+---"); // Update signal strength icon
 							} else if (value >= 10 && value <= 14) {
-								log.info("SIGNAL: " + value + "/10-14/31 [##--]");
+								log.info("SIGNAL: " + value + "/10-14/31 [++--]");
+								watchdogList.set(5, "++--"); // Update signal strength icon
 							} else if (value >= 15 && value <= 19) {
-								log.info("SIGNAL: " + value + "/15-19/31 [###-]"); 
+								log.info("SIGNAL: " + value + "/15-19/31 [+++-]"); 
+								watchdogList.set(5, "+++-"); // Update signal strength icon
 							} else if (value >= 20 && value <= 31) {
-								log.info("SIGNAL: " + value + "/20-31/31 [####]");
+								log.info("SIGNAL: " + value + "/20-31/31 [++++]");
+								watchdogList.set(5, "++++"); // Update signal strength icon
 							}
 						} else if (rx.toUpperCase().startsWith("+CPIN: SIM")) {
 							log.error("SIM requires PIN authentication. Please disable SIM PIN.");
@@ -1128,7 +1132,7 @@ public class ATresponder extends Thread {
 			log.trace("Update watchdog file \'" + watchdogFile + "\'");
 
 			// RAT-Timestamp, MSISDN, Provider, RAT
-			// 2020.05.23 17:28:53, +41791234567, Swisscom, 4G, 83%
+			// 2020.05.23 17:28:53, +41791234567, Swisscom, 4G, 83%, +++-
 			String content = watchdogList.toString();
 			watchdogWriter = new BufferedWriter(new FileWriter(watchdogFile));
 			watchdogWriter.write(content.substring(1, content.length() - 1).replace("null", "n/a").replace(", ", ","));
