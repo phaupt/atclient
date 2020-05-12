@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# Start OLED display script with timeout argument of 30min (1800s)
+#if ! ps aux | grep -q "[m]id.py" ; then
+#   (python /home/mid/oled-i2c/mid.py 1800) &
+#fi
+
 # Get unique number from hostname such as 'mobileid001' -> id=001
 id=$(hostname | cut -c 9-11)
 re='^[0-9]+$'
