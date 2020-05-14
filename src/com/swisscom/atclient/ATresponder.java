@@ -1133,6 +1133,8 @@ public class ATresponder extends Thread {
 	}
 	
 	public void updateWatchdog() {
+		if ( watchdogList.get(1) == null)
+			return; // update watchdog file only if the list contains the MSISDN (avoid too early updates)
 		try {
 			log.trace("Update watchdog file \'" + watchdogFile + "\'");
 
