@@ -908,7 +908,13 @@ public class ATresponder extends Thread {
 							 
 						} else if (rx.toUpperCase().startsWith("+CSQ: ")) {
 							value = Integer.parseInt( rx.substring(6, rx.indexOf(",")) ); // +CSQ: 14,99
-							watchdogList.set(4, Math.round(value * 100 / 31 ) + "%"); // Update signal strength in percentage
+							int percent = Math.round(value * 100 / 31 );
+							
+							if (percent > 0 && percent <= 100)
+								watchdogList.set(4, Math.round(value * 100 / 31 ) + "%"); // Update signal strength in percentage
+							else
+								watchdogList.set(4, "n/a"); // Update signal strength in percentage
+							
 							if (value <= 9) {
 								log.info("SIGNAL: " + value + "/1-9/31 [+---]");
 								watchdogList.set(5, "+---"); // Update signal strength icon
