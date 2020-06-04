@@ -1,5 +1,14 @@
 #!/bin/bash
 
+# Start OLED display script with timeout argument of 10min (600s)
+#if ! (ps -ef | grep -q "[m]id.py") ; then 
+#    # Display is currently free
+#    ((python /home/mid/oled-i2c/maintenance.py && python /home/mid/oled-i2c/mid.py 600) &)
+#else 
+#    # Display is currently busy, kill it first
+#    ps -ef | grep "[m]id.py" | awk '{print "kill -9", $2}' | sh ; ((python /home/mid/oled-i2c/maintenance.py && python /home/mid/oled-i2c/mid.py 600) &) 
+#fi
+
 # Get unique number from hostname such as 'mobileid001' -> id=001
 id=$(hostname | cut -c 9-11)
 re='^[0-9]+$'
