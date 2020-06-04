@@ -275,7 +275,7 @@ public class ATresponder extends Thread {
 					for (String portStr : portStrArr) {
 						// Check for known terminal (port string)
 						if (portDesc.contains(portStr)) {
-							log.info("Found a serial port: " + port.getSystemPortName() + " " + portDesc);
+							log.info("Found a serial port: " + port.getSystemPortName() + " '" + portDesc + "'");
 							serPortStr = port.getSystemPortName();
 
 							// Found a port with matching name... trying to open it
@@ -310,9 +310,17 @@ public class ATresponder extends Thread {
 	}
 	
 	private boolean openPort() throws IOException {
+		if (serPortStr == null) {
+			log.error("No Port defined. Missing '-Dserial.port' argument?");
+			System.exit(0);
+		}
+			
 		serPort = SerialPort.getCommPort(serPortStr);
 		
-		if (System.getProperty("os.name").toLowerCase().contains("win")) serPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 500, 0); // only available on Windows systems
+		if (System.getProperty("os.name").toLowerCase().contains("win")) {
+			log.debug("Windows detected. Setting serial port read and write timeout parameters.");
+			serPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 500, 0); // only available on Windows systems
+		}
 		
 		log.debug(serPortStr + " set port parameters (" + baudrate + ", " + databits + ", " + stopbits + ", " + parity + ")");
 		serPort.setComPortParameters(baudrate, databits, stopbits, parity);

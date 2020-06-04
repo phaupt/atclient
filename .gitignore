@@ -7,3 +7,4 @@ nohup.out
 /maintenance.sh
 /doc/
 /watchdog.atclient
+/log4j2.xml2
