@@ -143,14 +143,14 @@ public class ATresponder extends Thread {
 				log.info("Property cops.mode set to automatic");
 			}
 			
+			smsPattern = prop.getProperty("textsms.pattern");
+			log.info("Property textsms.pattern set to " + smsPattern);
+						
 			if (prop.getProperty("textsms.forward.enable").trim().equals("true")) {
 				smsTargetMsisdn = prop.getProperty("textsms.forward.msisdn").trim();
 				log.info("Property textsms.forward.msisdn set to " + smsTargetMsisdn);
-				smsPattern = prop.getProperty("textsms.forward.pattern");
-				log.info("Property textsms.forward.pattern set to " + smsPattern);
 			} else {
 				smsTargetMsisdn = null;
-				smsPattern = null;
 				log.info("Property textsms.forward disabled");
 			}
 			

@@ -49,19 +49,16 @@ atclient.atcommand.heartbeat = 180000
 cops.mode = 
 
 ############################################################################################
-# Forward Text SMS to MSISDN [optional]
+# Forward and/or Publish Text SMS [optional]
 ############################################################################################
+# Default is a pattern that matches with the OTP Code SMS from mobileid.ch
+# Text SMS will only be forwarded and/or published if the pattern matches the text SMS content
+textsms.pattern = ^.*: [A-Z0-9]{4}\\. .*$
+
 # Forward Text SMS to target MSISDN
 textsms.forward.enable  = false
 textsms.forward.msisdn  = +41791234567
 
-# Only forward a Text SMS if it matches the regex pattern. 
-# Default is a pattern that matches with the OTP Code SMS from mobileid.ch
-textsms.forward.pattern = ^.*: [A-Z0-9]{4}\\. .*$
-
-############################################################################################
-# Publish Text SMS to URL [optional]
-############################################################################################
 # Publish Text SMS to URL. GET call using query parameter
 # Example URL: https://www.example.com/script.sh?TXT=Hello&nbsp;World
 textsms.publish.enable            = false
