@@ -917,11 +917,11 @@ public class ATresponder extends Thread {
 							}
 						} else if (rx.toUpperCase().startsWith("+CPIN: SIM")) {
 							log.error("SIM requires PIN authentication. Please disable SIM PIN.");
-							shutdownAndExit("SIM PIN ERROR");
+							shutdownAndExit("REMOVE SIM PIN");
 							return false;
 						} else if (rx.toUpperCase().startsWith("+CME ERROR: SIM")) {
 							log.error("Please check if SIM is properly inserted.");
-							shutdownAndExit("SIM ERROR");
+							shutdownAndExit("SIM NOT INSERTED");
 							return false;
 						} else if (rx.toUpperCase().trim().contains(compareStr)) {		
 							return true; // Got the expected response
