@@ -233,23 +233,6 @@ public class ATresponder extends Thread {
 	      }
 	      return prop;
 	   }
-	
-	public void attachShutDownHook() {
-		Runtime.getRuntime().addShutdownHook(new Thread() {
-			public void run() {
-				Thread.currentThread().setName("ShutdownHook");
-				log.debug("Executing Shutdown Hook");
-				isAlive = false; // will exit the while loop and terminate the application	
-			}
-		});
-	}
-	
-	public void shutdownAndExit(){
-		log.info("Send SHUTDOWN Command and exit application");
-		send("AT+CFUN=1,1"); // force UE restart
-		//send("AT^SMSO"); // Power-off the terminal
-		isAlive = false; // will exit the while loop and terminate the application	
-	}
 
 	private boolean lookupSerialPort() throws UnsupportedEncodingException, IOException, InterruptedException {
 		log.info("Start serial port initialization.");
@@ -1158,6 +1141,36 @@ public class ATresponder extends Thread {
 		} catch (IOException e) {
 			log.error("Failed to update watchdog file at" + watchdogFile, e);
 		}
+	}
+	
+	public void attachShutDownHook() {
+		Runtime.getRuntime().addShutdownHook(new Thread() {
+			public void run() {
+				Thread.currentThread().setName("ShutdownHook");
+				log.debug("Executing Shutdown Hook");
+				isAlive = false; // will exit the while loop and terminate the application	
+			}
+		});
+	}
+	
+	public void shutdownAndExit(){
+		try {
+			log.trace("Update watchdog file \'" + watchdogFile + "\' with ERR content");
+
+			// RAT-Timestamp, IMSI, Provider, RAT
+			// 2020.05.23 17:28:53, 228017230302066, Swisscom, 4G, 83%, +++-
+			watchdogWriter = new BufferedWriter(new FileWriter(watchdogFile));
+			watchdogWriter.write(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()) + ",ERROR,,,,");
+			
+			watchdogWriter.close();
+		} catch (IOException e) {
+			log.error("Failed to update watchdog file at" + watchdogFile, e);
+		}
+		
+		log.info("Send SHUTDOWN Command and exit application");
+		send("AT+CFUN=1,1"); // force UE restart
+		//send("AT^SMSO"); // Power-off the terminal
+		isAlive = false; // will exit the while loop and terminate the application	
 	}
 
 }
