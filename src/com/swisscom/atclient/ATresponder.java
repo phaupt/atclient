@@ -1155,13 +1155,13 @@ public class ATresponder extends Thread {
 	
 	public void shutdownAndExit(){
 		try {
-			log.trace("Update watchdog file \'" + watchdogFile + "\' with ERR content");
+			log.error("Update watchdog file \'" + watchdogFile + "\' with ERR content");
 
-			// RAT-Timestamp, IMSI, Provider, RAT
-			// 2020.05.23 17:28:53, 228017230302066, Swisscom, 4G, 83%, +++-
+			//         RAT-Timestamp, IMSI, Provider, RAT
+			// normal: 2020.05.23 17:28:53, 228017230302066, Swisscom, 4G , 83%, +++-
+			// error : 2020.05.23 17:28:53, ERR            , ERR     , ERR,    ,  
 			watchdogWriter = new BufferedWriter(new FileWriter(watchdogFile));
-			watchdogWriter.write(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()) + ",ERROR,,,,");
-			
+			watchdogWriter.write(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()) + ",ERR,ERR,ERR,,");
 			watchdogWriter.close();
 		} catch (IOException e) {
 			log.error("Failed to update watchdog file at" + watchdogFile, e);
