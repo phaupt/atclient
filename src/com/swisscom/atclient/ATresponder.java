@@ -1165,7 +1165,7 @@ public class ATresponder extends Thread {
 			// normal: 2020.05.23 17:28:53, 228017230302066, Swisscom, 4G , 83%, +++-
 			// error : 2020.05.23 17:28:53, ERR            , ERR     , ERR,    ,  
 			watchdogWriter = new BufferedWriter(new FileWriter(watchdogFile));
-			watchdogWriter.write(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()) + ",\"msg\",,ERR,ERR,ERR");
+			watchdogWriter.write(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()) + "," + msg + ",,ERR,ERR,ERR");
 			watchdogWriter.close();
 		} catch (IOException e) {
 			log.error("Failed to update watchdog file at" + watchdogFile, e);
