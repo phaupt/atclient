@@ -359,7 +359,7 @@ public class ATresponder extends Thread {
 			// MDM = Modem, APP = Application
 			send("AT^SSRVSET=\"actSrvSet\",2"); // set service set number 2 (USB only; enables modem usage). activated after next UE restart only.
 			
-			shutdownAndExit();
+			shutdownAndExit(null);
 			return; // exit
 		} else if (opMode == 2) {
 			log.info("Switch to Automatic Response (AR) and reset AT command settings to factory default values");
@@ -367,7 +367,7 @@ public class ATresponder extends Thread {
 			
 			send("AT&F[0]"); // reset AT Command Settings to Factory Default Values
 			
-			shutdownAndExit();
+			shutdownAndExit(null);
 			return; // exit
 		} else {
 			
@@ -917,11 +917,11 @@ public class ATresponder extends Thread {
 							}
 						} else if (rx.toUpperCase().startsWith("+CPIN: SIM")) {
 							log.error("SIM requires PIN authentication. Please disable SIM PIN.");
-							shutdownAndExit();
+							shutdownAndExit("SIM PIN ERROR");
 							return false;
 						} else if (rx.toUpperCase().startsWith("+CME ERROR: SIM")) {
 							log.error("Please check if SIM is properly inserted.");
-							shutdownAndExit();
+							shutdownAndExit("SIM ERROR");
 							return false;
 						} else if (rx.toUpperCase().trim().contains(compareStr)) {		
 							return true; // Got the expected response
@@ -1153,7 +1153,11 @@ public class ATresponder extends Thread {
 		});
 	}
 	
-	public void shutdownAndExit(){
+	public void shutdownAndExit(String msg){
+		
+		if (msg == null)
+			msg = "ERR";
+		
 		try {
 			log.error("Update watchdog file \'" + watchdogFile + "\' with ERR content");
 
@@ -1161,7 +1165,7 @@ public class ATresponder extends Thread {
 			// normal: 2020.05.23 17:28:53, 228017230302066, Swisscom, 4G , 83%, +++-
 			// error : 2020.05.23 17:28:53, ERR            , ERR     , ERR,    ,  
 			watchdogWriter = new BufferedWriter(new FileWriter(watchdogFile));
-			watchdogWriter.write(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()) + ",ERR,ERR,ERR,,");
+			watchdogWriter.write(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()) + ",\"msg\",,ERR,ERR,ERR");
 			watchdogWriter.close();
 		} catch (IOException e) {
 			log.error("Failed to update watchdog file at" + watchdogFile, e);
