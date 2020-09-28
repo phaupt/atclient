@@ -38,7 +38,7 @@ public class ATresponder extends Thread {
 	private final int maxWrongPinAttempts = 5;
 	private int cntrWrongPinAttempts = maxWrongPinAttempts;
 	
-	private List<String> watchdogList = Arrays.asList(new String[6]); // RAT-Timestamp, MSISDN, Provider, RAT, Signal Strength Percentage, Signal Strength Icon
+	private List<String> watchdogList = Arrays.asList(new String[6]); // RAT-Timestamp, IMSI, Provider, RAT, Signal Strength Percentage, Signal Strength Icon
 	private BufferedWriter watchdogWriter = null;
 	private String watchdogFile = null;
 	private String maintenanceFile = null;
@@ -79,7 +79,7 @@ public class ATresponder extends Thread {
 	
 	private byte opMode; // Switch: 1=ER, 2=AR
 	
-	private String msisdn = null;
+	private String imsi = null;
 	
 	public volatile static boolean isAlive = true;
 	
@@ -393,7 +393,7 @@ public class ATresponder extends Thread {
 			if (!send("AT+CPIN?")) // Check if SIM is correctly inserted and SIM PIN is ready
 				return;
 						
-			send("AT+CNUM"); // MSISDN; update thread name
+			send("AT+CNUM"); // MSISDN - which is often not returned with this AT command! :-/
 						
 			if (!send("ATE0")) // Echo Mode On(1)/Off(0). Do not turn echo on if forward SMS feature is used.
 				return;
@@ -851,16 +851,12 @@ public class ATresponder extends Thread {
 							    publishSMS(rx); // any potential whitespace will be replaced with &nbsp;
 						    }
 						    
-						} else if (rx.toUpperCase().startsWith("+CNUM: ") && rx.length() > 22) {
-							// +CNUM: ,"+41797373717",145
-							
-							// Be sure that we have expected response format
-							if (rx.length() - rx.replaceAll(",","").length() < 2)
-								break;
+						} else if (rx.startsWith("228") && rx.length() == 15) {
+							// 228017230302066
 
-							msisdn = Arrays.asList(rx.split(",")).get(1).replace("\"", "");
-							Thread.currentThread().setName(Thread.currentThread().getName() + " " + msisdn);
-							watchdogList.set(1, msisdn); // Update MSISDN 
+							imsi = rx;
+							Thread.currentThread().setName(Thread.currentThread().getName() + " " + imsi);
+							watchdogList.set(1, imsi); // Update IMSI 
 
 						} else if (rx.toUpperCase().startsWith("+COPS: ")) {
 							// +COPS: 0,0,"Swisscom",7
@@ -1152,8 +1148,8 @@ public class ATresponder extends Thread {
 		try {
 			log.trace("Update watchdog file \'" + watchdogFile + "\'");
 
-			// RAT-Timestamp, MSISDN, Provider, RAT
-			// 2020.05.23 17:28:53, +41791234567, Swisscom, 4G, 83%, +++-
+			// RAT-Timestamp, IMSI, Provider, RAT
+			// 2020.05.23 17:28:53, 228017230302066, Swisscom, 4G, 83%, +++-
 			String content = watchdogList.toString();
 			watchdogWriter = new BufferedWriter(new FileWriter(watchdogFile));
 			watchdogWriter.write(content.substring(1, content.length() - 1).replace("null", "n/a").replace(", ", ","));
