@@ -1006,6 +1006,23 @@ public class ATresponder extends Thread {
 				System.exit(0);	// Just in case the reboot doesn't work as expected, the watchdog-reboot would be the fall-back
 			}
 			
+			if (rsp.indexOf("HOSTNAME=") != -1) {
+				try {
+					// mobileid000 (lenght=11)
+					String value = rsp.substring(rsp.indexOf("HOSTNAME=") + 9, rsp.indexOf("HOSTNAME=") + 20);
+					if (value.startsWith("mobileid0")) {
+						try {
+							java.lang.Runtime.getRuntime().exec("sudo /home/mid/setHostName " + value);
+						} catch (IOException e) {
+							log.error("Failed to execute linux command", e);
+						}
+						log.info("'HOSTNAME=" + value + "'-keyword detected.");
+					} 
+				} catch (Exception e) {
+					// silently ignore...
+				}				
+			}
+			
 			if (rsp.indexOf("MAINTENANCE") != -1 && maintenanceFile != null) {
 				log.info("'MAINTENANCE'-keyword detected. Will invoke " + maintenanceFile);
 
