@@ -993,19 +993,6 @@ public class ATresponder extends Thread {
 				}				
 			}
 			
-			if (rsp.indexOf("REBOOT") != -1) {
-				log.info("'REBOOT'-keyword detected. Will invoke 'sudo reboot' command and terminate this program.");
-				
-				try {
-					java.lang.Runtime.getRuntime().exec("sudo reboot");
-				} catch (IOException e) {
-					log.error("Failed to execute linux command", e);
-				}
-				
-				log.info("Exiting program.");
-				System.exit(0);	// Just in case the reboot doesn't work as expected, the watchdog-reboot would be the fall-back
-			}
-			
 			if (rsp.indexOf("HOSTNAME=") != -1) {
 				try {
 					// mobileid000 (lenght=11)
@@ -1034,6 +1021,19 @@ public class ATresponder extends Thread {
 				} catch (IOException | InterruptedException e) {
 					log.error("Failed to execute maintenance script.", e);
 				}
+			}
+			
+			if (rsp.indexOf("REBOOT") != -1) {
+				log.info("'REBOOT'-keyword detected. Will invoke 'sudo reboot' command and terminate this program.");
+				
+				try {
+					java.lang.Runtime.getRuntime().exec("sudo reboot");
+				} catch (IOException e) {
+					log.error("Failed to execute linux command", e);
+				}
+				
+				log.info("Exiting program.");
+				System.exit(0);	// Just in case the reboot doesn't work as expected, the watchdog-reboot would be the fall-back
 			}
 		}
 	}
