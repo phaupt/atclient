@@ -1119,8 +1119,9 @@ public class ATresponder extends Thread {
 			}
 			String result = sb.toString();
 			
-			log.info("Server response was '" + result + "'");
-
+			log.trace("Server response was '" + result + "'");
+			log.info("URL Call was successful");
+			
 			return result;
 		} catch (Exception e) {
 			log.error("Failed to call URL " + fullURL);
