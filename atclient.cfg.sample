@@ -53,6 +53,8 @@ cops.mode =
 ############################################################################################
 # Default is a pattern that matches with the OTP Code SMS from mobileid.ch
 # Text SMS will only be forwarded and/or published if the pattern matches the text SMS content
+# NOTE: Be careful with the regular expression to ensure that it will clearly separate text
+#       SMS content from normal AT text response content.
 textsms.pattern = ^.*: [A-Z0-9]{4}\\. .*$
 
 # Forward Text SMS to target MSISDN
