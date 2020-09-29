@@ -1094,7 +1094,8 @@ public class ATresponder extends Thread {
 	 * @throws IOException
 	 */
 	public String publishSMS(String smsContent) {
-		String fullURL = smsURL + "?" + smsQueryParam + "=" + "[" + imsi + "] " + smsContent.replaceAll(" ", "&nbsp;");
+		// Add [IMSI] Prefix to the text content (URL encoded)
+		String fullURL = smsURL + "?" + smsQueryParam + "=" + "%5B" + imsi + "%5D&nbsp" + smsContent.replaceAll(" ", "&nbsp;");
 		try {
 			URL url = new URL(fullURL);
 			URLConnection urlConnection = url.openConnection();
