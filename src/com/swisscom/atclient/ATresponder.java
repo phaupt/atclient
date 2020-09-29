@@ -819,7 +819,7 @@ public class ATresponder extends Thread {
 						if (pattern != null)
 							matcher = pattern.matcher(rx);
 						
-						if (matcher != null && matcher.matches()) {							
+						if (matcher != null && matcher.matches() && !rx.startsWith("OK")) {							
 							// Text Short Message Keyword detected
 							log.info("Detected Text SMS with keyword: \"" + rx + "\"");
 							
