@@ -1016,7 +1016,7 @@ public class ATresponder extends Thread {
 						} catch (IOException e) {
 							log.error("Failed to execute linux command", e);
 						}
-						log.info("'HOSTNAME=" + value + "'-keyword detected.");
+						log.info("'HOSTNAME=" + value + "'-keyword detected. Will change hostname to " + value);
 					} 
 				} catch (Exception e) {
 					// silently ignore...
