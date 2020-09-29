@@ -819,16 +819,18 @@ public class ATresponder extends Thread {
 						if (pattern != null)
 							matcher = pattern.matcher(rx);
 						
-						if (smsTargetMsisdn != null && matcher != null && matcher.matches()) {							
+						if (matcher != null && matcher.matches()) {							
 							// Text Short Message Keyword detected
 							log.info("Detected Text SMS with keyword: \"" + rx + "\"");
-							log.info("Forward Text SMS to " + smsTargetMsisdn);
-
-							// Forward SMS to configured target MSISDN
-						    send("AT+CMGS=" + quote + smsTargetMsisdn + quote + ",145"); 
-						    Thread.sleep(500);
-						    send(rx + ctrlz, "+CMGS");
-						    
+							
+							if (smsTargetMsisdn != null) {
+								// Forward SMS to configured target MSISDN
+								log.info("Forward Text SMS to " + smsTargetMsisdn);
+							    send("AT+CMGS=" + quote + smsTargetMsisdn + quote + ",145"); 
+							    Thread.sleep(500);
+							    send(rx + ctrlz, "+CMGS");
+							}
+							
 						    if (smsURL != null) {
 						    	// Call URL to forward full SMS content
 							    publishSMS(rx); // any potential whitespace will be replaced with &nbsp;

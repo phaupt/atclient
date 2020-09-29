@@ -31,4 +31,4 @@ sleep 10
 
 # Start AutoSSH reverse-tunnel to a remote server
 # Once the tunnel has been established, you can remote SSH to the Pi: $ ssh -i ~/.ssh/id_rsa mid@localhost -p 19<id>
-(autossh -M 0 -o "ServerAliveInterval 30" -o "ServerAliveCountMax 3" -fN -R 19"$id":localhost:22 -i /root/.ssh/id_rsa mid@<server-addr> -p 22) &
+(autossh -M 0 -o "ExitOnForwardFailure=yes" -o "ServerAliveInterval 30" -o "ServerAliveCountMax 3" -fN -R 19"$id":localhost:22 -i /root/.ssh/id_rsa mid@<server-addr> -p 22) &
