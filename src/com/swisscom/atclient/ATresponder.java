@@ -1099,7 +1099,7 @@ public class ATresponder extends Thread {
 		try {
 			URL url = new URL(fullURL);
 			URLConnection urlConnection = url.openConnection();
-			log.info("Trying to call URL '" + fullURL);
+			log.info("Calling URL '" + fullURL);
 			
 			if (smsAuthName != null && smsAuthPassword != null) {
 				String authString = smsAuthName + ":" + smsAuthPassword;
@@ -1119,7 +1119,7 @@ public class ATresponder extends Thread {
 			}
 			String result = sb.toString();
 			
-			log.debug("Server response was '" + result + "'");
+			log.info("Server response was '" + result + "'");
 
 			return result;
 		} catch (Exception e) {
