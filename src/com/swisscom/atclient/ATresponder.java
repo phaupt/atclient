@@ -825,7 +825,7 @@ public class ATresponder extends Thread {
 						
 						if (getTextSms && matcher != null && matcher.matches() && !rx.startsWith("+CMGR:") && !rx.startsWith("OK")) {							
 							// Text Short Message matches pattern!
-							log.info("Detected Text SMS with keyword: \"" + rx + "\"");
+							log.info("Detected Text SMS, which matches the SMS pattern: \"" + rx + "\"");
 							
 							if (smsTargetMsisdn != null) {
 								// Forward SMS to configured target MSISDN
