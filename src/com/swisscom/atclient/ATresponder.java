@@ -845,7 +845,9 @@ public class ATresponder extends Thread {
 							// INCOMING TEXT SMS HEADER DETAILS
 							// +CMGR: "REC UNREAD","+41797895164",,"20/09/30,09:04:33+08"
 
-							textSmsHeader = Arrays.asList(rx.split(",")).get(1) + "," + Arrays.asList(rx.split(",")).get(3);
+							textSmsHeader = Arrays.asList(rx.replace("\"", "").split("\",\"")).get(1) + "," 
+									+ Arrays.asList(rx.replace("\"", "").split(",")).get(3) + "," 
+									+ Arrays.asList(rx.replace("\"", "").split(",")).get(4);
 
 						} else if (rx.startsWith("228") && rx.length() == 15) {
 							// 228017230302066
