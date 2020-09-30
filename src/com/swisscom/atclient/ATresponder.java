@@ -62,6 +62,7 @@ public class ATresponder extends Thread {
 	private volatile static int user_delay_millis = 0;
 	
 	private volatile static boolean getTextSms;
+	private String textSmsHeader = null;
 
 	private String atclientCfg = null;
 	
@@ -840,6 +841,12 @@ public class ATresponder extends Thread {
 							    publishSMS(rx); // any potential whitespace will be replaced with &nbsp;
 						    }
 						    
+						} else if (getTextSms && rx.toUpperCase().startsWith("+CMGR: ")) {
+							// INCOMING TEXT SMS HEADER DETAILS
+							// +CMGR: "REC UNREAD","+41797895164",,"20/09/30,09:04:33+08"
+
+							textSmsHeader = Arrays.asList(rx.split(",")).get(1) + "," + Arrays.asList(rx.split(",")).get(3);
+
 						} else if (rx.startsWith("228") && rx.length() == 15) {
 							// 228017230302066
 
@@ -1116,7 +1123,7 @@ public class ATresponder extends Thread {
 	 */
 	public String publishSMS(String smsContent) {
 		// Add [IMSI] Prefix to the text content
-		String fullURL = smsURL + "?" + smsQueryParam + "=" + "[" + imsi + "]&nbsp" + smsContent.replaceAll(" ", "&nbsp;");
+		String fullURL = smsURL + "?" + smsQueryParam + "=" + "[" + textSmsHeader + "," + imsi + "]&nbsp" + smsContent.replaceAll(" ", "&nbsp;");
 		try {
 			URL url = new URL(fullURL);
 			URLConnection urlConnection = url.openConnection();
