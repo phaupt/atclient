@@ -60,6 +60,8 @@ public class ATresponder extends Thread {
 	private volatile static boolean user_delay;
 
 	private volatile static int user_delay_millis = 0;
+	
+	private volatile static boolean getTextSms;
 
 	private String atclientCfg = null;
 	
@@ -487,7 +489,9 @@ public class ATresponder extends Thread {
 					if (rx.toUpperCase().startsWith("+CMTI: ")) {
 						value = Integer.parseInt((rx.substring(13, rx.length()))); // +CMTI: "SM", 0
 						log.info("TEXT MESSAGE (SMS)");
+						getTextSms = true; // enable text SMS flag, so that we know we get SMS text content 
 						send("AT+CMGR=" + value); // read the SMS data
+						getTextSms = false; // disable text SMS flag
 						send("AT+CMGD=0,4"); // delete all stored short messages after reading
 					} else if (rx.toUpperCase().startsWith("^SSTR: ")) {	
 						// ^SSTR: 3,19
@@ -819,8 +823,8 @@ public class ATresponder extends Thread {
 						if (pattern != null)
 							matcher = pattern.matcher(rx);
 						
-						if (matcher != null && matcher.matches() && !rx.startsWith("OK")) {							
-							// Text Short Message Keyword detected
+						if (getTextSms && matcher != null && matcher.matches() && !rx.startsWith("+CMGR:") && !rx.startsWith("OK")) {							
+							// Text Short Message matches pattern!
 							log.info("Detected Text SMS with keyword: \"" + rx + "\"");
 							
 							if (smsTargetMsisdn != null) {
