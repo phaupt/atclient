@@ -18,6 +18,8 @@ if ! [[ $id =~ $re ]] ; then
    id=000
 fi
 
+ifconfig eth0 down
+
 # Start PPP interface (LTE modem connectivity)
 # wrapper script for wvdial to auto-reconnect in case connection is dropped randomly
 (
