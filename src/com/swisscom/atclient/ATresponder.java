@@ -406,7 +406,7 @@ public class ATresponder extends Thread {
 			send("AT+CEER"); // returns an extended error report (of previous error)
 			send("AT+CEER=0"); // reset the extended error report to initial value
 			
-			send("AT&W[0]"); // Store AT Command Settings to User Defined Profile
+			send("AT&W"); // Store AT Command Settings to User Defined Profile
 			
 			if (!actualCopsMode.contentEquals("A") && actualCopsMode.length() == 1) {
 				// Force the mobile terminal to select and register a specific network
