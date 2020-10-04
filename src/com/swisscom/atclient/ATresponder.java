@@ -378,7 +378,7 @@ public class ATresponder extends Thread {
 			
 			if (!send("AT+CPIN?")) // Check if SIM is correctly inserted and SIM PIN is ready
 				return;
-						
+
 			send("AT+CNUM"); // MSISDN - which is often not returned with this AT command! :-/
 						
 			if (!send("ATE0")) // Echo Mode On(1)/Off(0). Do not turn echo on if forward SMS feature is used.
@@ -390,7 +390,6 @@ public class ATresponder extends Thread {
 			
 			send("AT+CMGD=0,4"); // delete all stored short messages
 			
-			send("ATI1"); // display product identification information
 			send("AT^SCFG?"); // Extended Configuration Settings: read command returns a list of all supported parameters and their current values.
 			send("AT^SSRVSET=\"current\""); // check currently active settings			
 			
@@ -400,6 +399,14 @@ public class ATresponder extends Thread {
 			send("AT+CIMI"); // IMSI		
 			send("AT+CPIN?"); // SIM Card status			
 			send("AT+CREG?"); // Network registration
+			
+			send("AT^SMONI"); // supplies information of the serving cell
+			send("ATI1"); // display product identification information
+			send("AT^SCFG=\"SAT/URC\",\"1\""); // enable modem logging
+			send("AT+CEER"); // returns an extended error report (of previous error)
+			send("AT+CEER=0"); // reset the extended error report to initial value
+			
+			send("AT&W[0]"); // Store AT Command Settings to User Defined Profile
 			
 			if (!actualCopsMode.contentEquals("A") && actualCopsMode.length() == 1) {
 				// Force the mobile terminal to select and register a specific network
@@ -420,10 +427,9 @@ public class ATresponder extends Thread {
 			
 			send("AT+COPS?"); // Provider + access technology
 			send("AT+CSQ"); // Signal Strength
-							
+				
 			// Start listening...
-			send("AT^SSTR?", null); // Check for STK Menu initialization 
-			
+			send("AT^SSTR?", null); // Check for STK Menu initialization 			
 		}
 	}
 	
