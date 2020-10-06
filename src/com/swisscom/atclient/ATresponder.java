@@ -400,9 +400,9 @@ public class ATresponder extends Thread {
 			send("AT+CPIN?"); // SIM Card status			
 			send("AT+CREG?"); // Network registration
 			
-			send("AT^SMONI"); // supplies information of the serving cell
+			//send("AT^SMONI"); // supplies information of the serving cell
 			send("ATI1"); // display product identification information
-			send("AT^SCFG=\"SAT/URC\",\"1\""); // enable modem logging
+			//send("AT^SCFG=\"SAT/URC\",\"1\""); // enable modem logging
 			send("AT+CEER"); // returns an extended error report (of previous error)
 			send("AT+CEER=0"); // reset the extended error report to initial value
 			
