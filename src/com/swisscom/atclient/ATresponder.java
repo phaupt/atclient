@@ -273,7 +273,7 @@ public class ATresponder extends Thread {
 					if (portSuccess)
 						break; // success, break iteration for available serial ports
 					
-					Thread.sleep(100); // wait before to proceed with next available port in list
+					Thread.sleep(sleepWhile); // wait before to proceed with next available port in list
 				}
 
 			} else {
@@ -765,7 +765,7 @@ public class ATresponder extends Thread {
 	public boolean send(String cmd, String expectedRsp, long timeout, boolean sstr) {
 		try {
 	
-			sleep(10); // Ensure that there is enough time for the terminal to process previous command.
+			sleep(sleepWhile); // Ensure that there is enough time for the terminal to process previous command.
 	
 			log.debug("TX0 >>> " + cmd);
 			printStream.write((cmd + "\r\n").getBytes());
