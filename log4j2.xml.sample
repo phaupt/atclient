@@ -8,11 +8,11 @@
 	<Appenders>
 
 		<Console name="console" target="SYSTEM_OUT">
-			<PatternLayout pattern="%d %t [%level{WARN=WRN, DEBUG=DBG, ERROR=ERR, TRACE=TRC, INFO=INF}] %m%n"/>
+			<PatternLayout pattern="%d %t [%level{WARN=WRN, DEBUG=DBG, ERROR=ERR, TRACE=TRC, INFO=INF}] %m%n" charset="UTF-8"/>
 		</Console>
 
 		<RollingFile name="reporter" fileName="${sys:log.file}" filePattern="${sys:log.file}-%i">
-			<PatternLayout>
+			<PatternLayout charset="UTF-8">
 				<Pattern>%d %t [%level{WARN=WRN, DEBUG=DBG, ERROR=ERR, TRACE=TRC,INFO=INF}] %m%n</Pattern>
 			</PatternLayout>
 			<Policies>
@@ -23,7 +23,7 @@
 		</RollingFile>
 
 		<Socket name="syslogsocket" host="localhost" port="514"	protocol="UDP">
-			<PatternLayout pattern="%t [%level{WARN=WRN, DEBUG=DBG, ERROR=ERR, TRACE=TRC, INFO=INF}] %m%n"/>
+			<PatternLayout pattern="%t [%level{WARN=WRN, DEBUG=DBG, ERROR=ERR, TRACE=TRC, INFO=INF}] %m%n" charset="UTF-8"/>
 		</Socket>
 	</Appenders>
 	
