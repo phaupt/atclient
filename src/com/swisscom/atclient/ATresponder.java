@@ -48,7 +48,7 @@ public class ATresponder extends Thread {
 	 * Any other incoming RX data (e.g. STK even from a Mobile ID signature) will reset the heart beat timer
 	 **/
 	private long heartBeatMillis;
-	private final int sleepWhile = 50; 
+	private final int sleepWhile = 150; 
 	
 	private BufferedReader buffReader;
 	private PrintStream printStream;
@@ -742,8 +742,8 @@ public class ATresponder extends Thread {
 			
 		} 
 		
-		send("AT+COPS?"); // Provider + access technology
-		send("AT+CSQ"); // Signal Strength
+		//send("AT+COPS?"); // Provider + access technology
+		//send("AT+CSQ"); // Signal Strength
 	}
 	
 	public boolean send(String cmd, long timeout, boolean sstr) {
