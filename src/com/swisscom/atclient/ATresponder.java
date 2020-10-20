@@ -390,23 +390,23 @@ public class ATresponder extends Thread {
 			
 			send("AT+CMGD=0,4"); // delete all stored short messages
 			
-			send("AT^SCFG?"); // Extended Configuration Settings: read command returns a list of all supported parameters and their current values.
-			send("AT^SSRVSET=\"current\""); // check currently active settings			
+			//send("AT^SCFG?"); // Extended Configuration Settings: read command returns a list of all supported parameters and their current values.
+			//send("AT^SSRVSET=\"current\""); // check currently active settings			
 			
-			send("AT+CGMI"); // Module manufacturers
-			send("AT+CGMM"); // Module model			
-			send("AT+CGSN"); // Module serial number / IMEI			
-			send("AT+CIMI"); // IMSI		
-			send("AT+CPIN?"); // SIM Card status			
-			send("AT+CREG?"); // Network registration
+			//send("AT+CGMI"); // Module manufacturers
+			//send("AT+CGMM"); // Module model			
+			//send("AT+CGSN"); // Module serial number / IMEI			
+			//send("AT+CIMI"); // IMSI		
+			//send("AT+CPIN?"); // SIM Card status			
+			//send("AT+CREG?"); // Network registration
 			
 			//send("AT^SMONI"); // supplies information of the serving cell
-			send("ATI1"); // display product identification information
+			//send("ATI1"); // display product identification information
 			//send("AT^SCFG=\"SAT/URC\",\"1\""); // enable modem logging
-			send("AT+CEER"); // returns an extended error report (of previous error)
-			send("AT+CEER=0"); // reset the extended error report to initial value
+			//send("AT+CEER"); // returns an extended error report (of previous error)
+			//send("AT+CEER=0"); // reset the extended error report to initial value
 			
-			send("AT&W"); // Store AT Command Settings to User Defined Profile
+			//send("AT&W"); // Store AT Command Settings to User Defined Profile
 			
 			if (!actualCopsMode.contentEquals("A") && actualCopsMode.length() == 1) {
 				// Force the mobile terminal to select and register a specific network
@@ -425,8 +425,8 @@ public class ATresponder extends Thread {
 				send("AT+COPS=0", "OK", 60000, true);
 			}
 			
-			send("AT+COPS?"); // Provider + access technology
-			send("AT+CSQ"); // Signal Strength
+			//send("AT+COPS?"); // Provider + access technology
+			//send("AT+CSQ"); // Signal Strength
 				
 			// Start listening...
 			send("AT^SSTR?", null); // Check for STK Menu initialization 			
@@ -1170,7 +1170,7 @@ public class ATresponder extends Thread {
 	}
 	
 	public void updateWatchdog() {
-		if ( watchdogList.get(0) == null)
+		if ( watchdogFile == null || watchdogList.get(0) == null )
 			return; // update watchdog file only if the list contains the RAT Timestamp (avoid too early updates)
 		try {
 			log.trace("Update watchdog file \'" + watchdogFile + "\'");
@@ -1202,17 +1202,20 @@ public class ATresponder extends Thread {
 		if (msg == null)
 			msg = "ERR";
 		
-		try {
-			log.error("Update watchdog file \'" + watchdogFile + "\' with ERR content");
+		if ( watchdogFile != null ) {
+			try {
+				
+				log.error("Update watchdog file \'" + watchdogFile + "\' with ERR content");
 
-			//         RAT-Timestamp, IMSI, Provider, RAT
-			// normal: 2020.05.23 17:28:53, 228017230302066, Swisscom, 4G , 83%, +++-
-			// error : 2020.05.23 17:28:53, ERR            , ERR     , ERR,    ,  
-			watchdogWriter = new BufferedWriter(new FileWriter(watchdogFile));
-			watchdogWriter.write(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()) + "," + msg + ",,ERR,ERR,ERR");
-			watchdogWriter.close();
-		} catch (IOException e) {
-			log.error("Failed to update watchdog file at" + watchdogFile, e);
+				//         RAT-Timestamp, IMSI, Provider, RAT
+				// normal: 2020.05.23 17:28:53, 228017230302066, Swisscom, 4G , 83%, +++-
+				// error : 2020.05.23 17:28:53, ERR            , ERR     , ERR,    ,  
+				watchdogWriter = new BufferedWriter(new FileWriter(watchdogFile));
+				watchdogWriter.write(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()) + "," + msg + ",,ERR,ERR,ERR");
+				watchdogWriter.close();
+			} catch (IOException e) {
+				log.error("Failed to update watchdog file at" + watchdogFile, e);
+			}
 		}
 		
 		log.info("Send SHUTDOWN Command and exit application");
