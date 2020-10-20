@@ -396,9 +396,10 @@ public class ATresponder extends Thread {
 			//send("AT+CGMI"); // Module manufacturers
 			//send("AT+CGMM"); // Module model			
 			//send("AT+CGSN"); // Module serial number / IMEI			
-			//send("AT+CIMI"); // IMSI		
-			//send("AT+CPIN?"); // SIM Card status			
-			//send("AT+CREG?"); // Network registration
+			
+			send("AT+CIMI"); // IMSI		
+			send("AT+CPIN?"); // SIM Card status			
+			send("AT+CREG?"); // Network registration
 			
 			//send("AT^SMONI"); // supplies information of the serving cell
 			//send("ATI1"); // display product identification information
@@ -425,9 +426,9 @@ public class ATresponder extends Thread {
 				send("AT+COPS=0", "OK", 60000, true);
 			}
 			
-			//send("AT+COPS?"); // Provider + access technology
-			//send("AT+CSQ"); // Signal Strength
-				
+			send("AT+COPS?"); // Provider + access technology
+			send("AT+CSQ"); // Signal Strength
+			
 			// Start listening...
 			send("AT^SSTR?", null); // Check for STK Menu initialization 			
 		}
