@@ -680,8 +680,12 @@ public class ATresponder extends Thread {
 						case 254:
 							log.info("STK254: SIM Applet returns to main menu");
 							
-							// STK Process completed. Let's do some regular checks:
-							setRAT();
+							// Check if RAT keyword was set in previous STK call
+							verifyRAT();
+							
+							// Check Signal Data (keep OLED display updated)
+							send("AT+COPS?"); // Provider + access technology
+							send("AT+CSQ"); // Signal Strength
 							
 							break;
 						case 255:
@@ -703,7 +707,7 @@ public class ATresponder extends Thread {
 		
 	}
 
-	private void setRAT() {
+	private void verifyRAT() {
 		if (rat) {
 			setRAT(false); // reset flag
 			
@@ -737,13 +741,8 @@ public class ATresponder extends Thread {
 						actualCopsMode = newCopsMode; // update actual mode if command was successful
 					
 				}
-				
-			}
-			
+			}	
 		} 
-		
-		//send("AT+COPS?"); // Provider + access technology
-		//send("AT+CSQ"); // Signal Strength
 	}
 	
 	public boolean send(String cmd, long timeout, boolean sstr) {
