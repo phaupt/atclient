@@ -686,6 +686,7 @@ public class ATresponder extends Thread {
 							// Check Signal Data (keep OLED display updated)
 							send("AT+COPS?"); // Provider + access technology
 							send("AT+CSQ"); // Signal Strength
+							send("AT^SSTR?", null);
 							
 							break;
 						case 255:
