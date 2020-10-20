@@ -831,7 +831,7 @@ public class ATresponder extends Thread {
 						if (pattern != null)
 							matcher = pattern.matcher(rx);
 						
-						if (getTextSms && matcher != null && matcher.matches() && !rx.startsWith("+CMGR:") && !rx.startsWith("OK")) {							
+						if (getTextSms && textSmsHeader != null && matcher != null && matcher.matches() && !rx.startsWith("+CMGR:") && !rx.startsWith("OK")) {							
 							// Text Short Message matches pattern!
 							log.info("Detected Text SMS, which matches the SMS pattern: \"" + rx + "\"");
 							
@@ -857,7 +857,7 @@ public class ATresponder extends Thread {
 										+ Arrays.asList(rx.replace("\"", "").split(",")).get(3) + "," 
 										+ Arrays.asList(rx.replace("\"", "").split(",")).get(4);
 							} catch (Exception e) {
-								textSmsHeader = "n/a";
+								textSmsHeader = null;
 							}
 
 						} else if (rx.startsWith("228") && rx.length() == 15) {
@@ -1137,6 +1137,7 @@ public class ATresponder extends Thread {
 	public String publishSMS(String smsContent) {
 		// Add [IMSI] Prefix to the text content
 		String fullURL = smsURL + "?" + smsQueryParam + "=" + "[" + textSmsHeader + "," + imsi + "]&nbsp" + smsContent.replaceAll(" ", "&nbsp;");
+		textSmsHeader = null; //reset
 		try {
 			URL url = new URL(fullURL);
 			URLConnection urlConnection = url.openConnection();
