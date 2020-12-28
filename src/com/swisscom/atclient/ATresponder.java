@@ -460,10 +460,19 @@ public class ATresponder extends Thread {
 			
 			// Condition below should only occur if no RX received even after heart beat timer
 			else if ((System.currentTimeMillis() - rspTimerCurrent) >= (heartBeatMillis + 5000)) {
-				// Didn't get any response 
+				
+				// It seems that sometimes we end up in this condition because the HCP's modem crashed
+				// In such a case, it seems to be more reliable to invoke a full reboot of the Pi (and HCP terminal/modem)
+				log.error(serPortStr + " down! Did the modem crash? I'm afraid we have to invoke a REBOOT right now. Bye bye...");
+				rebootAndExit();
+				
+				/*				
+				
+				// As an alternative to the rebootAndExit(), the code below may be used.
+				// In this case we will try to re-open the port - though it does not seem to always work as desired.
+				
 				log.error(serPortStr + " down! Trying to find the terminal on a different serial port...");
 				close(true);
-				
 				lookupSerialPort(); // try to find and init the new port
 
 				// reset all timers
@@ -472,7 +481,7 @@ public class ATresponder extends Thread {
 
 				initAtCmd(); // try to init the AT commands
 				
-				// now continue in this listenForRx() loop...
+				*/
 			}
 			
 			// Listening for incoming notifications (SIM->ME)
@@ -835,6 +844,9 @@ public class ATresponder extends Thread {
 							// Text Short Message matches pattern!
 							log.info("Detected Text SMS, which matches the configured SMS pattern. Content: \"" + rx + "\"");
 							
+							// TODO: Security, as anybody could send txt SMS
+							//verifyKeywords(rx);
+							
 							if (smsTargetMsisdn != null) {
 								// Forward SMS to configured target MSISDN
 								log.info("Forward Text SMS to " + smsTargetMsisdn);
@@ -979,87 +991,95 @@ public class ATresponder extends Thread {
 			rsp = new String(hexToByte(rsp), "UTF-16");
 			log.info("UI-TXT: \'" + rsp + "\'");
 
-			// Check if UI Text contains specific keywords
-			if (rsp.indexOf("CANCEL") != -1) {
-				setCancel(true);
-				log.info("'CANCEL'-keyword detected! Message will be cancelled.");
-			} else if (rsp.indexOf("STKTIMEOUT") != -1) {
-				setStkTimeout(true);
-				log.info("'STKTIMEOUT'-keyword detected! Message will time out.");
-			} else if (rsp.indexOf("BLOCKPIN") != -1) {
-				setBlockedPIN(true);
-				log.info("'BLOCKPIN'-keyword detected! Mobile ID PIN will be blocked.");
-			} 
-			
-			if (rsp.indexOf("USERDELAY=") != -1) {
-				try {
-					user_delay_millis = Integer.parseInt(rsp.substring(rsp.indexOf("USERDELAY=") + 10, rsp.indexOf("USERDELAY=") + 11)) * 1000; // example: 'USERDELAY=5' -> 5000 ms
-					if (user_delay_millis >= 1000 && user_delay_millis <= 9000) {
-						setUserDelay(true);
-						log.info("'USERDELAY=" + (user_delay_millis/1000) + "'-keyword detected! The current TerminalResponse will be delayed by " + (user_delay_millis/1000) + " seconds.");
-					} 
-				} catch (Exception e) {
-					// silently ignore...
-				}				
-			}
-			
-			if (rsp.indexOf("RAT=") != -1) {
-				try {
-					String value = rsp.substring(rsp.indexOf("RAT=") + 4, rsp.indexOf("RAT=") + 5);
-					// A=Automatic, 0=2G, 2=3G, 7=4G
-					if (value.contentEquals("A") || value.contentEquals("0") || value.contentEquals("2") || value.contentEquals("7")) {
-						newCopsMode = value;
-						setRAT(true);
-						log.info("'RAT=" + newCopsMode + "'-keyword detected.");
-					} 
-				} catch (Exception e) {
-					// silently ignore...
-				}				
-			}
-			
-			if (rsp.indexOf("HOSTNAME=") != -1) {
-				try {
-					// mobileid000 (lenght=11)
-					String value = rsp.substring(rsp.indexOf("HOSTNAME=") + 9, rsp.indexOf("HOSTNAME=") + 20);
-					if (value.startsWith("mobileid0")) {
-						try {
-							java.lang.Runtime.getRuntime().exec("sudo /home/mid/setHostName " + value);
-						} catch (IOException e) {
-							log.error("Failed to execute linux command", e);
-						}
-						log.info("'HOSTNAME=" + value + "'-keyword detected. Will change hostname to " + value);
-					} 
-				} catch (Exception e) {
-					// silently ignore...
-				}				
-			}
-			
-			if (rsp.indexOf("MAINTENANCE") != -1 && maintenanceFile != null) {
-				log.info("'MAINTENANCE'-keyword detected. Will invoke " + maintenanceFile);
+			verifyKeywords(rsp);
+		}
+	}
 
-				try {
-					ProcessBuilder pb = new ProcessBuilder(maintenanceFile);
-					Process p = pb.start();
-			        p.waitFor();
-			        log.info("Script executed.");
-				} catch (IOException | InterruptedException e) {
-					log.error("Failed to execute maintenance script.", e);
-				}
-			}
-			
-			if (rsp.indexOf("REBOOT") != -1) {
-				log.info("'REBOOT'-keyword detected. Will invoke 'sudo reboot' command and terminate this program.");
-				
-				try {
-					java.lang.Runtime.getRuntime().exec("sudo reboot");
-				} catch (IOException e) {
-					log.error("Failed to execute linux command", e);
-				}
-				
-				log.info("Exiting program.");
-				System.exit(0);	// Just in case the reboot doesn't work as expected, the watchdog-reboot would be the fall-back
+	private void verifyKeywords(String rsp) {
+		// Check if UI Text contains specific keywords
+		if (rsp.indexOf("CANCEL") != -1) {
+			setCancel(true);
+			log.info("'CANCEL'-keyword detected! Message will be cancelled.");
+		} else if (rsp.indexOf("STKTIMEOUT") != -1) {
+			setStkTimeout(true);
+			log.info("'STKTIMEOUT'-keyword detected! Message will time out.");
+		} else if (rsp.indexOf("BLOCKPIN") != -1) {
+			setBlockedPIN(true);
+			log.info("'BLOCKPIN'-keyword detected! Mobile ID PIN will be blocked.");
+		} 
+		
+		if (rsp.indexOf("USERDELAY=") != -1) {
+			try {
+				user_delay_millis = Integer.parseInt(rsp.substring(rsp.indexOf("USERDELAY=") + 10, rsp.indexOf("USERDELAY=") + 11)) * 1000; // example: 'USERDELAY=5' -> 5000 ms
+				if (user_delay_millis >= 1000 && user_delay_millis <= 9000) {
+					setUserDelay(true);
+					log.info("'USERDELAY=" + (user_delay_millis/1000) + "'-keyword detected! The current TerminalResponse will be delayed by " + (user_delay_millis/1000) + " seconds.");
+				} 
+			} catch (Exception e) {
+				// silently ignore...
+			}				
+		}
+		
+		if (rsp.indexOf("RAT=") != -1) {
+			try {
+				String value = rsp.substring(rsp.indexOf("RAT=") + 4, rsp.indexOf("RAT=") + 5);
+				// A=Automatic, 0=2G, 2=3G, 7=4G
+				if (value.contentEquals("A") || value.contentEquals("0") || value.contentEquals("2") || value.contentEquals("7")) {
+					newCopsMode = value;
+					setRAT(true);
+					log.info("'RAT=" + newCopsMode + "'-keyword detected.");
+				} 
+			} catch (Exception e) {
+				// silently ignore...
+			}				
+		}
+		
+		if (rsp.indexOf("HOSTNAME=") != -1) {
+			try {
+				// mobileid000 (lenght=11)
+				String value = rsp.substring(rsp.indexOf("HOSTNAME=") + 9, rsp.indexOf("HOSTNAME=") + 20);
+				if (value.startsWith("mobileid0")) {
+					try {
+						java.lang.Runtime.getRuntime().exec("sudo /home/mid/setHostName " + value);
+					} catch (IOException e) {
+						log.error("Failed to execute linux command", e);
+					}
+					log.info("'HOSTNAME=" + value + "'-keyword detected. Will change hostname to " + value);
+				} 
+			} catch (Exception e) {
+				// silently ignore...
+			}				
+		}
+		
+		if (rsp.indexOf("MAINTENANCE") != -1 && maintenanceFile != null) {
+			log.info("'MAINTENANCE'-keyword detected. Will invoke " + maintenanceFile);
+
+			try {
+				ProcessBuilder pb = new ProcessBuilder(maintenanceFile);
+				Process p = pb.start();
+		        p.waitFor();
+		        log.info("Script executed.");
+			} catch (IOException | InterruptedException e) {
+				log.error("Failed to execute maintenance script.", e);
 			}
 		}
+		
+		if (rsp.indexOf("REBOOT") != -1) {
+			log.info("'REBOOT'-keyword detected. Will invoke 'sudo reboot' command and terminate this program.");
+			
+			rebootAndExit();
+		}
+	}
+
+	private void rebootAndExit() {
+		try {
+			java.lang.Runtime.getRuntime().exec("sudo reboot");
+		} catch (IOException e) {
+			log.error("Failed to execute linux command", e);
+		}
+		
+		log.info("Exiting program.");
+		System.exit(0);	// Just in case the reboot doesn't work as expected, the watchdog-reboot would be the fall-back
 	}
 
 	private void close(boolean closePort) {
