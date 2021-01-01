@@ -69,7 +69,7 @@ public class ATresponder extends Thread {
 	private String serPortStr = null;
 	private SerialPort serPort;
 	
-	private final int safetySleepTime = 1000;
+	private final int safetySleepTime = 5000;
 	private int baudrate;
 	private int databits;
 	private int stopbits;
