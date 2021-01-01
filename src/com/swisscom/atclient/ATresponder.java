@@ -270,7 +270,7 @@ public class ATresponder extends Thread {
 						}
 						
 						// -Dserial.port was NOT provided, so the input value 'portStrInput' is null
-						else if (portStrInput == null && portDesc.contains(portStr) || portStrInput.contains(serPortStr)) {							
+						else if (portStrInput == null && portDesc.contains(portStr) || portStrInput != null && portStrInput.contains(serPortStr)) {							
 							log.info("Found a serial port: " + port.getSystemPortName() + " '" + portDesc + "'");
 
 							// Found a port with matching name... trying to open it
