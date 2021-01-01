@@ -262,9 +262,9 @@ public class ATresponder extends Thread {
 						// Check for known terminal (port string)
 						serPortStr = port.getSystemPortName();
 						
-						if (portStrInput != null && !portStrInput.equals(port.getSystemPortName())) {
+						if (portStrInput != null && !serPortStr.equals(port.getSystemPortName())) {
 							// -Dserial.port is NOT matching
-							log.info("Found a serial port: " + port.getSystemPortName() + " '" + portDesc + "' - but this isn't matching -Dserial.port=" + portStrInput);
+							log.info("Found a serial port: " + serPortStr + " '" + portDesc + "' - but this isn't matching -Dserial.port=" + portStrInput);
 							break;
 						}
 						
