@@ -206,9 +206,9 @@ public class ATresponder extends Thread {
 		boolean portFound = false;
 		try {
 			if (serPortStr == null) {
-				portFound = lookupSerialPort();
+				portFound = lookupSerialPort(null);
 			} else {
-				portFound = openPort();
+				portFound = lookupSerialPort(serPortStr);
 			}
 			if (portFound) {
 				initAtCmd();
@@ -237,7 +237,7 @@ public class ATresponder extends Thread {
 	      return prop;
 	   }
 
-	private boolean lookupSerialPort() throws UnsupportedEncodingException, IOException, InterruptedException {
+	private boolean lookupSerialPort(String portStrInput) throws UnsupportedEncodingException, IOException, InterruptedException {
 		log.info("Start serial port initialization.");
 		
 		SerialPort[] ports; 
@@ -260,7 +260,14 @@ public class ATresponder extends Thread {
 					
 					for (String portStr : portStrArr) {
 						// Check for known terminal (port string)
-						if (portDesc.contains(portStr)) {
+						
+						if (portStrInput != null && !portStrInput.equals(port.getSystemPortName())) {
+							// -Dserial.port is NOT matching
+							log.info("Found a serial port: " + port.getSystemPortName() + " '" + portDesc + "' - but this isn't matching -Dserial.port=" + portStrInput);
+							break;
+						}
+						
+						else if (portDesc.contains(portStr) || portStrInput.equals(port.getSystemPortName())) {							
 							log.info("Found a serial port: " + port.getSystemPortName() + " '" + portDesc + "'");
 							serPortStr = port.getSystemPortName();
 
