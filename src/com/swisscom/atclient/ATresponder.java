@@ -268,7 +268,7 @@ public class ATresponder extends Thread {
 							break;
 						}
 						
-						else if (portDesc.contains(portStr) || serPortStr.equals(port.getSystemPortName())) {							
+						else if (portStrInput == null && portDesc.contains(portStr) || serPortStr.equals(port.getSystemPortName())) {							
 							log.info("Found a serial port: " + port.getSystemPortName() + " '" + portDesc + "'");
 
 							// Found a port with matching name... trying to open it
