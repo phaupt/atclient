@@ -283,12 +283,7 @@ public class ATresponder extends Thread {
 			}
 			
 			if (!portSuccess) {
-				log.error("No terminal found. Next check in 10 seconds.");
-				try {
-					Thread.sleep(10000); 
-				} catch (InterruptedException e) {
-					log.error("Internal error", e);
-				}
+				log.error("No terminal found yet. Let's try again.");
 			}	
 		}	
 		Thread.sleep(2000);
