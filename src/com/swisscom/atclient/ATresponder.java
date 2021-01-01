@@ -293,6 +293,7 @@ public class ATresponder extends Thread {
 			
 			if (!portSuccess) {
 				log.error("No terminal found yet. Let's try again.");
+				sleep(1000);
 			}	
 		}	
 		Thread.sleep(2000);
@@ -323,6 +324,7 @@ public class ATresponder extends Thread {
 		if (!serPort.openPort(safetySleepTime)) {
 			// Port not available
 			log.debug(serPortStr + " is currently not available.");
+			serPort.closePort();
 			return false;			
 		} else {
 			// Port available
