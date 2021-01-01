@@ -319,7 +319,7 @@ public class ATresponder extends Thread {
 		log.debug(serPortStr + " set state of the DTR line to 1");
 		serPort.setDTR();
 		
-		// Try to open port..
+		// Try to open port.. the saftySleepTime needs to be long enough to ensure the port will not be opened too early, causing a port freeze
 		log.debug(serPortStr + " trying to open");
 		if (!serPort.openPort(safetySleepTime)) {
 			// Port not available
