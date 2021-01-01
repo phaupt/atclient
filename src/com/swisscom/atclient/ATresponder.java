@@ -262,12 +262,14 @@ public class ATresponder extends Thread {
 						// Check for known terminal (port string)
 						serPortStr = port.getSystemPortName();
 						
+						// -Dserial.port was provided, so 'portStrInput' has the name we are looking for
 						if (portStrInput != null && !serPortStr.equals(port.getSystemPortName())) {
 							// -Dserial.port is NOT matching
 							log.info("Found a serial port: " + serPortStr + " '" + portDesc + "' - but this isn't matching -Dserial.port=" + portStrInput);
 							break;
 						}
 						
+						// -Dserial.port was NOT provided, so the input value 'portStrInput' is null
 						else if (portStrInput == null && portDesc.contains(portStr) || serPortStr.equals(port.getSystemPortName())) {							
 							log.info("Found a serial port: " + port.getSystemPortName() + " '" + portDesc + "'");
 
