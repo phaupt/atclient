@@ -260,6 +260,7 @@ public class ATresponder extends Thread {
 					
 					for (String portStr : portStrArr) {
 						// Check for known terminal (port string)
+						serPortStr = port.getSystemPortName();
 						
 						if (portStrInput != null && !portStrInput.equals(port.getSystemPortName())) {
 							// -Dserial.port is NOT matching
@@ -267,9 +268,8 @@ public class ATresponder extends Thread {
 							break;
 						}
 						
-						else if (portDesc.contains(portStr) || portStrInput.equals(port.getSystemPortName())) {							
+						else if (portDesc.contains(portStr) || serPortStr.equals(port.getSystemPortName())) {							
 							log.info("Found a serial port: " + port.getSystemPortName() + " '" + portDesc + "'");
-							serPortStr = port.getSystemPortName();
 
 							// Found a port with matching name... trying to open it
 							portSuccess = openPort();
