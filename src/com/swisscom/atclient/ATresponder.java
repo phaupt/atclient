@@ -69,7 +69,7 @@ public class ATresponder extends Thread {
 	private String serPortStr = null;
 	private SerialPort serPort;
 	
-	private final int safetySleepTime = 5000;
+	private final int safetySleepTime = 500;
 	private int baudrate;
 	private int databits;
 	private int stopbits;
@@ -305,6 +305,14 @@ public class ATresponder extends Thread {
 			log.error("No Port defined. Missing '-Dserial.port' argument?");
 			System.exit(0);
 		}
+		
+		try {
+			// wait long enough to ensure the port will not be opened too early, causing a port freeze
+			sleep(5000);
+		} catch (InterruptedException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} 
 			
 		serPort = SerialPort.getCommPort(serPortStr);
 		
@@ -319,7 +327,7 @@ public class ATresponder extends Thread {
 		log.debug(serPortStr + " set state of the DTR line to 1");
 		serPort.setDTR();
 		
-		// Try to open port.. the saftySleepTime needs to be long enough to ensure the port will not be opened too early, causing a port freeze
+		// Try to open port.. the saftySleepTime needs to be 
 		log.debug(serPortStr + " trying to open");
 		if (!serPort.openPort(safetySleepTime)) {
 			// Port not available
