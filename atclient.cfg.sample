@@ -84,22 +84,26 @@ cops.mode =
 #   0 = disabled
 #
 # Linux watchdog integration hint (separate from ATClient config):
+#   Recommended production target state uses one productive watchdog file only:
+#     /var/log/watchdog.atclient
+#   Legacy paths for older setups (not recommended as parallel production model):
+#     /home/mid/atclient/watchdog.atclient
+#     /var/log/watchdog-keywordcheck.atclient
 #   Example /etc/watchdog.conf:
-#     file = /home/mid/atclient/watchdog.atclient
-#     change = 900    # 15 minutes, in seconds
+#     file = /var/log/watchdog.atclient
+#     change = 900    # conservative production starting point (15 minutes, seconds)
 #
 # Operational commands:
 #   sudo systemctl status watchdog
 #   sudo systemctl stop watchdog
 #   sudo systemctl start watchdog
-#   stat /home/mid/atclient/watchdog.atclient
 #   stat /var/log/watchdog.atclient
 #
 # Sample defaults below follow recommended production baseline for activity semantics,
 # but watchdog remains disabled by default for safe local/manual usage.
 #
 watchdog.enable = false
-watchdog.file   = /home/mid/atclient/watchdog.atclient
+watchdog.file   = /var/log/watchdog.atclient
 watchdog.mode   = activity
 watchdog.activity.events = 19
 watchdog.activity.startup.grace = 300000

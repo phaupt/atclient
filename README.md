@@ -128,12 +128,33 @@ Watchdog modes:
 Meaningful STK activity is derived from modem `^SSTR` / `^SSTN` notifications. ATClient parses those command/event codes and logs them as `STKxxx` markers. For production health monitoring, `STK019: SEND MESSAGE` is the recommended primary signal because it best reflects end-to-end Mobile ID activity.
 
 Recommended production starting point:
+* `watchdog.file=/var/log/watchdog.atclient` (single productive watchdog file path)
 * `watchdog.mode=activity`
 * `watchdog.activity.events=19`
 * `watchdog.activity.startup.grace=300000` (5 minutes, milliseconds)
-* Linux watchdog `change=900` (15 minutes, seconds) in `/etc/watchdog.conf`
+* Linux watchdog `change=900` (15 minutes, seconds) as a conservative starting point in `/etc/watchdog.conf`
 
 `atclient.cfg.sample` already uses that production-oriented activity baseline, while keeping `watchdog.enable=false` by default for safer local/manual testing.
+
+Host-side Linux watchdog must also be configured (ATClient only updates the file):
+
+```ini
+# /etc/watchdog.conf
+file = /var/log/watchdog.atclient
+change = 900
+```
+
+Why `change=900` is a conservative starting point:
+* healthy Mobile ID activity is usually expected about every 5 minutes
+* a failed attempt may take about 60-80 seconds before timeout
+* retry cadence in error mode is often around 3 minutes
+* startup/modem attach/SIM registration need additional safety margin
+* less aggressive than 10-12 minute settings during temporary carrier/network issues
+
+Migration note for older setups:
+* recommended target state now uses only `/var/log/watchdog.atclient` as productive file
+* `/home/mid/atclient/watchdog.atclient` is legacy and should be migrated
+* `/var/log/watchdog-keywordcheck.atclient` is historical keyword-check path, not a parallel production model
 
 ### log4j2.xml
 
@@ -299,6 +320,8 @@ The `+C...` commands above are standardized 3GPP-style AT commands. The `^SST...
 
 In productive deployments, a watchdog may be used to automatically reboot the device if expected activity stops. During local testing, this can interfere with manual work by triggering unexpected reboots.
 
+During manual tests and debugging, stopping the Linux watchdog service is often intentional to avoid unwanted reboot loops.
+
 Before doing manual tests, check and optionally stop the watchdog:
 
 ```bash
@@ -312,10 +335,11 @@ Remember to re-enable it when you are done testing.
 
 1. Configure ATClient:
    * `watchdog.enable=true`
+   * `watchdog.file=/var/log/watchdog.atclient`
    * `watchdog.mode=activity`
    * `watchdog.activity.events=19`
    * `watchdog.activity.startup.grace=300000`
-2. Configure Linux watchdog to monitor the same file and set `change=900` in `/etc/watchdog.conf`.
+2. Configure Linux watchdog to monitor the same file and set `change=900` in `/etc/watchdog.conf` (conservative starting point).
 3. Start/restart ATClient and follow the log:
    * `tail -F /var/log/atclient.log`
 4. Trigger a Mobile ID authentication from your monitoring/test backend.
@@ -324,6 +348,12 @@ Remember to re-enable it when you are done testing.
    * watchdog file timestamp/content updates shortly after `STK019`
 6. Verify negative case:
    * if no `STK019` occurs for longer than the Linux watchdog `change` window, recovery action is expected.
+
+Useful host-side commands:
+* `sudo systemctl status watchdog`
+* `sudo systemctl stop watchdog`
+* `sudo systemctl start watchdog`
+* `stat /var/log/watchdog.atclient`
 
 ## Troubleshooting
 
