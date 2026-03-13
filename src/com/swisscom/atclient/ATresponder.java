@@ -152,12 +152,17 @@ public class ATresponder extends Thread {
 			heartBeatMillis = requireIntProperty(prop, "atclient.atcommand.heartbeat");
 			log.info("Property atclient.atcommand.heartbeat set to " + heartBeatMillis);
 			
-			if (prop.getProperty("cops.mode").trim().length() == 1) {
-				actualCopsMode = prop.getProperty("cops.mode").trim();
+			String configuredCopsMode = prop.getProperty("cops.mode", "").trim().toUpperCase();
+			if (configuredCopsMode.length() == 0) {
+				actualCopsMode = "A";
+				log.info("Property cops.mode set to automatic");
+			} else if (configuredCopsMode.contentEquals("A") || configuredCopsMode.contentEquals("0") || configuredCopsMode.contentEquals("2")
+					|| configuredCopsMode.contentEquals("7")) {
+				actualCopsMode = configuredCopsMode;
 				log.info("Property cops.mode set to " + actualCopsMode);
 			} else {
 				actualCopsMode = "A";
-				log.info("Property cops.mode set to automatic");
+				log.warn("Property cops.mode has invalid value '" + configuredCopsMode + "'. Fallback to automatic mode.");
 			}
 			
 			if (prop.getProperty("watchdog.enable").trim().equals("true")) {
@@ -914,13 +919,26 @@ public class ATresponder extends Thread {
 							if (rx.length() - rx.replaceAll(",","").length() < 3) {
 								startupNetworkReady = false;
 								if (rx.contentEquals("+COPS: 0"))
-									log.error("It seems there is currently no mobile radio reception");
+									log.warn("Network selection not usable yet ('+COPS: 0'). Waiting for registration/provider details.");
+								else
+									log.warn("Network selection not usable yet. Incomplete +COPS response '" + rx + "'.");
 								break;
 							}
-								
-							
+
 							String[] copsParts = rx.split(",");
-							value = Integer.parseInt(copsParts[3].trim());
+							if (copsParts.length < 4) {
+								startupNetworkReady = false;
+								log.warn("Network selection not usable yet. Incomplete +COPS response '" + rx + "'.");
+								break;
+							}
+							String providerName = copsParts.length > 2 ? copsParts[2].replace("\"", "").trim() : "";
+							try {
+								value = Integer.parseInt(copsParts[3].trim());
+							} catch (NumberFormatException e) {
+								startupNetworkReady = false;
+								log.warn("Network selection malformed. Invalid RAT value in +COPS response '" + rx + "'.");
+								break;
+							}
 							switch (value) {
 							case 0: 
 								log.info("RADIOT: GSM (2G)");
@@ -958,7 +976,6 @@ public class ATresponder extends Thread {
 								break;
 							}
 							
-							String providerName = copsParts[2].replace("\"", "").trim();
 							watchdogList.set(2, providerName); // Update provider name
 							watchdogList.set(0, new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date())); // Update  RAT-timestamp
 							startupNetworkReady = (providerName.length() > 0 && value >= 0 && value <= 7);

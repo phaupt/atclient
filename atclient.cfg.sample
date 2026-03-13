@@ -46,6 +46,7 @@ atclient.atcommand.heartbeat = 180000
 #       0 = GSM (2G)
 #       2 = UTRAN (3G)
 #       7 = E-UTRAN (4G/LTE)
+# invalid non-empty values fall back to automatic mode
 cops.mode = 
 
 ############################################################################################
