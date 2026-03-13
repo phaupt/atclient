@@ -5,7 +5,7 @@ Automate Mobile ID (SIM Toolkit) user response.
 
 #### Features
 
-* Auto-respond to SIM Toolkit request, for example a [Mobile ID](https://mobileid.ch) authentication request
+* Auto-respond to SIM Toolkit request, for example a [Mobile ID](https://www.mobileid.ch/en) authentication request
 * Auto detect the SIM terminal (USB port)
 * Configuration of the radio access technology (4G/3G/2G)
 * Forward incoming Text SMS (if they match a configured pattern) to a configured target MSISDN
@@ -14,18 +14,24 @@ Automate Mobile ID (SIM Toolkit) user response.
 
 ### What you will need
 Recommended setup:
-* [Mobile ID SIM card](https://mobileid.ch)
-* [Raspberry PI 4](https://www.raspberrypi.org/products/raspberry-pi-4-model-b)
-* [PLS8-E LTE terminal](http://electronicshcp.com/product/hit-u4-lte)
+* [Mobile ID SIM card](https://www.mobileid.ch/en)
+* [Raspberry Pi 4](https://www.raspberrypi.com/products/raspberry-pi-4-model-b/)
+* [PLS8-E LTE terminal](https://www.hcp.rs/en/products/communications-/hit-u4-lte)
 * [RPi Relay Board](https://www.waveshare.com/wiki/RPi_Relay_Board)
 
 ### Wireless terminal
 
-This application has been tested with Raspberry PI 4 and PLS8-E LTE terminal. [HCP HIT U4 LTE terminal](http://electronicshcp.com/product/hit-u4-lte), [Technical documentation](https://developer.gemalto.com/documentation/pls8-e-technical-documentation), [Windows Drivers](https://files.c-wm.net/index.php/s/GRPgoz5m7a73c54) (Password: Gemalto019)
+This application has been tested with Raspberry Pi 4 and PLS8-E LTE terminal ([HCP HIT U4 LTE](https://www.hcp.rs/en/products/communications-/hit-u4-lte)).
+
+> **Note:** Official Cinterion / Thales technical documentation and Windows drivers are no longer published on the old public Gemalto URLs.
+> For current documentation and support, use:
+> - [Thales/Gemalto Support Portal](https://supportportal.gemalto.com/csm?id=kb_home_page)
+> - [HCP Support](https://www.hcp.rs/en/support/communications)
+> - [HCP Contact](https://www.hcp.rs/en/contact-us-)
 
 ### Serial port
 
-To find serial port details on Raspberian:
+To find serial port details on Raspberry Pi OS:
 
 1. Unplug the GSM terminal
 2. Run: `sudo dmesg -c`
@@ -34,7 +40,7 @@ To find serial port details on Raspberian:
 
 ### How To
 
-#### Clone GIT repository
+#### Clone Git repository
 `pi@raspberypi:~ $ git clone https://github.com/phaupt/atclient.git`
 
 #### Compile java source
@@ -100,7 +106,30 @@ If a keyword (case sensitive) is found in the Mobile ID authentication message, 
 
 ##### Auto start at boot
 
-On Raspberian you can configure ATClient to auto-start (as forked process) at boot. Edit `/etc/rc.local` and before the `exit 0`, add:
+On Raspberry Pi OS you can configure ATClient to auto-start (as forked process) at boot. Edit `/etc/rc.local` and before the `exit 0`, add:
 `(/bin/sleep 80 && /usr/bin/java -Dconfig.file=/home/mid/atclient/atclient.cfg -Dlog.file=/home/mid/atclient/atclient.log -Dlog4j.configurationFile=/home/mid/atclient/log4j2.xml -cp "/home/mid/atclient/class:/home/mid/atclient/lib/*" com.swisscom.atclient.ATClient) &`
 
 The sleep of 80 seconds is recommended because the PLS8-E LTE terminal requires 30-40 seconds boot time.
+
+> **Tip:** On modern Raspberry Pi OS, a systemd service is usually preferable to rc.local for auto-starting services. Example unit file:
+> ```ini
+> [Unit]
+> Description=ATClient Mobile ID responder
+> After=network.target
+>
+> [Service]
+> Type=simple
+> ExecStartPre=/bin/sleep 80
+> ExecStart=/usr/bin/java -Dconfig.file=/home/mid/atclient/atclient.cfg -Dlog.file=/home/mid/atclient/atclient.log -Dlog4j.configurationFile=/home/mid/atclient/log4j2.xml -cp "/home/mid/atclient/class:/home/mid/atclient/lib/*" com.swisscom.atclient.ATClient
+> Restart=on-failure
+> User=mid
+>
+> [Install]
+> WantedBy=multi-user.target
+> ```
+
+### License
+
+This project is licensed under the Apache License 2.0 — see [LICENSE](LICENSE) for details.
+
+Third-party dependencies bundled in `lib/` are documented in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

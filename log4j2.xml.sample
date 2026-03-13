@@ -3,7 +3,6 @@
 <Configuration status="WARN">
 	<Properties>
 		<Property name="log-path">logs</Property>
-		"log4j.properties"
 	</Properties>
 	<Appenders>
 
