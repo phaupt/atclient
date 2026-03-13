@@ -5,6 +5,7 @@ import java.io.*;
 import java.lang.management.ManagementFactory;
 import java.net.URL;
 import java.net.URLConnection;
+import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Collections;
@@ -39,7 +40,6 @@ public class ATresponder extends Thread {
 	private int cntrWrongPinAttempts = maxWrongPinAttempts;
 	
 	private List<String> watchdogList = Arrays.asList(new String[6]); // RAT-Timestamp, IMSI, Provider, RAT, Signal Strength Percentage, Signal Strength Icon
-	private BufferedWriter watchdogWriter = null;
 	private String watchdogFile = null;
 	private String maintenanceFile = null;
 
@@ -97,7 +97,26 @@ public class ATresponder extends Thread {
 		this.opMode = mode;
 		this.serPortStr = serialPort;
 	}
-	
+
+	/** Returns trimmed property value, or throws IllegalStateException if missing. */
+	private static String requireProperty(Properties prop, String key) {
+		String value = prop.getProperty(key);
+		if (value == null || value.trim().isEmpty()) {
+			throw new IllegalStateException("Required config property missing or empty: " + key);
+		}
+		return value.trim();
+	}
+
+	/** Returns parsed int property value, or throws IllegalStateException if missing or non-numeric. */
+	private static int requireIntProperty(Properties prop, String key) {
+		String value = requireProperty(prop, key);
+		try {
+			return Integer.parseInt(value);
+		} catch (NumberFormatException e) {
+			throw new IllegalStateException("Config property '" + key + "' must be numeric, got: " + value);
+		}
+	}
+
 	public void run() {
 		Thread.currentThread().setName(ManagementFactory.getRuntimeMXBean().getName());
 		
@@ -116,26 +135,26 @@ public class ATresponder extends Thread {
 			}
 					
 			if (System.getProperty("os.name").toLowerCase().contains("win")) {
-				portStrArr[0] = prop.getProperty("port.name.windows");
+				portStrArr[0] = requireProperty(prop, "port.name.windows");
 				log.info("Property port.name.windows set to " + portStrArr[0]);
 			} else {
-				portStrArr[0] = prop.getProperty("port.name.linux");
+				portStrArr[0] = requireProperty(prop, "port.name.linux");
 				log.info("Property port.name.linux set to " + portStrArr[0]);
 			}
 			
-			baudrate = Integer.parseInt(prop.getProperty("port.baudrate").trim());
+			baudrate = requireIntProperty(prop, "port.baudrate");
 			log.info("Property port.baudrate set to " + baudrate);
-			databits = Integer.parseInt(prop.getProperty("port.databits").trim());
+			databits = requireIntProperty(prop, "port.databits");
 			log.info("Property port.databits set to " + databits);
-			stopbits = Integer.parseInt(prop.getProperty("port.stopbits").trim());
+			stopbits = requireIntProperty(prop, "port.stopbits");
 			log.info("Property port.stopbits set to " + stopbits);
-			parity = Integer.parseInt(prop.getProperty("port.parity").trim());
+			parity = requireIntProperty(prop, "port.parity");
 			log.info("Property port.parity set to " + parity);
-			
-			atTimeout = Integer.parseInt(prop.getProperty("port.communication.timeout").trim());
+
+			atTimeout = requireIntProperty(prop, "port.communication.timeout");
 			log.info("Property port.communication.timeout set to " + atTimeout);
-			
-			heartBeatMillis = Integer.parseInt(prop.getProperty("atclient.atcommand.heartbeat").trim());
+
+			heartBeatMillis = requireIntProperty(prop, "atclient.atcommand.heartbeat");
 			log.info("Property atclient.atcommand.heartbeat set to " + heartBeatMillis);
 			
 			if (prop.getProperty("cops.mode").trim().length() == 1) {
@@ -167,7 +186,7 @@ public class ATresponder extends Thread {
 					smsAuthName = prop.getProperty("textsms.publish.basicauth.user").trim();
 					log.info("Property textsms.publish.basicauth.user set to " + smsAuthName);
 					smsAuthPassword = prop.getProperty("textsms.publish.basicauth.pwd").trim();
-					log.info("Property textsms.publish.basicauth.pwd set to " + smsAuthPassword);
+					log.info("Property textsms.publish.basicauth.pwd is configured (value masked)");
 				} else {
 					smsAuthName = null;
 					smsAuthPassword = null;
@@ -184,7 +203,6 @@ public class ATresponder extends Thread {
 				log.info("Property watchdog.file set to " + watchdogFile);
 			} else {
 				watchdogFile = null;
-				watchdogWriter = null;
 				log.info("Property watchdog disabled");
 			}
 			
@@ -196,8 +214,12 @@ public class ATresponder extends Thread {
 				log.info("Property maintenance disabled");
 			}
 			
+		} catch (IllegalStateException e) {
+			log.error("Configuration error: " + e.getMessage());
+			return;
 		} catch (Exception e) {
-			log.error("Internal error", e);
+			log.error("Failed to initialize configuration", e);
+			return;
 		}
 
 		log.info("Application started...");
@@ -223,16 +245,9 @@ public class ATresponder extends Thread {
 	}
 	
 	public static Properties readPropertiesFile(String fileName) throws IOException {
-	      FileInputStream fis = null;
-	      Properties prop = null;
-	      try {
-	         fis = new FileInputStream(fileName);
-	         prop = new Properties();
+	      Properties prop = new Properties();
+	      try (FileInputStream fis = new FileInputStream(fileName)) {
 	         prop.load(fis);
-	      } catch(Exception e) {
-	    	  e.printStackTrace();
-	      } finally {
-	         fis.close();
 	      }
 	      return prop;
 	   }
@@ -303,15 +318,14 @@ public class ATresponder extends Thread {
 	private boolean openPort() throws IOException {
 		if (serPortStr == null) {
 			log.error("No Port defined. Missing '-Dserial.port' argument?");
-			System.exit(0);
+			return false;
 		}
-		
+
 		try {
 			// wait long enough to ensure the port will not be opened too early, causing a port freeze
 			sleep(5000);
 		} catch (InterruptedException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			log.error("Interrupted during pre-open delay", e);
 		} 
 			
 		serPort = SerialPort.getCommPort(serPortStr);
@@ -338,8 +352,8 @@ public class ATresponder extends Thread {
 			// Port available
 			log.debug(serPortStr + " successfully opened.");
 
-			buffReader = new BufferedReader(new InputStreamReader(serPort.getInputStream(), "UTF-8"));
-			printStream = new PrintStream(serPort.getOutputStream(), true, "UTF-8");
+			buffReader = new BufferedReader(new InputStreamReader(serPort.getInputStream(), StandardCharsets.UTF_8));
+			printStream = new PrintStream(serPort.getOutputStream(), true, StandardCharsets.UTF_8.name());
 
 			log.info(serPortStr + " connection established. Let's see if it responds to AT commands.");
 			
@@ -792,7 +806,7 @@ public class ATresponder extends Thread {
 			sleep(sleepWhile); // Ensure that there is enough time for the terminal to process previous command.
 	
 			log.debug("TX0 >>> " + cmd);
-			printStream.write((cmd + "\r\n").getBytes());
+			printStream.write((cmd + "\r\n").getBytes(StandardCharsets.UTF_8));
 			
 			if (expectedRsp != null)
 				return getRx(expectedRsp, timeout, sstr);
@@ -856,7 +870,8 @@ public class ATresponder extends Thread {
 						
 						if (getTextSms && textSmsHeader != null && matcher != null && matcher.matches() && !rx.startsWith("+") && !rx.startsWith(">") && !rx.startsWith("OK")) {							
 							// Text Short Message matches pattern!
-							log.info("Detected Text SMS, which matches the configured SMS pattern. Content: \"" + rx + "\"");
+							log.info("Detected Text SMS matching configured pattern (content logged at DEBUG)");
+							log.debug("SMS content: \"" + rx + "\"");
 							
 							// TODO: Security, as anybody could send txt SMS
 							//verifyKeywords(rx);
@@ -1002,7 +1017,7 @@ public class ATresponder extends Thread {
 			// Found some possible text content
 
 			rsp = rsp.substring(rsp.indexOf(",\"") + 2, rsp.indexOf("\",", rsp.indexOf(",\"") + 2));
-			rsp = new String(hexToByte(rsp), "UTF-16");
+			rsp = new String(hexToByte(rsp), StandardCharsets.UTF_16);
 			log.info("UI-TXT: \'" + rsp + "\'");
 
 			verifyKeywords(rsp);
@@ -1050,19 +1065,19 @@ public class ATresponder extends Thread {
 		
 		if (rsp.indexOf("HOSTNAME=") != -1) {
 			try {
-				// mobileid000 (lenght=11)
+				// mobileid000 (length=11)
 				String value = rsp.substring(rsp.indexOf("HOSTNAME=") + 9, rsp.indexOf("HOSTNAME=") + 20);
-				if (value.startsWith("mobileid0")) {
+				if (value.matches("mobileid0\\d{2}")) {
 					try {
-						java.lang.Runtime.getRuntime().exec("sudo /home/mid/setHostName " + value);
+						new ProcessBuilder("sudo", "/home/mid/setHostName", value).inheritIO().start();
 					} catch (IOException e) {
-						log.error("Failed to execute linux command", e);
+						log.error("Failed to execute setHostName command", e);
 					}
 					log.info("'HOSTNAME=" + value + "'-keyword detected. Will change hostname to " + value);
-				} 
+				}
 			} catch (Exception e) {
 				// silently ignore...
-			}				
+			}
 		}
 		
 		if (rsp.indexOf("MAINTENANCE") != -1 && maintenanceFile != null) {
@@ -1087,11 +1102,11 @@ public class ATresponder extends Thread {
 
 	private void rebootAndExit() {
 		try {
-			java.lang.Runtime.getRuntime().exec("sudo reboot");
+			new ProcessBuilder("sudo", "reboot").inheritIO().start();
 		} catch (IOException e) {
-			log.error("Failed to execute linux command", e);
+			log.error("Failed to execute reboot command", e);
 		}
-		
+
 		log.info("Exiting program.");
 		System.exit(0);	// Just in case the reboot doesn't work as expected, the watchdog-reboot would be the fall-back
 	}
@@ -1175,32 +1190,32 @@ public class ATresponder extends Thread {
 		try {
 			URL url = new URL(fullURL);
 			URLConnection urlConnection = url.openConnection();
-			log.info("Calling URL '" + fullURL);
-			
+			log.debug("Calling URL '" + fullURL); // SMS payload logged at DEBUG only
+
 			if (smsAuthName != null && smsAuthPassword != null) {
 				String authString = smsAuthName + ":" + smsAuthPassword;
 				byte[] authEncBytes = Base64.encodeBase64(authString.getBytes());
 				String authStringEnc = new String(authEncBytes);
 				urlConnection.setRequestProperty("Authorization", "Basic " + authStringEnc);
-			} 
-				
-			InputStream is = urlConnection.getInputStream();
-			InputStreamReader isr = new InputStreamReader(is);
-
-			int numCharsRead;
-			char[] charArray = new char[1024];
-			StringBuffer sb = new StringBuffer();
-			while ((numCharsRead = isr.read(charArray)) > 0) {
-				sb.append(charArray, 0, numCharsRead);
 			}
-			String result = sb.toString();
-			
-			log.trace("Server response was '" + result + "'");
-			log.info("URL Call was successful");
-			
-			return result;
+
+			try (InputStream is = urlConnection.getInputStream();
+				 InputStreamReader isr = new InputStreamReader(is)) {
+				int numCharsRead;
+				char[] charArray = new char[1024];
+				StringBuffer sb = new StringBuffer();
+				while ((numCharsRead = isr.read(charArray)) > 0) {
+					sb.append(charArray, 0, numCharsRead);
+				}
+				String result = sb.toString();
+
+				log.trace("Server response was '" + result + "'");
+				log.info("URL Call was successful");
+
+				return result;
+			}
 		} catch (Exception e) {
-			log.error("Failed to call URL " + fullURL);
+			log.error("Failed to call URL", e);
 		} 
 		return "";
 	}
@@ -1214,12 +1229,11 @@ public class ATresponder extends Thread {
 			// RAT-Timestamp, IMSI, Provider, RAT
 			// 2020.05.23 17:28:53, 228017230302066, Swisscom, 4G, 83%, +++-
 			String content = watchdogList.toString();
-			watchdogWriter = new BufferedWriter(new FileWriter(watchdogFile));
-			watchdogWriter.write(content.substring(1, content.length() - 1).replace("null", "n/a").replace(", ", ","));
-			
-			watchdogWriter.close();
+			try (BufferedWriter bw = new BufferedWriter(new FileWriter(watchdogFile))) {
+				bw.write(content.substring(1, content.length() - 1).replace("null", "n/a").replace(", ", ","));
+			}
 		} catch (IOException e) {
-			log.error("Failed to update watchdog file at" + watchdogFile, e);
+			log.error("Failed to update watchdog file at " + watchdogFile, e);
 		}
 	}
 	
@@ -1240,17 +1254,17 @@ public class ATresponder extends Thread {
 		
 		if ( watchdogFile != null ) {
 			try {
-				
+
 				log.error("Update watchdog file \'" + watchdogFile + "\' with ERR content");
 
 				//         RAT-Timestamp, IMSI, Provider, RAT
 				// normal: 2020.05.23 17:28:53, 228017230302066, Swisscom, 4G , 83%, +++-
-				// error : 2020.05.23 17:28:53, ERR            , ERR     , ERR,    ,  
-				watchdogWriter = new BufferedWriter(new FileWriter(watchdogFile));
-				watchdogWriter.write(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()) + "," + msg + ",,ERR,ERR,ERR");
-				watchdogWriter.close();
+				// error : 2020.05.23 17:28:53, ERR            , ERR     , ERR,    ,
+				try (BufferedWriter bw = new BufferedWriter(new FileWriter(watchdogFile))) {
+					bw.write(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()) + "," + msg + ",,ERR,ERR,ERR");
+				}
 			} catch (IOException e) {
-				log.error("Failed to update watchdog file at" + watchdogFile, e);
+				log.error("Failed to update watchdog file at " + watchdogFile, e);
 			}
 		}
 		
