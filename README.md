@@ -10,7 +10,7 @@ Automate Mobile ID (SIM Toolkit) user response.
 * Auto detect the SIM terminal (USB port)
 * Configuration of the radio access technology (4G/3G/2G)
 * Observe incoming text SMS activity in the application log
-* Write watchdog file upon every successful AT communication
+* Write watchdog file for communication health and optional STK activity health
 
 ## What you will need
 
@@ -116,8 +116,22 @@ cp atclient.cfg.sample atclient.cfg
 Key settings include:
 * **Serial port**: port name patterns, baud rate, timeouts
 * **Radio access technology**: force 2G/3G/4G or leave automatic
-* **Watchdog**: write a watchdog file on successful AT communication
+* **Watchdog**: communication mode (legacy) or activity mode based on meaningful STK events
 * **Maintenance**: trigger a maintenance script via a Mobile ID keyword
+
+Watchdog modes:
+* `watchdog.mode=communication` (default): refresh on incoming AT RX traffic (backward-compatible legacy behavior)
+* `watchdog.mode=activity`: refresh only on curated meaningful STK events (`STK019`, `STK033`, `STK035`, `STK037`, `STK254`)
+* `watchdog.activity.events=<csv>`: optional STK event allowlist for activity mode (default/fallback `19,33,35,37,254`)
+* `watchdog.activity.startup.grace=<ms>`: optional grace window in milliseconds for activity mode; during grace, communication RX still refreshes watchdog
+
+Meaningful STK activity is derived from modem `^SSTR` / `^SSTN` notifications. ATClient parses those command/event codes and logs them as `STKxxx` markers. For production health monitoring, `STK019: SEND MESSAGE` is the recommended primary signal because it best reflects end-to-end Mobile ID activity.
+
+Recommended production starting point:
+* `watchdog.mode=activity`
+* `watchdog.activity.events=19`
+* `watchdog.activity.startup.grace=300000` (5 minutes, milliseconds)
+* Linux watchdog `change=900` (15 minutes, seconds) in `/etc/watchdog.conf`
 
 ### log4j2.xml
 
@@ -291,6 +305,23 @@ sudo systemctl stop watchdog
 ```
 
 Remember to re-enable it when you are done testing.
+
+### Raspberry Pi smoke test for activity mode (`STK019` only)
+
+1. Configure ATClient:
+   * `watchdog.enable=true`
+   * `watchdog.mode=activity`
+   * `watchdog.activity.events=19`
+   * `watchdog.activity.startup.grace=300000`
+2. Configure Linux watchdog to monitor the same file and set `change=900` in `/etc/watchdog.conf`.
+3. Start/restart ATClient and follow the log:
+   * `tail -F /var/log/atclient.log`
+4. Trigger a Mobile ID authentication from your monitoring/test backend.
+5. Verify expected markers:
+   * log contains `STK019: SEND MESSAGE`
+   * watchdog file timestamp/content updates shortly after `STK019`
+6. Verify negative case:
+   * if no `STK019` occurs for longer than the Linux watchdog `change` window, recovery action is expected.
 
 ## Troubleshooting
 

@@ -5,11 +5,14 @@ import java.io.*;
 import java.lang.management.ManagementFactory;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
+import java.util.Set;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -27,6 +30,13 @@ public class ATresponder extends Thread {
 	
 	private List<String> watchdogList = Arrays.asList(new String[6]); // RAT-Timestamp, IMSI, Provider, RAT, Signal Strength Percentage, Signal Strength Icon
 	private String watchdogFile = null;
+	private static final String WATCHDOG_MODE_COMMUNICATION = "communication";
+	private static final String WATCHDOG_MODE_ACTIVITY = "activity";
+	private static final String WATCHDOG_ACTIVITY_EVENTS_DEFAULT = "19,33,35,37,254";
+	private String watchdogMode = WATCHDOG_MODE_COMMUNICATION;
+	private Set<Integer> watchdogActivityEventAllowlist = getDefaultWatchdogActivityEventSet();
+	private long watchdogActivityStartupGraceMillis = 0;
+	private long watchdogStartedAtMillis = 0;
 	private String maintenanceFile = null;
 
 	/**
@@ -150,8 +160,45 @@ public class ATresponder extends Thread {
 			if (prop.getProperty("watchdog.enable").trim().equals("true")) {
 				watchdogFile = prop.getProperty("watchdog.file").trim();
 				log.info("Property watchdog.file set to " + watchdogFile);
+
+				String configuredWatchdogMode = prop.getProperty("watchdog.mode", WATCHDOG_MODE_COMMUNICATION).trim().toLowerCase();
+				if (WATCHDOG_MODE_ACTIVITY.equals(configuredWatchdogMode) || WATCHDOG_MODE_COMMUNICATION.equals(configuredWatchdogMode)) {
+					watchdogMode = configuredWatchdogMode;
+				} else {
+					watchdogMode = WATCHDOG_MODE_COMMUNICATION;
+					log.warn("Property watchdog.mode has unknown value '" + configuredWatchdogMode + "'. Fallback to '" + WATCHDOG_MODE_COMMUNICATION + "'.");
+				}
+				log.info("Property watchdog.mode set to " + watchdogMode);
+
+				String startupGraceValue = prop.getProperty("watchdog.activity.startup.grace", "0").trim();
+				try {
+					watchdogActivityStartupGraceMillis = Long.parseLong(startupGraceValue);
+					if (watchdogActivityStartupGraceMillis < 0) {
+						log.warn("Property watchdog.activity.startup.grace cannot be negative. Fallback to 0.");
+						watchdogActivityStartupGraceMillis = 0;
+					}
+				} catch (NumberFormatException e) {
+					log.warn("Property watchdog.activity.startup.grace has non-numeric value '" + startupGraceValue + "'. Fallback to 0.");
+					watchdogActivityStartupGraceMillis = 0;
+				}
+				log.info("Property watchdog.activity.startup.grace set to " + watchdogActivityStartupGraceMillis + "ms");
+
+				boolean activityEventsConfigured = prop.getProperty("watchdog.activity.events") != null;
+				watchdogActivityEventAllowlist = parseWatchdogActivityEvents(prop.getProperty("watchdog.activity.events"), activityEventsConfigured);
+				if (activityEventsConfigured)
+					log.info("Property watchdog.activity.events set to " + formatWatchdogActivityEvents(watchdogActivityEventAllowlist));
+				else
+					log.info("Property watchdog.activity.events not set. Using default " + formatWatchdogActivityEvents(watchdogActivityEventAllowlist));
+
+				watchdogStartedAtMillis = System.currentTimeMillis();
+				log.info("Resolved watchdog settings: mode=" + watchdogMode + ", activity.events=" + formatWatchdogActivityEvents(watchdogActivityEventAllowlist)
+						+ ", activity.startup.grace=" + watchdogActivityStartupGraceMillis + "ms");
 			} else {
 				watchdogFile = null;
+				watchdogMode = WATCHDOG_MODE_COMMUNICATION;
+				watchdogActivityEventAllowlist = getDefaultWatchdogActivityEventSet();
+				watchdogActivityStartupGraceMillis = 0;
+				watchdogStartedAtMillis = 0;
 				log.info("Property watchdog disabled");
 			}
 			
@@ -473,8 +520,7 @@ public class ATresponder extends Thread {
 					heartBeatTimerCurrent = rspTimerCurrent;
 					
 					// Watchdog: Write/update local file
-					if (watchdogFile != null)
-						updateWatchdog();
+					updateWatchdogForCommunicationRx();
 
 					log.debug("RX1 <<< " + rx);
 	
@@ -491,6 +537,7 @@ public class ATresponder extends Thread {
 						// ^SSTR: 3,19
 						// ^SSTR: 19,0,"" --> ignore this one (NumberFormatException catched and ignored)
 						value = Integer.parseInt(rx.substring(9, rx.length())); // ^SSTR: ?,XX
+						updateWatchdogForStkEvent(value);
 
 						// ^SSTR: 2,?? | ^SSTR: 3,?? | ^SSTR: 4,??
 						// ^SSTR: <state>,<cmdType>
@@ -588,6 +635,7 @@ public class ATresponder extends Thread {
 						}
 					} else if (rx.toUpperCase().startsWith("^SSTN: ")) {
 						value = Integer.parseInt(rx.substring(7, rx.length())); // ^SSTN: 19
+						updateWatchdogForStkEvent(value);
 
 						// Check Proactive Command Type
 						switch (value) {
@@ -902,8 +950,7 @@ public class ATresponder extends Thread {
 						} 
 						
 						// Watchdog: Write/update local file
-						if (watchdogFile != null)
-							updateWatchdog();
+						updateWatchdogForCommunicationRx();
 
 					}
 					Thread.sleep(sleepWhile);
@@ -1080,6 +1127,76 @@ public class ATresponder extends Thread {
 	
 	public static synchronized void setUserDelay(boolean flag){
 		user_delay = flag;
+	}
+
+	private boolean isWatchdogActivityMode() {
+		return WATCHDOG_MODE_ACTIVITY.equals(watchdogMode);
+	}
+
+	private boolean isWithinActivityStartupGrace() {
+		if (!isWatchdogActivityMode() || watchdogActivityStartupGraceMillis <= 0 || watchdogStartedAtMillis <= 0)
+			return false;
+		return (System.currentTimeMillis() - watchdogStartedAtMillis) < watchdogActivityStartupGraceMillis;
+	}
+
+	private boolean isMeaningfulWatchdogActivityEvent(int eventCode) {
+		return watchdogActivityEventAllowlist.contains(eventCode);
+	}
+
+	private Set<Integer> getDefaultWatchdogActivityEventSet() {
+		HashSet<Integer> defaultEvents = new HashSet<>();
+		for (String token : WATCHDOG_ACTIVITY_EVENTS_DEFAULT.split(",")) {
+			defaultEvents.add(Integer.parseInt(token));
+		}
+		return defaultEvents;
+	}
+
+	private Set<Integer> parseWatchdogActivityEvents(String configuredValue, boolean explicitlyConfigured) {
+		Set<Integer> defaultEvents = getDefaultWatchdogActivityEventSet();
+		if (!explicitlyConfigured)
+			return defaultEvents;
+
+		HashSet<Integer> parsedEvents = new HashSet<>();
+		if (configuredValue != null) {
+			for (String token : configuredValue.split(",")) {
+				String value = token.trim();
+				if (value.isEmpty())
+					continue;
+
+				try {
+					parsedEvents.add(Integer.parseInt(value));
+				} catch (NumberFormatException e) {
+					log.warn("Invalid watchdog.activity.events token '" + value + "' ignored.");
+				}
+			}
+		}
+
+		if (parsedEvents.isEmpty()) {
+			log.warn("Property watchdog.activity.events has no valid values. Fallback to default " + formatWatchdogActivityEvents(defaultEvents));
+			return defaultEvents;
+		}
+
+		return parsedEvents;
+	}
+
+	private String formatWatchdogActivityEvents(Set<Integer> events) {
+		ArrayList<Integer> values = new ArrayList<>(events);
+		Collections.sort(values);
+		return values.toString().replace("[", "").replace("]", "").replace(" ", "");
+	}
+
+	private void updateWatchdogForCommunicationRx() {
+		if (watchdogFile == null)
+			return;
+		if (!isWatchdogActivityMode() || isWithinActivityStartupGrace())
+			updateWatchdog();
+	}
+
+	private void updateWatchdogForStkEvent(int eventCode) {
+		if (watchdogFile == null)
+			return;
+		if (isWatchdogActivityMode() && (isWithinActivityStartupGrace() || isMeaningfulWatchdogActivityEvent(eventCode)))
+			updateWatchdog();
 	}
 	
 	public void updateWatchdog() {

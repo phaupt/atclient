@@ -49,12 +49,49 @@ atclient.atcommand.heartbeat = 180000
 cops.mode = 
 
 ############################################################################################
-# AT Communication Watchdog [optional]
+# Watchdog [optional]
 ############################################################################################
-# If enabled, ATClient will write a watchdog file if RX data have been received
-# Refer to https://linux.die.net/man/5/watchdog.conf how to use linux watchdog daemon
+# If enabled, ATClient writes a watchdog file that can be monitored by linux watchdog daemon.
+# Refer to https://linux.die.net/man/5/watchdog.conf
+#
+# Operational intent:
+# - communication mode checks low-level AT/RX liveness.
+# - activity mode checks higher-level Mobile ID/SIM Toolkit activity.
+#
+# watchdog.mode:
+#   communication (default): refresh file on incoming AT RX traffic (legacy behavior)
+#   activity              : refresh only on meaningful STK activity events
+#
+# STK event semantics in this project:
+# The modem reports STK via ^SSTR / ^SSTN notifications; ATClient logs these as STKxxx markers.
+#   19  = SEND MESSAGE  (STK019)  <-- strongest recommended production health signal
+#   33  = DISPLAY TEXT  (STK033)  (UI/context marker)
+#   35  = GET INPUT     (STK035)  (UI/context marker)
+#   37  = SET UP MENU   (STK037)  (lifecycle marker)
+#   254 = Applet returns to main menu (STK254) (lifecycle marker)
+#
+# watchdog.activity.events:
+#   comma-separated STK event allowlist used only in watchdog.mode=activity
+#   default/fallback is: 19,33,35,37,254
+#   recommended production focus: 19
+#
+# watchdog.activity.startup.grace:
+#   startup grace window in milliseconds (ms) for activity mode.
+#   During this time, communication RX can still refresh the watchdog file to reduce
+#   early reboot-loop risk while modem/SIM is still initializing.
+#   0 = disabled (default)
+#
+# Recommended production baseline example:
+#   watchdog.mode = activity
+#   watchdog.activity.events = 19
+#   watchdog.activity.startup.grace = 300000   # 5 minutes (ms)
+#   Linux watchdog: set 'change = 900' in /etc/watchdog.conf   # 15 minutes (seconds)
+#
 watchdog.enable = false
 watchdog.file   = /home/mid/atclient/watchdog.atclient
+watchdog.mode   = communication
+watchdog.activity.events = 19,33,35,37,254
+watchdog.activity.startup.grace = 0
 
 ############################################################################################
 # Maintenance Mode [optional]
