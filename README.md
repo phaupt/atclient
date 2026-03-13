@@ -402,6 +402,229 @@ Useful host-side commands:
 * `sudo systemctl start watchdog`
 * `stat /var/log/watchdog.atclient`
 
+## Optional: OLED status handling on Raspberry Pi
+
+If you run the optional OLED helper on Raspberry Pi (`/home/mid/oled-i2c`), you can apply a small improvement so the first line no longer stays on `AT starts soon...` when ATClient is already running.
+
+This is optional and mainly useful for Pi units with OLED. On headless units, you can skip this section.
+
+OLED line 1 behavior after this change:
+* `AT starts soon...` -> ATClient process is not running yet
+* `AT error state` -> watchdog file contains `ERR`, `FAIL`, or `NOT READY`
+* `AT running / waiting` -> ATClient is running, but no STK heartbeat data is available yet (or watchdog is disabled)
+* otherwise -> normal status line (`RAT / signal / age`)
+
+Before editing, create backups on the Pi:
+
+```bash
+cd /home/mid/oled-i2c
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+cp get-age.sh get-age.sh.bak_$TIMESTAMP
+cp mid.py mid.py.bak_$TIMESTAMP
+```
+
+Set `/home/mid/oled-i2c/get-age.sh` to:
+
+```bash
+#! /bin/bash
+
+if [ ! -e /var/log/watchdog.atclient ]
+then
+    echo "n/a"
+    exit 1
+fi
+
+filecontent=$(cat /var/log/watchdog.atclient)
+
+# Check for error markers in full file content
+if echo "$filecontent" | grep -qi "ERR\|FAIL\|NOT READY"
+then
+    echo "ERR"
+    exit 0
+fi
+
+date1=$(echo "$filecontent" | cut -d "," -f1)
+
+# If no valid content yet, check if ATClient is at least running
+if [ -z "$date1" ]
+then
+    if pgrep -f "com.swisscom.atclient.ATClient" > /dev/null 2>&1
+    then
+        echo "ready"
+    else
+        echo "n/a"
+    fi
+    exit 0
+fi
+
+seconds1=$(date --date "$date1" +%s)
+seconds2=$(date +%s)
+delta=$((seconds2 - seconds1))
+
+if [[ "$delta" -lt 86400 ]]; then
+    echo "${delta}"
+else
+    echo ">1 day"
+fi
+```
+
+Then restore execute permission:
+
+```bash
+chmod +x /home/mid/oled-i2c/get-age.sh
+```
+
+Set `/home/mid/oled-i2c/mid.py` to:
+
+```python
+import time
+import sys
+sys.path.append('/home/mid/oled-i2c/drive')
+import SPI
+import SSD1305
+
+from PIL import Image
+from PIL import ImageDraw
+from PIL import ImageFont
+
+import subprocess
+
+# Raspberry Pi pin configuration:
+RST = None     # on the PiOLED this pin isnt used
+# Note the following are only used with SPI:
+DC = 24
+SPI_PORT = 0
+SPI_DEVICE = 0
+
+# 128x32 display with hardware I2C:
+disp = SSD1305.SSD1305_128_32(rst=RST)
+
+# Initialize library.
+disp.begin()
+
+# Clear display.
+disp.clear()
+disp.display()
+
+# Create blank image for drawing.
+# Make sure to create image with mode '1' for 1-bit color.
+width = disp.width
+height = disp.height
+image = Image.new('1', (width, height))
+# Get drawing object to draw on image.
+draw = ImageDraw.Draw(image)
+
+# Draw a black filled box to clear the image.
+draw.rectangle((0,0,width,height), outline=0, fill=0)
+
+# Draw some shapes.
+# First define some constants to allow easy resizing of shapes.
+padding = 0
+top = padding
+bottom = height-padding
+# Move left to right keeping track of the current x position for drawing shapes.
+x = 0
+
+# Alternatively load a TTF font.  Make sure the .ttf font file is in the same directory as the python script!
+# Some other nice fonts to try: http://www.dafont.com/bitmap.php
+DefaultFont = ImageFont.truetype('/home/mid/oled-i2c/04B_08__.TTF',8)
+BigFont = ImageFont.truetype('/home/mid/oled-i2c/04B_08__.TTF',14)
+
+startTime = time.time()
+timeout = int(sys.argv[1]) # take the command line argument (timeout in seconds)
+
+# Clear display
+draw.rectangle((0,0,width,height), outline=0, fill=0)
+disp.clear()
+disp.display()
+
+while True:
+
+    cmd = "date +'%d.%m.%y %H:%M' | tr -d '\n'"
+    Uptim = subprocess.check_output(cmd, shell = True )
+
+    # Draw a black filled box to clear the image.
+    draw.rectangle((0,0,width,height), outline=0, fill=0)
+
+    # /var/log/watchdog.atclient columns:
+    # 2020-05-12 09:38:55,+41796691039,Swisscom,4G,61%
+    #                   1,           2,       3, 4,  5
+
+    # time critical commands first!
+    cmd = "date +'%d.%m.%y %H:%M' | tr -d '\n'"
+    Date = subprocess.check_output(cmd, shell = True )
+
+    cmd = "/home/mid/oled-i2c/get-age.sh | tr -d '\n'"
+    LastStkHeartbeat = subprocess.check_output(cmd, shell = True )
+
+    #cmd = "awk '{printf(\"%02d:%02d\",($1/60/60%24),($1/60%60))}' /proc/uptime | tr -d '\n'"
+    cmd = "awk '{printf(\"%03d %02d\",($1/60/60/24),($1/60/60%24))}' /proc/uptime | tr -d '\n'"
+    Uptime = subprocess.check_output(cmd, shell = True )
+
+    # now do the rest..
+    cmd = "hostname -I | cut -d\' \' -f1 | tr -d '\n'"
+    IP = subprocess.check_output(cmd, shell = True )
+
+    cmd = "hostname | cut -c 9-11 | tr -d '\n'"
+    Hostname = subprocess.check_output(cmd, shell = True )
+
+    cmd = "cut -d ',' -f2 /var/log/watchdog.atclient | sed 's/\+//g' | tr -d '\n'"
+    MSISDN = subprocess.check_output(cmd, shell = True )
+
+    cmd = "cut -d ',' -f4 /var/log/watchdog.atclient | tr -d '\n'"
+    RAT = subprocess.check_output(cmd, shell = True )
+
+    cmd = "cut -d ',' -f5 /var/log/watchdog.atclient | tr -d '\n'"
+    SignalStrengthPercentage = subprocess.check_output(cmd, shell = True )
+
+    cmd = "cut -d ',' -f6 /var/log/watchdog.atclient | tr -d '\n'"
+    SignalStrengthIcon = subprocess.check_output(cmd, shell = True )
+
+    cmd = "cut -d ',' -f3 /var/log/watchdog.atclient | tr -d '\n'"
+    Operator = subprocess.check_output(cmd, shell = True )
+
+    if "n/a" in LastStkHeartbeat:
+        draw.text((x, top), "AT starts soon...", font=DefaultFont, fill=255)
+    elif "ERR" in LastStkHeartbeat:
+        draw.text((x, top), "AT error state", font=DefaultFont, fill=255)
+    elif "ready" in LastStkHeartbeat:
+        draw.text((x, top), "AT running / waiting", font=DefaultFont, fill=255)
+    else:
+        draw.text((x, top), str(RAT) + " " + str(SignalStrengthPercentage) + " " + str(SignalStrengthIcon) + " AGE " + str(LastStkHeartbeat),  font=DefaultFont, fill=255)
+    draw.text((x, top+8), str(MSISDN) + " " + str(Operator), font=DefaultFont, fill=255)
+    draw.text((x, top+16), "ID=" + str(Hostname) + "  IP=" + str(IP),  font=DefaultFont, fill=255)
+    draw.text((x, top+25), str(Date) + " UP " + str(Uptime),  font=DefaultFont, fill=255)
+
+    # Display image.
+    disp.image(image)
+    disp.display()
+    time.sleep(.1)
+
+    if (time.time() - startTime) > timeout:
+        break
+
+# Clear display
+draw.rectangle((0,0,width,height), outline=255, fill=255)
+disp.clear()
+disp.display()
+
+# Terminate
+sys.exit()
+```
+
+After applying both files, either reboot or restart the OLED script:
+
+```bash
+pkill -f "/home/mid/oled-i2c/mid.py"
+nohup /home/mid/oled-i2c/mid.sh 600 >/dev/null 2>&1 &
+```
+
+Expected result:
+* before ATClient start -> `AT starts soon...`
+* ATClient running without STK activity yet -> `AT running / waiting`
+* error condition -> `AT error state`
+* valid watchdog CSV with STK activity -> normal `RAT / signal / age` status line
+
 ## Troubleshooting
 
 | Problem | What to check |
