@@ -4,7 +4,6 @@
 	<classpathentry kind="src" path="src"/>
 	<classpathentry kind="lib" path="lib/log4j-api-2.25.3.jar"/>
 	<classpathentry kind="lib" path="lib/log4j-core-2.25.3.jar"/>
-	<classpathentry kind="lib" path="lib/commons-codec-1.21.0.jar"/>
 	<classpathentry kind="lib" path="lib/jSerialComm-2.6.2.jar" sourcepath="lib/jSerialComm-2.6.2.zip"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

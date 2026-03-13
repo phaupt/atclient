@@ -9,8 +9,7 @@ Automate Mobile ID (SIM Toolkit) user response.
 * Auto-respond to SIM Toolkit requests, for example a [Mobile ID](https://www.mobileid.ch/en) authentication request
 * Auto detect the SIM terminal (USB port)
 * Configuration of the radio access technology (4G/3G/2G)
-* Forward incoming Text SMS (if they match a configured pattern) to a configured target MSISDN
-* Publish incoming Text SMS (if they match a configured pattern) to a URL
+* Observe incoming text SMS activity in the application log
 * Write watchdog file upon every successful AT communication
 
 ## What you will need
@@ -108,7 +107,7 @@ If no <MODE> argument found: Run user emulation with automatic serial port detec
 
 ### atclient.cfg
 
-Main configuration file for the ATClient. Controls serial port settings, radio access technology, SMS forwarding/publishing rules, watchdog behaviour, and maintenance mode. Copy `atclient.cfg.sample` to `atclient.cfg` and edit to match your environment:
+Main configuration file for the ATClient. Controls serial port settings, radio access technology, watchdog behaviour, and maintenance mode. Copy `atclient.cfg.sample` to `atclient.cfg` and edit to match your environment:
 
 ```bash
 cp atclient.cfg.sample atclient.cfg
@@ -117,8 +116,6 @@ cp atclient.cfg.sample atclient.cfg
 Key settings include:
 * **Serial port**: port name patterns, baud rate, timeouts
 * **Radio access technology**: force 2G/3G/4G or leave automatic
-* **SMS forwarding**: enable forwarding of matching SMS to a target MSISDN
-* **SMS publishing**: publish matching SMS content to a URL endpoint
 * **Watchdog**: write a watchdog file on successful AT communication
 * **Maintenance**: trigger a maintenance script via a Mobile ID keyword
 
@@ -220,7 +217,6 @@ Real logs may also contain identifier lookups such as `AT+CNUM` or `AT+CIMI`. Do
 2026-03-13 10:10:58 [DBG] TX0 >>> AT+CMGR=0
 2026-03-13 10:10:59 [DBG] RX2 <<< +CMGR: "REC UNREAD","<REDACTED-MSISDN>",,"26/03/13,10:10:57+04"
 2026-03-13 10:10:59 [DBG] RX2 <<< Your unique identification code is: <REDACTED-OTP>. Please enter the code in the web interface to continue.
-2026-03-13 10:10:59 [INF] Detected Text SMS matching configured pattern
 2026-03-13 10:10:59 [DBG] TX0 >>> AT+CMGD=0,4
 ...
 2026-03-13 10:11:17 [INF] STK035: GET INPUT
@@ -244,7 +240,7 @@ Real logs may also contain identifier lookups such as `AT+CNUM` or `AT+CIMI`. Do
 2. **Basic modem and SIM initialization**: `AT` is the basic modem handshake. `AT+CPIN?` checks whether the SIM is ready or still expects PIN entry. `AT+COPS?` reports operator selection and registration state, and `AT+CSQ` reports signal quality. For plain text SMS, `+CMTI` announces an incoming message, `AT+CMGR=<slot>` reads it, and `AT+CMGD=0,4` deletes stored SMS after processing.
 3. **SIM Toolkit initialization**: `STK037: SET UP MENU` followed by `UI-TXT: 'SIM Apps'` and `UI-TXT: 'Mobile ID'` shows the SIM Toolkit applet presenting its top-level menu through the modem/terminal interface. `STK254: SIM Applet returns to main menu` is the visible sign that the applet has returned to its idle or main-menu state.
 4. **Ping / reachability test**: In this setup, a backend-triggered binary or PDU-style SMS can lead to `STK019: SEND MESSAGE`. The log does not necessarily expose the full logical payload of that backend transaction; what it reliably shows is that the SIM Toolkit session caused an outgoing message to be sent.
-5. **OTP text SMS**: The `+CMTI` notification, `TEXT MESSAGE (SMS)`, `AT+CMGR`, and the matched message text represent a normal text-SMS path. This is much more directly visible than SIM Toolkit driven traffic because the sender metadata and SMS body can be read from the modem. Depending on ATClient version and log level, the full SMS body may be shown only at `DEBUG`.
+5. **OTP text SMS**: The `+CMTI` notification, `TEXT MESSAGE (SMS)`, `AT+CMGR`, and the SMS body shown in debug RX lines represent a normal text-SMS path. This is much more directly visible than SIM Toolkit driven traffic because the sender metadata and SMS body can be read from the modem. Depending on ATClient version and log level, the full SMS body may be shown only at `DEBUG`.
 6. **Account enrollment flow**: The incoming backend trigger happens outside the visible SIM internals, but the log clearly shows the user-facing prompts `Define your new Mobile ID PIN (6 digits)` and `Confirm your new Mobile ID PIN`. The later `STK019: SEND MESSAGE` lines show outbound responses from the SIM/terminal layer. The internal applet logic, including sensitive work such as key generation, is not directly visible in the log. Multiple `STK019` events can occur because the response may be split across multiple mobile-originated SMS segments.
 7. **Authentication flow**: `STK033: DISPLAY TEXT` shows the confirmation message, `STK035: GET INPUT` shows that the terminal is asked for PIN input, and the later `STK019: SEND MESSAGE` marks the outbound response. The sensitive authentication or signature logic runs inside the SIM; the ATClient only sees the terminal-facing prompts and the resulting message trigger.
 

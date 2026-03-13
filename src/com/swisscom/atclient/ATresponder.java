@@ -3,8 +3,6 @@ package com.swisscom.atclient;
 import com.fazecast.jSerialComm.*;
 import java.io.*;
 import java.lang.management.ManagementFactory;
-import java.net.URL;
-import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
@@ -12,25 +10,13 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Properties;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import org.apache.commons.codec.binary.Base64;
-
 public class ATresponder extends Thread {
 	
 	private final Logger log = LogManager.getLogger(ATresponder.class.getName());
-	
-	// Detect incoming Text SMS that contains a specific keyword and forward to target MSISDN. Value "" will forward all SMS.
-	private String smsPattern = null;
-	private String smsTargetMsisdn = null;
-	private String smsURL = null;
-	private String smsQueryParam = null;
-	private String smsAuthName = null;
-	private String smsAuthPassword = null;
 	
 	private String portStrArr[] = new String[1];
 	
@@ -62,7 +48,6 @@ public class ATresponder extends Thread {
 	private volatile static int user_delay_millis = 0;
 	
 	private volatile static boolean getTextSms;
-	private String textSmsHeader = null;
 
 	private String atclientCfg = null;
 	
@@ -85,9 +70,6 @@ public class ATresponder extends Thread {
 	private String imsi = null;
 	
 	public volatile static boolean isAlive = true;
-	
-	private final char quote = 34;
-	private final char ctrlz = 26;
 
 	public ATresponder(byte mode) {
 		this.opMode = mode;
@@ -163,39 +145,6 @@ public class ATresponder extends Thread {
 			} else {
 				actualCopsMode = "A";
 				log.info("Property cops.mode set to automatic");
-			}
-			
-			smsPattern = prop.getProperty("textsms.pattern");
-			log.info("Property textsms.pattern set to " + smsPattern);
-						
-			if (prop.getProperty("textsms.forward.enable").trim().equals("true")) {
-				smsTargetMsisdn = prop.getProperty("textsms.forward.msisdn").trim();
-				log.info("Property textsms.forward.msisdn set to " + smsTargetMsisdn);
-			} else {
-				smsTargetMsisdn = null;
-				log.info("Property textsms.forward disabled");
-			}
-			
-			if (prop.getProperty("textsms.publish.enable").trim().equals("true")) {
-				smsURL = prop.getProperty("textsms.publish.url").trim();
-				log.info("Property textsms.publish.url set to " + smsURL);
-				smsQueryParam = prop.getProperty("textsms.publish.queryparam").trim();
-				log.info("Property textsms.publish.queryparam set to " + smsQueryParam);
-				
-				if (prop.getProperty("textsms.publish.basicauth.enabled").trim().equals("true")) {
-					smsAuthName = prop.getProperty("textsms.publish.basicauth.user").trim();
-					log.info("Property textsms.publish.basicauth.user set to " + smsAuthName);
-					smsAuthPassword = prop.getProperty("textsms.publish.basicauth.pwd").trim();
-					log.info("Property textsms.publish.basicauth.pwd is configured (value masked)");
-				} else {
-					smsAuthName = null;
-					smsAuthPassword = null;
-					log.info("Property textsms.publish.basicauth disabled");
-				}
-			} else {
-				smsURL = null;
-				smsQueryParam = null;
-				log.info("Property textsms.publish disabled");
 			}
 			
 			if (prop.getProperty("watchdog.enable").trim().equals("true")) {
@@ -409,7 +358,7 @@ public class ATresponder extends Thread {
 
 			send("AT+CNUM"); // MSISDN - which is often not returned with this AT command! :-/
 						
-			if (!send("ATE0")) // Echo Mode On(1)/Off(0). Do not turn echo on if forward SMS feature is used.
+			if (!send("ATE0")) // Echo Mode On(1)/Off(0).
 				return;
 			
 			send("AT+CMEE=2"); // Enable reporting of me errors (1 = result code with numeric values; 2 = result code with verbose string values)
@@ -837,12 +786,6 @@ public class ATresponder extends Thread {
 			if (timeout == 0)
 				timeout = atTimeout; // default
 			
-			Pattern pattern = null;
-			Matcher matcher = null;
-			if (smsPattern != null) {
-				pattern = Pattern.compile(smsPattern);
-			}
-			
 			log.trace("Start waiting for response '" + expectedRx + "'");
 
 			while (true) {
@@ -865,43 +808,7 @@ public class ATresponder extends Thread {
 						
 						getMeTextAscii(rx);
 						
-						if (pattern != null)
-							matcher = pattern.matcher(rx);
-						
-						if (getTextSms && textSmsHeader != null && matcher != null && matcher.matches() && !rx.startsWith("+") && !rx.startsWith(">") && !rx.startsWith("OK")) {							
-							// Text Short Message matches pattern!
-							log.info("Detected Text SMS matching configured pattern (content logged at DEBUG)");
-							log.debug("SMS content: \"" + rx + "\"");
-							
-							// TODO: Security, as anybody could send txt SMS
-							//verifyKeywords(rx);
-							
-							if (smsTargetMsisdn != null) {
-								// Forward SMS to configured target MSISDN
-								log.info("Forward Text SMS to " + smsTargetMsisdn);
-							    send("AT+CMGS=" + quote + smsTargetMsisdn + quote + ",145"); 
-							    Thread.sleep(500);
-							    send(rx + ctrlz, "+CMGS");
-							}
-							
-						    if (smsURL != null) {
-						    	// Call URL to forward full SMS content
-							    publishSMS(rx); // any potential whitespace will be replaced with &nbsp;
-						    }
-						    
-						} else if (getTextSms && rx.toUpperCase().startsWith("+CMGR: ")) {
-							// INCOMING TEXT SMS HEADER DETAILS
-							// +CMGR: "REC UNREAD","+41797895164",,"20/09/30,09:04:33+08"
-
-							try {
-								textSmsHeader = Arrays.asList(rx.replace("\"", "").split(",")).get(1) + "," 
-										+ Arrays.asList(rx.replace("\"", "").split(",")).get(3) + "," 
-										+ Arrays.asList(rx.replace("\"", "").split(",")).get(4);
-							} catch (Exception e) {
-								textSmsHeader = null;
-							}
-
-						} else if (rx.startsWith("228") && rx.length() == 15) {
+						if (rx.startsWith("228") && rx.length() == 15) {
 							// 228017230302066
 
 							imsi = rx;
@@ -1173,51 +1080,6 @@ public class ATresponder extends Thread {
 	
 	public static synchronized void setUserDelay(boolean flag){
 		user_delay = flag;
-	}
-	
-	/**
-	 * Forward the OTP code value from the SMS to a URL (GET call)
-	 * The code value is set in a URL query parameter ("https://www.example.com/script.sh?TXT=Hello&nbsp;World")
-	 * The script.sh on that server may read the query parameter to process the SMS code.
-	 * @param smsContent Any whitespace will be replaced with '&nbsp'
-	 * @return result is the server response
-	 * @throws IOException
-	 */
-	public String publishSMS(String smsContent) {
-		// Add [IMSI] Prefix to the text content
-		String fullURL = smsURL + "?" + smsQueryParam + "=" + "[" + textSmsHeader + "," + imsi + "]&nbsp" + smsContent.replaceAll(" ", "&nbsp;");
-		textSmsHeader = null; //reset
-		try {
-			URL url = new URL(fullURL);
-			URLConnection urlConnection = url.openConnection();
-			log.debug("Calling URL '" + fullURL); // SMS payload logged at DEBUG only
-
-			if (smsAuthName != null && smsAuthPassword != null) {
-				String authString = smsAuthName + ":" + smsAuthPassword;
-				byte[] authEncBytes = Base64.encodeBase64(authString.getBytes());
-				String authStringEnc = new String(authEncBytes);
-				urlConnection.setRequestProperty("Authorization", "Basic " + authStringEnc);
-			}
-
-			try (InputStream is = urlConnection.getInputStream();
-				 InputStreamReader isr = new InputStreamReader(is)) {
-				int numCharsRead;
-				char[] charArray = new char[1024];
-				StringBuffer sb = new StringBuffer();
-				while ((numCharsRead = isr.read(charArray)) > 0) {
-					sb.append(charArray, 0, numCharsRead);
-				}
-				String result = sb.toString();
-
-				log.trace("Server response was '" + result + "'");
-				log.info("URL Call was successful");
-
-				return result;
-			}
-		} catch (Exception e) {
-			log.error("Failed to call URL", e);
-		} 
-		return "";
 	}
 	
 	public void updateWatchdog() {

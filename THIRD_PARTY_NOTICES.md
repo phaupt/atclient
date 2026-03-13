@@ -5,18 +5,6 @@ Each library is redistributed under its own license as noted below.
 
 ---
 
-## Apache Commons Codec
-
-- **Artifact:** `commons-codec`
-- **Bundled version:** 1.21.0
-- **License:** Apache License 2.0
-- **Project URL:** https://commons.apache.org/proper/commons-codec/
-
-Copyright © The Apache Software Foundation. Licensed under the
-[Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0).
-
----
-
 ## Apache Log4j 2
 
 Includes both `log4j-api` and `log4j-core`.
