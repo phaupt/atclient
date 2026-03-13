@@ -69,9 +69,14 @@ public class ATresponder extends Thread {
 	private int parity;
 	
 	private int atTimeout;
+	private static final long STARTUP_READINESS_MAX_WAIT_MILLIS = 180000;
+	private static final long STARTUP_READINESS_POLL_MILLIS = 5000;
 	
 	private String actualCopsMode;
 	private String newCopsMode;
+	private boolean startupSimReady = false;
+	private boolean startupNetworkReady = false;
+	private boolean startupSignalReady = false;
 	
 	private byte opMode; // Switch: 1=ER, 2=AR
 	
@@ -227,8 +232,11 @@ public class ATresponder extends Thread {
 				portFound = lookupSerialPort(serPortStr);
 			}
 			if (portFound) {
-				initAtCmd();
-				listenForRx(); // program will stay in the while loop inside this method...
+				if (initAtCmd()) {
+					listenForRx(); // program will stay in the while loop inside this method...
+				} else {
+					log.error("AT command startup initialization failed. Exiting before steady-state listener loop.");
+				}
 			}
 		} catch (Exception e) {
 			log.error("Internal error", e);
@@ -364,7 +372,7 @@ public class ATresponder extends Thread {
 		}
 	}
 
-	private void initAtCmd() throws InterruptedException {
+	private boolean initAtCmd() throws InterruptedException {
 		
 		if (opMode == 1) {	
 			log.info("Switch to Explicit Response (ER) and enable modem usage");
@@ -385,7 +393,7 @@ public class ATresponder extends Thread {
 			send("AT^SSRVSET=\"actSrvSet\",2"); // set service set number 2 (USB only; enables modem usage). activated after next UE restart only.
 			
 			shutdownAndExit(null);
-			return; // exit
+			return false; // exit
 		} else if (opMode == 2) {
 			log.info("Switch to Automatic Response (AR) and reset AT command settings to factory default values");
 			send("AT^SSTA=0"); // enable Automatic Response (AR) Mode
@@ -393,18 +401,22 @@ public class ATresponder extends Thread {
 			send("AT&F[0]"); // reset AT Command Settings to Factory Default Values
 			
 			shutdownAndExit(null);
-			return; // exit
+			return false; // exit
 		} else {
 			
 			// CONFIGURATION
 			
-			if (!send("AT+CPIN?")) // Check if SIM is correctly inserted and SIM PIN is ready
-				return;
+			if (!send("AT+CPIN?")) { // Check if SIM is correctly inserted and SIM PIN is ready
+				log.error("Startup initialization failed: no response for AT+CPIN?.");
+				return false;
+			}
 
 			send("AT+CNUM"); // MSISDN - which is often not returned with this AT command! :-/
 						
-			if (!send("ATE0")) // Echo Mode On(1)/Off(0).
-				return;
+			if (!send("ATE0")) { // Echo Mode On(1)/Off(0).
+				log.error("Startup initialization failed: no response for ATE0.");
+				return false;
+			}
 			
 			send("AT+CMEE=2"); // Enable reporting of me errors (1 = result code with numeric values; 2 = result code with verbose string values)
 			send("AT+CMGF=1"); // Set SMS text mode			
@@ -448,12 +460,48 @@ public class ATresponder extends Thread {
 				send("AT+COPS=0", "OK", 60000, true);
 			}
 			
-			send("AT+COPS?"); // Provider + access technology
-			send("AT+CSQ"); // Signal Strength
+			if (!waitForStartupReadiness(STARTUP_READINESS_MAX_WAIT_MILLIS, STARTUP_READINESS_POLL_MILLIS)) {
+				log.error("Startup readiness was not reached in time. Triggering controlled shutdown/recovery.");
+				shutdownAndExit("STARTUP NOT READY");
+				return false;
+			}
 			
 			// Start listening...
-			send("AT^SSTR?", null); // Check for STK Menu initialization 			
+			send("AT^SSTR?", null); // Check for STK Menu initialization
+			return true;
 		}
+	}
+
+	private void resetStartupReadinessFlags() {
+		startupSimReady = false;
+		startupNetworkReady = false;
+		startupSignalReady = false;
+	}
+
+	private boolean waitForStartupReadiness(long maxWaitMs, long pollMs) throws InterruptedException {
+		long startTs = System.currentTimeMillis();
+		int attempt = 0;
+		while (isAlive && (System.currentTimeMillis() - startTs) < maxWaitMs) {
+			attempt++;
+			resetStartupReadinessFlags();
+
+			boolean cpinOk = send("AT+CPIN?");
+			boolean copsOk = send("AT+COPS?");
+			boolean csqOk = send("AT+CSQ");
+
+			if (cpinOk && copsOk && csqOk && startupSimReady && startupNetworkReady && startupSignalReady) {
+				log.info("Startup readiness confirmed after attempt " + attempt + ".");
+				return true;
+			}
+
+			log.warn("Startup readiness pending (attempt " + attempt + "): SIM=" + startupSimReady + ", NETWORK=" + startupNetworkReady + ", SIGNAL=" + startupSignalReady + ".");
+			long remainingMs = maxWaitMs - (System.currentTimeMillis() - startTs);
+			if (remainingMs > 0)
+				sleep(Math.min(pollMs, remainingMs));
+		}
+
+		log.error("Startup readiness timeout after " + maxWaitMs + "ms: SIM=" + startupSimReady + ", NETWORK=" + startupNetworkReady + ", SIGNAL=" + startupSignalReady + ".");
+		return false;
 	}
 	
 	private void listenForRx() throws InterruptedException, UnsupportedEncodingException, IOException {
@@ -864,13 +912,15 @@ public class ATresponder extends Thread {
 							
 							// Be sure that we have expected response format
 							if (rx.length() - rx.replaceAll(",","").length() < 3) {
+								startupNetworkReady = false;
 								if (rx.contentEquals("+COPS: 0"))
 									log.error("It seems there is currently no mobile radio reception");
 								break;
 							}
 								
 							
-							value = Integer.parseInt( Arrays.asList(rx.split(",")).get(3) ); 
+							String[] copsParts = rx.split(",");
+							value = Integer.parseInt(copsParts[3].trim());
 							switch (value) {
 							case 0: 
 								log.info("RADIOT: GSM (2G)");
@@ -908,12 +958,15 @@ public class ATresponder extends Thread {
 								break;
 							}
 							
-							watchdogList.set(2, Arrays.asList(rx.split(",")).get(2).replace("\"", "")); // Update provider name
+							String providerName = copsParts[2].replace("\"", "").trim();
+							watchdogList.set(2, providerName); // Update provider name
 							watchdogList.set(0, new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date())); // Update  RAT-timestamp
+							startupNetworkReady = (providerName.length() > 0 && value >= 0 && value <= 7);
 							 
 						} else if (rx.toUpperCase().startsWith("+CSQ: ")) {
 							value = Integer.parseInt( rx.substring(6, rx.indexOf(",")) ); // +CSQ: 14,99
 							int percent = Math.round(value * 100 / 31 );
+							startupSignalReady = value >= 0 && value <= 31;
 							
 							if (percent > 0 && percent <= 100)
 								watchdogList.set(4, Math.round(value * 100 / 31 ) + "%"); // Update signal strength in percentage
@@ -933,6 +986,8 @@ public class ATresponder extends Thread {
 								log.info("SIGNAL: " + value + "/20-31/31 [++++]");
 								watchdogList.set(5, "++++"); // Update signal strength icon
 							}
+						} else if (rx.toUpperCase().startsWith("+CPIN: READY")) {
+							startupSimReady = true;
 						} else if (rx.toUpperCase().startsWith("+CPIN: SIM")) {
 							log.error("SIM requires PIN authentication. Please disable SIM PIN.");
 							shutdownAndExit("REMOVE SIM PIN");
