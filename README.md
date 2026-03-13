@@ -133,6 +133,8 @@ Recommended production starting point:
 * `watchdog.activity.startup.grace=300000` (5 minutes, milliseconds)
 * Linux watchdog `change=900` (15 minutes, seconds) in `/etc/watchdog.conf`
 
+`atclient.cfg.sample` already uses that production-oriented activity baseline, while keeping `watchdog.enable=false` by default for safer local/manual testing.
+
 ### log4j2.xml
 
 Log4j2 configuration for application logging. Controls log output format, file rotation, and log levels. Copy the sample and adjust as needed:

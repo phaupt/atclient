@@ -57,8 +57,6 @@ public class ATresponder extends Thread {
 
 	private volatile static int user_delay_millis = 0;
 	
-	private volatile static boolean getTextSms;
-
 	private String atclientCfg = null;
 	
 	private String serPortStr = null;
@@ -529,9 +527,7 @@ public class ATresponder extends Thread {
 					if (rx.toUpperCase().startsWith("+CMTI: ")) {
 						value = Integer.parseInt((rx.substring(13, rx.length()))); // +CMTI: "SM", 0
 						log.info("TEXT MESSAGE (SMS)");
-						getTextSms = true; // enable text SMS flag, so that we know we get SMS text content 
 						send("AT+CMGR=" + value); // read the SMS data
-						getTextSms = false; // disable text SMS flag
 						send("AT+CMGD=0,4"); // delete all stored short messages after reading
 					} else if (rx.toUpperCase().startsWith("^SSTR: ")) {	
 						// ^SSTR: 3,19

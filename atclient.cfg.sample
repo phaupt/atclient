@@ -51,7 +51,9 @@ cops.mode =
 ############################################################################################
 # Watchdog [optional]
 ############################################################################################
-# If enabled, ATClient writes a watchdog file that can be monitored by linux watchdog daemon.
+# If enabled, ATClient writes/refreshes a watchdog file.
+# Important: ATClient only updates the file; Linux watchdog daemon decides when stale
+# file age should trigger recovery action (for example reboot).
 # Refer to https://linux.die.net/man/5/watchdog.conf
 #
 # Operational intent:
@@ -79,19 +81,28 @@ cops.mode =
 #   startup grace window in milliseconds (ms) for activity mode.
 #   During this time, communication RX can still refresh the watchdog file to reduce
 #   early reboot-loop risk while modem/SIM is still initializing.
-#   0 = disabled (default)
+#   0 = disabled
 #
-# Recommended production baseline example:
-#   watchdog.mode = activity
-#   watchdog.activity.events = 19
-#   watchdog.activity.startup.grace = 300000   # 5 minutes (ms)
-#   Linux watchdog: set 'change = 900' in /etc/watchdog.conf   # 15 minutes (seconds)
+# Linux watchdog integration hint (separate from ATClient config):
+#   Example /etc/watchdog.conf:
+#     file = /home/mid/atclient/watchdog.atclient
+#     change = 900    # 15 minutes, in seconds
+#
+# Operational commands:
+#   sudo systemctl status watchdog
+#   sudo systemctl stop watchdog
+#   sudo systemctl start watchdog
+#   stat /home/mid/atclient/watchdog.atclient
+#   stat /var/log/watchdog.atclient
+#
+# Sample defaults below follow recommended production baseline for activity semantics,
+# but watchdog remains disabled by default for safe local/manual usage.
 #
 watchdog.enable = false
 watchdog.file   = /home/mid/atclient/watchdog.atclient
-watchdog.mode   = communication
-watchdog.activity.events = 19,33,35,37,254
-watchdog.activity.startup.grace = 0
+watchdog.mode   = activity
+watchdog.activity.events = 19
+watchdog.activity.startup.grace = 300000
 
 ############################################################################################
 # Maintenance Mode [optional]
