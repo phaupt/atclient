@@ -144,6 +144,27 @@ file = /var/log/watchdog.atclient
 change = 900
 ```
 
+Example (real Raspberry Pi deployment, shortened):
+
+```ini
+# /etc/watchdog.conf
+file            = /var/log/watchdog.atclient
+change          = 900
+max-load-1      = 24
+min-memory      = 1
+watchdog-device = /dev/watchdog
+max-temperature = 65
+interval        = 1
+realtime        = yes
+priority        = 1
+watchdog-timeout = 15
+```
+
+Notes on the example above:
+* `file` and `change` define the ATClient heartbeat expectation window (15 minutes)
+* `interval=1`, `realtime=yes`, and `priority=1` make watchdog checks frequent and scheduling robust under load
+* load/memory/temperature/device checks run in parallel to file-change monitoring
+
 Why `change=900` is a conservative starting point:
 * healthy Mobile ID activity is usually expected about every 5 minutes
 * a failed attempt may take about 60-80 seconds before timeout
@@ -207,6 +228,32 @@ Alternatively, you can use `/etc/rc.local` (add before `exit 0`):
 ```bash
 (/bin/sleep 80 && /usr/bin/java -Dconfig.file=/home/mid/atclient/atclient.cfg -Dlog.file=/var/log/atclient.log -Dlog4j.configurationFile=/home/mid/atclient/log4j2.xml -cp "/home/mid/atclient/class:/home/mid/atclient/lib/*" com.swisscom.atclient.ATClient) &
 ```
+
+Example boot flow from a field Raspberry Pi setup (`/etc/rc.local`, shortened):
+
+```bash
+# avoid early watchdog reboot before Java process starts
+touch /var/log/watchdog.atclient
+
+# optional local hardware helpers
+/home/mid/oled-i2c/mid.sh 600 &
+/home/mid/relay.sh CH3 ON
+
+# start ATClient after modem boot delay
+(/bin/sleep 80 && /usr/bin/java \
+  -Dserial.port=/dev/ttyACM1 \
+  -Dconfig.file=/home/mid/atclient/atclient.cfg \
+  -Dlog.file=/var/log/atclient.log \
+  -Dlog4j.configurationFile=/home/mid/atclient/log4j2.xml \
+  -cp "/home/mid/atclient/class:/home/mid/atclient/lib/*" \
+  com.swisscom.atclient.ATClient) &
+```
+
+This sequence highlights the practical dependency chain:
+1. create initial watchdog heartbeat file
+2. power/initialize attached hardware
+3. wait for LTE terminal readiness
+4. start Java client with explicit serial port and config paths
 
 ## Logging and monitoring
 
