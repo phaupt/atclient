@@ -8,11 +8,15 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Properties;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -38,6 +42,8 @@ public class ATresponder extends Thread {
 	private long watchdogActivityStartupGraceMillis = 0;
 	private long watchdogStartedAtMillis = 0;
 	private String maintenanceFile = null;
+	private final Object maintenanceLock = new Object();
+	private volatile boolean maintenanceInFlight = false;
 
 	/**
 	 * Heart beat to detect serial port disconnection in milliseconds
@@ -69,14 +75,37 @@ public class ATresponder extends Thread {
 	private int parity;
 	
 	private int atTimeout;
+	private static final long DEGRADED_DIAGNOSTIC_TIMEOUT_MILLIS = 1200;
 	private static final long STARTUP_READINESS_MAX_WAIT_MILLIS = 180000;
 	private static final long STARTUP_READINESS_POLL_MILLIS = 5000;
 	
 	private String actualCopsMode;
 	private String newCopsMode;
 	private boolean startupSimReady = false;
+	private boolean startupRegistrationReady = false;
 	private boolean startupNetworkReady = false;
 	private boolean startupSignalReady = false;
+	private String startupRegistrationSource = "unknown";
+	private Integer lastCregStat = null;
+	private Integer lastCeregStat = null;
+	private String startupProviderName = "n/a";
+	private String startupRatLabel = "n/a";
+	private boolean startupRadioqCaptured = false;
+	private String startupModemVendor = "n/a";
+	private String startupModemModel = "n/a";
+	private String startupModemRevision = "n/a";
+	private String startupModemARevision = "n/a";
+	private String startupSrvsetUsbcomp = "n/a";
+	private String startupSrvsetMdm = "n/a";
+	private String startupSrvsetApp = "n/a";
+	private String startupSrvsetNmea = "n/a";
+	private String startupSignalSummary = "n/a";
+
+	private static final Pattern KEYWORD_USERDELAY = Pattern.compile("\\bUSERDELAY=(\\d+)\\b");
+	private static final Pattern KEYWORD_RAT = Pattern.compile("\\bRAT=([A072])\\b");
+	private static final Pattern KEYWORD_HOSTNAME = Pattern.compile("\\bHOSTNAME=(mobileid0\\d{2})\\b");
+	private static final Pattern MODEM_REV_PATTERN = Pattern.compile("^REV(?:ISION)?\\s+(.+)$", Pattern.CASE_INSENSITIVE);
+	private static final Pattern MODEM_A_REV_PATTERN = Pattern.compile("^A-REV(?:ISION)?\\s+(.+)$", Pattern.CASE_INSENSITIVE);
 	
 	private byte opMode; // Switch: 1=ER, 2=AR
 	
@@ -270,36 +299,35 @@ public class ATresponder extends Thread {
 		while (!portSuccess) {
 			ports = SerialPort.getCommPorts();
 			
-			// reverse the list to have the matching port first
-			List<SerialPort> list = Arrays.asList(ports);
-		    Collections.reverse(list);
+			List<SerialPort> list = new ArrayList<>(Arrays.asList(ports));
+			list.sort(Comparator.comparing(SerialPort::getSystemPortName, String.CASE_INSENSITIVE_ORDER));
 			
 			if (opMode == 0) {
 				// automatic serial port detection!
 				for (SerialPort port : list) {
 					
 					portDesc = port.getDescriptivePortName();
+					serPortStr = port.getSystemPortName();
 					
 					for (String portStr : portStrArr) {
-						// Check for known terminal (port string)
-						serPortStr = port.getSystemPortName();
-						
-						// -Dserial.port was provided, so 'portStrInput' has the name we are looking for
-						if (portStrInput != null && !portStrInput.contains(serPortStr)) {
-							// -Dserial.port is NOT matching
-							log.info("Found a serial port: " + serPortStr + " '" + portDesc + "' - but this isn't matching -Dserial.port=" + portStrInput);
-							break;
-						}
-						
-						// -Dserial.port was NOT provided, so the input value 'portStrInput' is null
-						else if (portStrInput == null && portDesc.contains(portStr) || portStrInput != null && portStrInput.contains(serPortStr)) {							
-							log.info("Found a serial port: " + port.getSystemPortName() + " '" + portDesc + "'");
-
-							// Found a port with matching name... trying to open it
+						if (portStrInput != null) {
+							if (!matchesRequestedPort(portStrInput, serPortStr)) {
+								log.info("Found serial port " + serPortStr + " '" + portDesc
+										+ "' - skipping (does not exactly match -Dserial.port=" + portStrInput + ").");
+								break;
+							}
+							log.info("Found serial port " + serPortStr + " '" + portDesc
+									+ "' - selecting because it exactly matches -Dserial.port.");
 							portSuccess = openPort();
 							if (portSuccess)
-								break; // success, break iteration for portStrArr
-						} 
+								break;
+						} else if (portDesc != null && portDesc.contains(portStr)) {
+							log.info("Found serial port " + serPortStr + " '" + portDesc
+									+ "' - selecting because description matches configured pattern '" + portStr + "'.");
+							portSuccess = openPort();
+							if (portSuccess)
+								break;
+						}
 					}
 					if (portSuccess)
 						break; // success, break iteration for available serial ports
@@ -370,8 +398,8 @@ public class ATresponder extends Thread {
 				Thread.currentThread().setName(ManagementFactory.getRuntimeMXBean().getName() + " " + serPortStr); // Update thread name
 				return true; // success
 			} else {
-				log.info(serPortStr + " wasn't responding. Closing this port.");
-				close(false);
+				log.info(serPortStr + " wasn't responding to AT probe. Closing this port cleanly.");
+				close(true);
 				return false; // failed. terminal wasn't responding.
 			}
 		}
@@ -439,6 +467,9 @@ public class ATresponder extends Thread {
 			send("AT+CIMI"); // IMSI		
 			send("AT+CPIN?"); // SIM Card status			
 			send("AT+CREG?"); // Network registration
+			send("AT+CEREG?"); // EPS/LTE registration
+			send("ATI1"); // Product identity for conservative startup diagnostics
+			send("AT^SSRVSET=\"current\""); // Active service-set diagnostics for USB/Remote-SAT visibility
 			
 			//send("AT^SMONI"); // supplies information of the serving cell
 			//send("ATI1"); // display product identification information
@@ -470,6 +501,8 @@ public class ATresponder extends Thread {
 				shutdownAndExit("STARTUP NOT READY");
 				return false;
 			}
+			captureStartupRadioQualitySnapshot();
+			logStartupModeDiagnostics();
 			
 			// Start listening...
 			send("AT^SSTR?", null); // Check for STK Menu initialization
@@ -479,6 +512,8 @@ public class ATresponder extends Thread {
 
 	private void resetStartupReadinessFlags() {
 		startupSimReady = false;
+		startupRegistrationReady = false;
+		startupRegistrationSource = "unknown";
 		startupNetworkReady = false;
 		startupSignalReady = false;
 	}
@@ -491,21 +526,30 @@ public class ATresponder extends Thread {
 			resetStartupReadinessFlags();
 
 			boolean cpinOk = send("AT+CPIN?");
+			boolean cregOk = send("AT+CREG?");
+			boolean ceregOk = send("AT+CEREG?");
 			boolean copsOk = send("AT+COPS?");
 			boolean csqOk = send("AT+CSQ");
 
-			if (cpinOk && copsOk && csqOk && startupSimReady && startupNetworkReady && startupSignalReady) {
+			if (cpinOk && (cregOk || ceregOk) && copsOk && csqOk
+					&& startupSimReady && startupRegistrationReady && startupNetworkReady && startupSignalReady) {
 				log.info("Startup readiness confirmed after attempt " + attempt + ".");
 				return true;
 			}
 
-			log.warn("Startup readiness pending (attempt " + attempt + "): SIM=" + startupSimReady + ", NETWORK=" + startupNetworkReady + ", SIGNAL=" + startupSignalReady + ".");
+			log.warn("Startup readiness pending (attempt " + attempt + "): SIM=" + startupSimReady
+					+ ", REGISTRATION=" + startupRegistrationReady + "(" + startupRegistrationSource + ")"
+					+ ", NETWORK=" + startupNetworkReady + ", SIGNAL=" + startupSignalReady
+					+ ", CMDOK[CPIN/CREG/CEREG/COPS/CSQ]=" + cpinOk + "/" + cregOk + "/" + ceregOk + "/" + copsOk + "/" + csqOk + ".");
 			long remainingMs = maxWaitMs - (System.currentTimeMillis() - startTs);
 			if (remainingMs > 0)
 				sleep(Math.min(pollMs, remainingMs));
 		}
 
-		log.error("Startup readiness timeout after " + maxWaitMs + "ms: SIM=" + startupSimReady + ", NETWORK=" + startupNetworkReady + ", SIGNAL=" + startupSignalReady + ".");
+		log.error("Startup readiness timeout after " + maxWaitMs + "ms: SIM=" + startupSimReady
+				+ ", REGISTRATION=" + startupRegistrationReady + "(" + startupRegistrationSource + ")"
+				+ ", NETWORK=" + startupNetworkReady + ", SIGNAL=" + startupSignalReady + ".");
+		captureDegradedRadioDiagnostics("startup-timeout", true);
 		return false;
 	}
 	
@@ -518,6 +562,7 @@ public class ATresponder extends Thread {
 		String code, rx;
 		int value = 0;
 		boolean ackCmdRequired = false;
+		int consecutiveRxFailures = 0;
 		
 		// Start endless loop...
 		while (isAlive) {
@@ -560,6 +605,7 @@ public class ATresponder extends Thread {
 			}
 			
 			// Listening for incoming notifications (SIM->ME)
+			boolean hadRxLoopFailure = false;
 			try {
 				
 				log.trace("Waiting for RX data..");
@@ -578,22 +624,28 @@ public class ATresponder extends Thread {
 					getMeTextAscii(rx); // may set the flag such as CANCEL	
 	
 					if (rx.toUpperCase().startsWith("+CMTI: ")) {
-						value = Integer.parseInt((rx.substring(13, rx.length()))); // +CMTI: "SM", 0
-						log.info("TEXT MESSAGE (SMS)");
-						send("AT+CMGR=" + value); // read the SMS data
-						send("AT+CMGD=0,4"); // delete all stored short messages after reading
+						Integer smsIndex = parseSmsStorageIndex(rx);
+						if (smsIndex == null) {
+							log.warn("Ignoring malformed +CMTI line '" + rx + "'.");
+						} else {
+							log.info("TEXT MESSAGE (SMS)");
+							send("AT+CMGR=" + smsIndex); // read the SMS data
+							send("AT+CMGD=0,4"); // delete all stored short messages after reading
+						}
 					} else if (rx.toUpperCase().startsWith("^SSTR: ")) {	
-						// ^SSTR: 3,19
-						// ^SSTR: 19,0,"" --> ignore this one (NumberFormatException catched and ignored)
-						value = Integer.parseInt(rx.substring(9, rx.length())); // ^SSTR: ?,XX
+						ParsedSstr parsedSstr = parseSstrLine(rx);
+						if (parsedSstr == null) {
+							log.warn("Ignoring malformed ^SSTR line '" + rx + "'.");
+							continue;
+						}
+						value = parsedSstr.commandType;
 						updateWatchdogForStkEvent(value);
 
 						// ^SSTR: 2,?? | ^SSTR: 3,?? | ^SSTR: 4,??
 						// ^SSTR: <state>,<cmdType>
 						// <state>: 0=RESET, 1=OFF, 2=IDLE, 3=PAC, 4=WAIT
 						// <cmdType>: only valid in case of <state> is PAC or WAIT
-						if (rx.substring(7, 8).equals("3") || rx.substring(7, 8).equals("4"))
-							ackCmdRequired = true;
+						ackCmdRequired = parsedSstr.ackRequired;
 						
 						// Check Proactive Command Type
 						switch (value) {
@@ -683,7 +735,12 @@ public class ATresponder extends Thread {
 							break;
 						}
 					} else if (rx.toUpperCase().startsWith("^SSTN: ")) {
-						value = Integer.parseInt(rx.substring(7, rx.length())); // ^SSTN: 19
+						Integer sstnValue = parseSstnLine(rx);
+						if (sstnValue == null) {
+							log.warn("Ignoring malformed ^SSTN line '" + rx + "'.");
+							continue;
+						}
+						value = sstnValue; // ^SSTN: 19
 						updateWatchdogForStkEvent(value);
 
 						// Check Proactive Command Type
@@ -785,9 +842,20 @@ public class ATresponder extends Thread {
 					}			
 					
 				}
-			} catch (NumberFormatException e) {
-				// Ignore the ^SSTR: 19,0,"" cases
+			} catch (IOException | RuntimeException e) {
+				hadRxLoopFailure = true;
+				consecutiveRxFailures++;
+				log.error("listenForRx() processing failure (consecutive=" + consecutiveRxFailures + ")", e);
+				if (consecutiveRxFailures >= 5) {
+					log.error("listenForRx() reached failure threshold. Triggering controlled shutdown/recovery.");
+					captureDegradedRadioDiagnostics("rx-loop-failure", true);
+					shutdownAndExit("RX LOOP FAILURE");
+					return;
+				}
+				Thread.sleep(Math.min(1000L * consecutiveRxFailures, 5000L));
 			} 
+			if (!hadRxLoopFailure)
+				consecutiveRxFailures = 0;
 		}
 		
 	}
@@ -855,7 +923,7 @@ public class ATresponder extends Thread {
 			printStream.write((cmd + "\r\n").getBytes(StandardCharsets.UTF_8));
 			
 			if (expectedRsp != null)
-				return getRx(expectedRsp, timeout, sstr);
+				return getRx(expectedRsp, timeout, sstr, cmd);
 			else
 				return true;
 		} catch (IOException e) {
@@ -867,32 +935,29 @@ public class ATresponder extends Thread {
 		}
 	}
 
-	private boolean getRx(String expectedRx, long timeout, boolean sstr) {
+	private boolean getRx(String expectedRx, long timeout, boolean sstr, String txCmd) {
 		try {
-			String compareStr;
-			if (expectedRx == null)
-				compareStr = "OK";
-			else
-				compareStr = expectedRx.toUpperCase();
+			String compareStr = (expectedRx == null || expectedRx.trim().isEmpty()) ? "OK" : expectedRx.trim().toUpperCase();
+			String txCmdUpper = txCmd == null ? "" : txCmd.trim().toUpperCase();
+			boolean payloadSensitiveCommand = txCmdUpper.startsWith("AT+CMGR=");
+			int payloadLinesToIgnoreForTerminalMatching = 0;
 
 			long startTime = System.currentTimeMillis();
 
 			String rx;
-			int value;
 			
 			if (timeout == 0)
 				timeout = atTimeout; // default
 			
-			log.trace("Start waiting for response '" + expectedRx + "'");
+			log.trace("Start waiting for response '" + compareStr + "'");
 
 			while (true) {
 				
 				// Wait buffered reader to have data available.
 				
 				if ((System.currentTimeMillis() - startTime) >= timeout){
-					log.error(serPortStr + " timeout (" + timeout + "ms) waiting for response '" + expectedRx + "'");
-					if (sstr) 
-						send("AT^SSTR?", null); // Check status, this may help.
+					log.error(serPortStr + " timeout (" + timeout + "ms) waiting for response '" + compareStr
+							+ "' (sstrRecoveryHint=" + sstr + ").");
 					return false;
 				}
 		
@@ -902,6 +967,7 @@ public class ATresponder extends Thread {
 					
 					if (rx.length() > 0) {
 						log.debug("RX2 <<< " + rx);
+						updateStartupDiagnosticsFromLine(rx);
 						
 						getMeTextAscii(rx);
 						
@@ -913,109 +979,50 @@ public class ATresponder extends Thread {
 							watchdogList.set(1, imsi); // Update IMSI 
 
 						} else if (rx.toUpperCase().startsWith("+COPS: ")) {
-							// +COPS: 0,0,"Swisscom",7
-							
-							// Be sure that we have expected response format
-							if (rx.length() - rx.replaceAll(",","").length() < 3) {
-								startupNetworkReady = false;
-								if (rx.contentEquals("+COPS: 0"))
-									log.warn("Network selection not usable yet ('+COPS: 0'). Waiting for registration/provider details.");
-								else
-									log.warn("Network selection not usable yet. Incomplete +COPS response '" + rx + "'.");
-								break;
-							}
-
-							String[] copsParts = rx.split(",");
-							if (copsParts.length < 4) {
-								startupNetworkReady = false;
-								log.warn("Network selection not usable yet. Incomplete +COPS response '" + rx + "'.");
-								break;
-							}
-							String providerName = copsParts.length > 2 ? copsParts[2].replace("\"", "").trim() : "";
-							try {
-								value = Integer.parseInt(copsParts[3].trim());
-							} catch (NumberFormatException e) {
-								startupNetworkReady = false;
-								log.warn("Network selection malformed. Invalid RAT value in +COPS response '" + rx + "'.");
-								break;
-							}
-							switch (value) {
-							case 0: 
-								log.info("RADIOT: GSM (2G)");
-								watchdogList.set(3, "2G"); 
-								break;
-							case 1: 
-								log.info("RADIOT: GSM Compact (2G)");
-								watchdogList.set(3, "2G");
-								break;
-							case 2: 
-								log.info("RADIOT: UTRAN (3G)");
-								watchdogList.set(3, "3G");
-								break;
-							case 3: 
-								log.info("RADIOT: GSM w/EGPRS (2G)");
-								watchdogList.set(3, "2G");
-								break;
-							case 4: 
-								log.info("RADIOT: UTRAN w/HSDPA (3G)");
-								watchdogList.set(3, "3G");
-								break;
-							case 5: 
-								log.info("RADIOT: UTRAN w/HSUPA (3G)");
-								watchdogList.set(3, "3G");
-								break;
-							case 6: 
-								log.info("RADIOT: UTRAN w/HSDPA and HSUPA (3G)");
-								watchdogList.set(3, "3G");
-								break;
-							case 7: 
-								log.info("RADIOT: E-UTRAN (4G/LTE)");
-								watchdogList.set(3, "4G");
-								break;
-							default:
-								break;
-							}
-							
-							watchdogList.set(2, providerName); // Update provider name
-							watchdogList.set(0, new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date())); // Update  RAT-timestamp
-							startupNetworkReady = (providerName.length() > 0 && value >= 0 && value <= 7);
+							updateStartupAndWatchdogFromCops(rx);
 							 
 						} else if (rx.toUpperCase().startsWith("+CSQ: ")) {
-							value = Integer.parseInt( rx.substring(6, rx.indexOf(",")) ); // +CSQ: 14,99
-							int percent = Math.round(value * 100 / 31 );
-							startupSignalReady = value >= 0 && value <= 31;
-							
-							if (percent > 0 && percent <= 100)
-								watchdogList.set(4, Math.round(value * 100 / 31 ) + "%"); // Update signal strength in percentage
-							else
-								watchdogList.set(4, "n/a"); // Update signal strength in percentage
-							
-							if (value <= 9) {
-								log.info("SIGNAL: " + value + "/1-9/31 [+---]");
-								watchdogList.set(5, "+---"); // Update signal strength icon
-							} else if (value >= 10 && value <= 14) {
-								log.info("SIGNAL: " + value + "/10-14/31 [++--]");
-								watchdogList.set(5, "++--"); // Update signal strength icon
-							} else if (value >= 15 && value <= 19) {
-								log.info("SIGNAL: " + value + "/15-19/31 [+++-]"); 
-								watchdogList.set(5, "+++-"); // Update signal strength icon
-							} else if (value >= 20 && value <= 31) {
-								log.info("SIGNAL: " + value + "/20-31/31 [++++]");
-								watchdogList.set(5, "++++"); // Update signal strength icon
-							}
+							updateStartupAndWatchdogFromCsq(rx);
 						} else if (rx.toUpperCase().startsWith("+CPIN: READY")) {
 							startupSimReady = true;
 						} else if (rx.toUpperCase().startsWith("+CPIN: SIM")) {
 							log.error("SIM requires PIN authentication. Please disable SIM PIN.");
 							shutdownAndExit("REMOVE SIM PIN");
 							return false;
+						} else if (rx.toUpperCase().startsWith("+CREG: ")) {
+							updateRegistrationStateFromLine(rx, false);
+						} else if (rx.toUpperCase().startsWith("+CEREG: ")) {
+							updateRegistrationStateFromLine(rx, true);
+						} else if (rx.toUpperCase().startsWith("+CESQ: ")) {
+							logCesqLine(rx);
+						} else if (rx.toUpperCase().startsWith("^SMONI:")) {
+							log.info("CELL: " + rx.trim());
+						} else if (rx.toUpperCase().startsWith("+CEER:")) {
+							log.info("FAILCTX: " + rx.trim());
 						} else if (rx.toUpperCase().startsWith("+CME ERROR: SIM")) {
 							log.error("Please check if SIM is properly inserted.");
 							shutdownAndExit("SIM NOT INSERTED");
 							return false;
-						} else if (rx.toUpperCase().trim().contains(compareStr)) {		
-							return true; // Got the expected response
 						} 
+
+						String normalizedRx = rx.trim().toUpperCase();
+						if (payloadSensitiveCommand && normalizedRx.startsWith("+CMGR:")) {
+							// Following SMS body line can contain arbitrary text that may look like AT final result codes.
+							payloadLinesToIgnoreForTerminalMatching = 1;
+						} else if (payloadLinesToIgnoreForTerminalMatching > 0) {
+							payloadLinesToIgnoreForTerminalMatching--;
+						} else {
+							if (isExplicitModemErrorLine(normalizedRx)) {
+								log.error("Modem returned explicit failure while waiting for '" + compareStr + "': " + rx);
+								return false;
+							}
+							if (isExpectedResponseMatch(normalizedRx, compareStr))
+								return true;
+							if (isStandaloneFinalResultOk(normalizedRx) && !"OK".equals(compareStr)) {
+								log.warn("Received final OK before expected response '" + compareStr + "' for command flow.");
+								return false;
+							}
+						}
 						
 						// Watchdog: Write/update local file
 						updateWatchdogForCommunicationRx();
@@ -1035,90 +1042,651 @@ public class ATresponder extends Thread {
 
 	private void getMeTextAscii(String rsp) throws UnsupportedEncodingException {
 		// Only in case of UCS2 Mode: Convert to ASCII
-		if (rsp.contains("^SSTGI:") && rsp.indexOf(",\"") != -1 && rsp.indexOf("\",") != -1 && rsp.charAt(rsp.indexOf(",\"") + 2) != '"') {
-			// Found some possible text content
-
-			rsp = rsp.substring(rsp.indexOf(",\"") + 2, rsp.indexOf("\",", rsp.indexOf(",\"") + 2));
-			rsp = new String(hexToByte(rsp), StandardCharsets.UTF_16);
-			log.info("UI-TXT: \'" + rsp + "\'");
-
-			verifyKeywords(rsp);
+		if (rsp == null || !rsp.contains("^SSTGI:")) {
+			return;
+		}
+		int startIdx = rsp.indexOf(",\"");
+		int endIdx = (startIdx >= 0) ? rsp.indexOf("\",", startIdx + 2) : -1;
+		if (startIdx < 0 || endIdx <= startIdx + 2) {
+			return;
+		}
+		String ucs2Hex = rsp.substring(startIdx + 2, endIdx).trim();
+		if (ucs2Hex.length() == 0) {
+			return;
+		}
+		try {
+			String asciiText = new String(hexToByte(ucs2Hex), StandardCharsets.UTF_16);
+			log.info("UI-TXT: \'" + asciiText + "\'");
+			verifyKeywords(asciiText);
+		} catch (RuntimeException e) {
+			log.warn("Ignoring malformed ^SSTGI UCS2 payload '" + ucs2Hex + "'.");
 		}
 	}
 
 	private void verifyKeywords(String rsp) {
 		// Check if UI Text contains specific keywords
-		if (rsp.indexOf("CANCEL") != -1) {
+		if (rsp.contains("CANCEL")) {
 			setCancel(true);
 			log.info("'CANCEL'-keyword detected! Message will be cancelled.");
-		} else if (rsp.indexOf("STKTIMEOUT") != -1) {
+		} else if (rsp.contains("STKTIMEOUT")) {
 			setStkTimeout(true);
 			log.info("'STKTIMEOUT'-keyword detected! Message will time out.");
-		} else if (rsp.indexOf("BLOCKPIN") != -1) {
+		} else if (rsp.contains("BLOCKPIN")) {
 			setBlockedPIN(true);
 			log.info("'BLOCKPIN'-keyword detected! Mobile ID PIN will be blocked.");
 		} 
 		
-		if (rsp.indexOf("USERDELAY=") != -1) {
+		Matcher userDelayMatcher = KEYWORD_USERDELAY.matcher(rsp);
+		if (userDelayMatcher.find()) {
 			try {
-				user_delay_millis = Integer.parseInt(rsp.substring(rsp.indexOf("USERDELAY=") + 10, rsp.indexOf("USERDELAY=") + 11)) * 1000; // example: 'USERDELAY=5' -> 5000 ms
+				user_delay_millis = Integer.parseInt(userDelayMatcher.group(1)) * 1000;
 				if (user_delay_millis >= 1000 && user_delay_millis <= 9000) {
 					setUserDelay(true);
 					log.info("'USERDELAY=" + (user_delay_millis/1000) + "'-keyword detected! The current TerminalResponse will be delayed by " + (user_delay_millis/1000) + " seconds.");
+				} else {
+					log.warn("Ignoring out-of-range USERDELAY value in UI text.");
 				} 
 			} catch (Exception e) {
-				// silently ignore...
+				log.warn("Ignoring malformed USERDELAY keyword in UI text.");
 			}				
 		}
 		
-		if (rsp.indexOf("RAT=") != -1) {
-			try {
-				String value = rsp.substring(rsp.indexOf("RAT=") + 4, rsp.indexOf("RAT=") + 5);
-				// A=Automatic, 0=2G, 2=3G, 7=4G
-				if (value.contentEquals("A") || value.contentEquals("0") || value.contentEquals("2") || value.contentEquals("7")) {
-					newCopsMode = value;
-					setRAT(true);
-					log.info("'RAT=" + newCopsMode + "'-keyword detected.");
-				} 
-			} catch (Exception e) {
-				// silently ignore...
-			}				
+		Matcher ratMatcher = KEYWORD_RAT.matcher(rsp);
+		if (ratMatcher.find()) {
+			newCopsMode = ratMatcher.group(1);
+			setRAT(true);
+			log.info("'RAT=" + newCopsMode + "'-keyword detected.");
 		}
 		
-		if (rsp.indexOf("HOSTNAME=") != -1) {
+		Matcher hostnameMatcher = KEYWORD_HOSTNAME.matcher(rsp);
+		if (hostnameMatcher.find()) {
+			String value = hostnameMatcher.group(1);
 			try {
-				// mobileid000 (length=11)
-				String value = rsp.substring(rsp.indexOf("HOSTNAME=") + 9, rsp.indexOf("HOSTNAME=") + 20);
-				if (value.matches("mobileid0\\d{2}")) {
-					try {
-						new ProcessBuilder("sudo", "/home/mid/setHostName", value).inheritIO().start();
-					} catch (IOException e) {
-						log.error("Failed to execute setHostName command", e);
-					}
-					log.info("'HOSTNAME=" + value + "'-keyword detected. Will change hostname to " + value);
-				}
-			} catch (Exception e) {
-				// silently ignore...
+				new ProcessBuilder("sudo", "/home/mid/setHostName", value).inheritIO().start();
+			} catch (IOException e) {
+				log.error("Failed to execute setHostName command", e);
 			}
+			log.info("'HOSTNAME=" + value + "'-keyword detected. Will change hostname to " + value);
 		}
 		
-		if (rsp.indexOf("MAINTENANCE") != -1 && maintenanceFile != null) {
+		if (rsp.contains("MAINTENANCE") && maintenanceFile != null) {
 			log.info("'MAINTENANCE'-keyword detected. Will invoke " + maintenanceFile);
-
-			try {
-				ProcessBuilder pb = new ProcessBuilder(maintenanceFile);
-				Process p = pb.start();
-		        p.waitFor();
-		        log.info("Script executed.");
-			} catch (IOException | InterruptedException e) {
-				log.error("Failed to execute maintenance script.", e);
-			}
+			invokeMaintenanceScriptAsync();
 		}
 		
-		if (rsp.indexOf("REBOOT") != -1) {
+		if (rsp.contains("REBOOT")) {
 			log.info("'REBOOT'-keyword detected. Will invoke 'sudo reboot' command and terminate this program.");
 			
 			rebootAndExit();
+		}
+	}
+
+	private void invokeMaintenanceScriptAsync() {
+		if (maintenanceFile == null || maintenanceFile.trim().isEmpty()) {
+			log.warn("MAINTENANCE keyword ignored because maintenance.script.file is not configured.");
+			return;
+		}
+		synchronized (maintenanceLock) {
+			if (maintenanceInFlight) {
+				log.info("MAINTENANCE request ignored because a maintenance script is already running.");
+				return;
+			}
+			maintenanceInFlight = true;
+		}
+		Thread maintenanceThread = new Thread(() -> {
+			try {
+				ProcessBuilder pb = new ProcessBuilder(maintenanceFile);
+				Process process = pb.start();
+				int exitCode = process.waitFor();
+				log.info("Maintenance script finished with exit code " + exitCode + ".");
+			} catch (IOException e) {
+				log.error("Failed to execute maintenance script.", e);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				log.error("Maintenance script execution interrupted.", e);
+			} finally {
+				synchronized (maintenanceLock) {
+					maintenanceInFlight = false;
+				}
+			}
+		}, "maintenance-script");
+		maintenanceThread.setDaemon(true);
+		maintenanceThread.start();
+	}
+
+	private boolean matchesRequestedPort(String portArgument, String systemPortName) {
+		if (portArgument == null || systemPortName == null) {
+			return false;
+		}
+		String normalizedInput = portArgument.trim();
+		if (normalizedInput.isEmpty()) {
+			return false;
+		}
+		if (normalizedInput.equals(systemPortName)) {
+			return true;
+		}
+		String fullPath = normalizedInput.startsWith("/dev/") ? normalizedInput : ("/dev/" + normalizedInput);
+		return fullPath.equals("/dev/" + systemPortName);
+	}
+
+	private boolean isStandaloneFinalResultOk(String normalizedLineUpper) {
+		return "OK".equals(normalizedLineUpper);
+	}
+
+	private boolean isExplicitModemErrorLine(String normalizedLineUpper) {
+		return "ERROR".equals(normalizedLineUpper)
+				|| normalizedLineUpper.startsWith("+CME ERROR:")
+				|| normalizedLineUpper.startsWith("+CMS ERROR:");
+	}
+
+	private boolean isExpectedResponseMatch(String normalizedLineUpper, String expectedUpper) {
+		if (expectedUpper == null || expectedUpper.trim().isEmpty() || "OK".equals(expectedUpper))
+			return isStandaloneFinalResultOk(normalizedLineUpper);
+		if ("ERROR".equals(expectedUpper) || "+CME ERROR".equals(expectedUpper) || "+CMS ERROR".equals(expectedUpper))
+			return normalizedLineUpper.equals(expectedUpper) || normalizedLineUpper.startsWith(expectedUpper + ":");
+		return normalizedLineUpper.contains(expectedUpper);
+	}
+
+	private void updateRegistrationStateFromLine(String rawLine, boolean epsRegistration) {
+		Integer stat = parseRegistrationStatus(rawLine);
+		if (stat == null) {
+			String registrationType = epsRegistration ? "CEREG" : "CREG";
+			log.warn("Ignoring malformed +" + registrationType + " line '" + rawLine + "'.");
+			return;
+		}
+		String registrationType = epsRegistration ? "CEREG" : "CREG";
+		Integer previousStat = epsRegistration ? lastCeregStat : lastCregStat;
+		if (epsRegistration)
+			lastCeregStat = stat;
+		else
+			lastCregStat = stat;
+		if (previousStat == null || previousStat.intValue() != stat.intValue())
+			log.info("REG: " + registrationType + " stat=" + stat + " (" + decodeRegistrationState(stat) + ")");
+
+		if (stat == 1 || stat == 5) {
+			startupRegistrationReady = true;
+			startupRegistrationSource = registrationType + ":" + stat;
+		}
+	}
+
+	private void logStartupModeDiagnostics() {
+		log.info("MODEM: " + buildModemSummary());
+		log.info("SRVSET: " + buildSrvsetSummary());
+		log.info("REG: startupSummary source=" + startupRegistrationSource
+				+ ", CREG=" + formatRegistrationStat(lastCregStat)
+				+ ", CEREG=" + formatRegistrationStat(lastCeregStat)
+				+ ", ready=" + startupRegistrationReady);
+		log.info("STARTUP: serial=" + serPortStr
+				+ ", modem=" + buildModemIdentityLabel()
+				+ ", reg=" + formatStartupRegistrationSummary()
+				+ ", provider=" + startupProviderName
+				+ ", rat=" + startupRatLabel
+				+ ", signal=" + startupSignalSummary
+				+ ", radioqSnapshot=" + startupRadioqCaptured);
+	}
+
+	private void captureStartupRadioQualitySnapshot() {
+		if (send("AT+CESQ")) {
+			startupRadioqCaptured = true;
+		} else {
+			log.warn("RADIOQ: startup snapshot command failed.");
+		}
+	}
+
+	private void captureDegradedRadioDiagnostics(String reason, boolean includeCellSnapshot) {
+		log.info("FAILCTX: collecting degraded-path diagnostics (" + reason + ")");
+		if (!sendDiagnosticBestEffort("AT+CESQ", DEGRADED_DIAGNOSTIC_TIMEOUT_MILLIS))
+			log.warn("RADIOQ: failed to collect +CESQ during " + reason + ".");
+		if (includeCellSnapshot && !sendDiagnosticBestEffort("AT^SMONI", DEGRADED_DIAGNOSTIC_TIMEOUT_MILLIS))
+			log.warn("CELL: failed to collect ^SMONI during " + reason + ".");
+		if (!sendDiagnosticBestEffort("AT+CEER", DEGRADED_DIAGNOSTIC_TIMEOUT_MILLIS))
+			log.warn("FAILCTX: failed to collect +CEER during " + reason + ".");
+	}
+
+	private boolean sendDiagnosticBestEffort(String cmd, long timeoutMillis) {
+		// Keep degraded-path diagnostics bounded so they don't block recovery for full default timeouts.
+		return send(cmd, "OK", timeoutMillis, false);
+	}
+
+	private void logCesqLine(String cesqLine) {
+		Integer[] fields = parseCesqFields(cesqLine);
+		if (fields == null) {
+			log.info("RADIOQ: " + cesqLine.trim());
+			return;
+		}
+		log.info("RADIOQ: +CESQ"
+				+ " rxlev=" + fields[0]
+				+ " ber=" + fields[1]
+				+ " rscp=" + fields[2]
+				+ " ecno=" + fields[3]
+				+ " rsrq=" + formatCesqRsrq(fields[4])
+				+ " rsrp=" + formatCesqRsrp(fields[5]));
+	}
+
+	private Integer[] parseCesqFields(String cesqLine) {
+		int colonIdx = cesqLine.indexOf(':');
+		if (colonIdx < 0 || colonIdx + 1 >= cesqLine.length())
+			return null;
+		String[] parts = cesqLine.substring(colonIdx + 1).trim().split(",");
+		if (parts.length < 6)
+			return null;
+		Integer[] values = new Integer[6];
+		for (int i = 0; i < 6; i++) {
+			values[i] = safeParseInteger(parts[i]);
+			if (values[i] == null)
+				return null;
+		}
+		return values;
+	}
+
+	private String formatRegistrationStat(Integer stat) {
+		if (stat == null)
+			return "n/a";
+		return stat + "(" + decodeRegistrationState(stat) + ")";
+	}
+
+	private String decodeRegistrationState(int stat) {
+		switch (stat) {
+		case 1:
+			return "home-registered";
+		case 5:
+			return "roaming-registered";
+		case 2:
+			return "searching";
+		case 3:
+			return "registration-denied";
+		case 4:
+			return "unknown";
+		case 0:
+			return "not-registered";
+		default:
+			return "stat-" + stat;
+		}
+	}
+
+	private String getRatLabelForSummary(int ratValue) {
+		switch (ratValue) {
+		case 0:
+		case 1:
+		case 3:
+			return "2G";
+		case 2:
+		case 4:
+		case 5:
+		case 6:
+			return "3G";
+		case 7:
+			return "4G/LTE";
+		default:
+			return "n/a";
+		}
+	}
+
+	private Integer parseRegistrationStatus(String registrationLine) {
+		if (registrationLine == null) {
+			return null;
+		}
+		int colonIdx = registrationLine.indexOf(':');
+		if (colonIdx < 0 || colonIdx + 1 >= registrationLine.length()) {
+			return null;
+		}
+		String[] parts = registrationLine.substring(colonIdx + 1).trim().split(",");
+		if (parts.length == 0) {
+			return null;
+		}
+		if (parts.length >= 2) {
+			Integer second = safeParseInteger(parts[1]);
+			if (second != null) {
+				return second;
+			}
+		}
+		return safeParseInteger(parts[0]);
+	}
+
+	private void updateStartupDiagnosticsFromLine(String rawLine) {
+		if (rawLine == null) {
+			return;
+		}
+		String trimmed = rawLine.trim();
+		String normalized = trimmed.toUpperCase(Locale.ROOT);
+		updateModemIdentityFromLine(trimmed, normalized);
+		if (normalized.startsWith("^SSRVSET:"))
+			updateServiceSetFromLine(trimmed);
+	}
+
+	private String buildModemSummary() {
+		StringBuilder sb = new StringBuilder();
+		appendSummaryField(sb, "vendor", startupModemVendor);
+		appendSummaryField(sb, "model", startupModemModel);
+		appendSummaryField(sb, "revision", startupModemRevision);
+		if (!"n/a".equals(startupModemARevision))
+			appendSummaryField(sb, "a-revision", startupModemARevision);
+		appendSummaryField(sb, "serial", serPortStr == null ? "n/a" : serPortStr);
+		return sb.toString();
+	}
+
+	private String buildSrvsetSummary() {
+		StringBuilder sb = new StringBuilder();
+		appendSummaryField(sb, "usbcomp", startupSrvsetUsbcomp);
+		appendSummaryField(sb, "MDM", startupSrvsetMdm);
+		appendSummaryField(sb, "APP", startupSrvsetApp);
+		appendSummaryField(sb, "NMEA", startupSrvsetNmea);
+		return sb.toString();
+	}
+
+	private String buildModemIdentityLabel() {
+		StringBuilder sb = new StringBuilder();
+		if (!"n/a".equals(startupModemVendor))
+			sb.append(startupModemVendor);
+		if (!"n/a".equals(startupModemModel)) {
+			if (sb.length() > 0)
+				sb.append(" ");
+			sb.append(startupModemModel);
+		}
+		if (!"n/a".equals(startupModemRevision)) {
+			if (sb.length() > 0)
+				sb.append(" ");
+			sb.append("REV ").append(startupModemRevision);
+		}
+		if (!"n/a".equals(startupModemARevision)) {
+			if (sb.length() > 0)
+				sb.append(" ");
+			sb.append("(A-REV ").append(startupModemARevision).append(")");
+		}
+		if (sb.length() == 0)
+			return "n/a";
+		return sb.toString();
+	}
+
+	private String formatStartupRegistrationSummary() {
+		if ("unknown".equals(startupRegistrationSource))
+			return "unknown";
+		String[] parts = startupRegistrationSource.split(":");
+		if (parts.length != 2)
+			return startupRegistrationSource;
+		Integer stat = safeParseInteger(parts[1]);
+		if (stat == null)
+			return startupRegistrationSource;
+		return parts[0] + ":" + stat + "(" + decodeRegistrationState(stat) + ")";
+	}
+
+	private void appendSummaryField(StringBuilder sb, String key, String value) {
+		if (value == null || value.trim().isEmpty())
+			value = "n/a";
+		if (sb.length() > 0)
+			sb.append(" ");
+		sb.append(key).append("=").append(value);
+	}
+
+	private void updateModemIdentityFromLine(String trimmedLine, String normalizedLine) {
+		if ("CINTERION".equals(normalizedLine))
+			startupModemVendor = "Cinterion";
+		else if ("THALES".equals(normalizedLine))
+			startupModemVendor = "Thales";
+
+		if (normalizedLine.startsWith("PLS"))
+			startupModemModel = trimmedLine;
+
+		Matcher revMatcher = MODEM_REV_PATTERN.matcher(trimmedLine);
+		if (revMatcher.matches())
+			startupModemRevision = revMatcher.group(1).trim();
+
+		Matcher aRevMatcher = MODEM_A_REV_PATTERN.matcher(trimmedLine);
+		if (aRevMatcher.matches())
+			startupModemARevision = aRevMatcher.group(1).trim();
+
+	}
+
+	private void updateServiceSetFromLine(String ssrvsetLine) {
+		String[] tokens = parseSsrvsetQuotedTokens(ssrvsetLine);
+		if (tokens.length < 2)
+			return;
+
+		if ("usbcomp".equalsIgnoreCase(tokens[0])) {
+			startupSrvsetUsbcomp = tokens[1].trim();
+			return;
+		}
+
+		if ("srvmap".equalsIgnoreCase(tokens[0]) && tokens.length >= 4) {
+			String role = tokens[1].trim().toUpperCase(Locale.ROOT);
+			String mapping = tokens[2].trim() + "/" + tokens[3].trim();
+			if ("MDM".equals(role))
+				startupSrvsetMdm = mapping;
+			else if ("APP".equals(role))
+				startupSrvsetApp = mapping;
+			else if ("NMEA".equals(role))
+				startupSrvsetNmea = mapping;
+		}
+	}
+
+	private String[] parseSsrvsetQuotedTokens(String ssrvsetLine) {
+		int colonIdx = ssrvsetLine.indexOf(':');
+		if (colonIdx < 0 || colonIdx + 1 >= ssrvsetLine.length())
+			return new String[0];
+
+		List<String> tokens = new ArrayList<>();
+		Matcher matcher = Pattern.compile("\"([^\"]*)\"").matcher(ssrvsetLine.substring(colonIdx + 1));
+		while (matcher.find())
+			tokens.add(matcher.group(1));
+		return tokens.toArray(new String[0]);
+	}
+
+	private String formatCesqRsrq(Integer rsrqRaw) {
+		if (rsrqRaw == null || rsrqRaw == 255)
+			return "n/a";
+		if (rsrqRaw < 0 || rsrqRaw > 34)
+			return rsrqRaw + "(raw)";
+		double rsrqDb = -19.5 + (0.5 * rsrqRaw);
+		return rsrqRaw + "(" + String.format(Locale.ROOT, "%.1f dB", rsrqDb) + ")";
+	}
+
+	private String formatCesqRsrp(Integer rsrpRaw) {
+		if (rsrpRaw == null || rsrpRaw == 255)
+			return "n/a";
+		if (rsrpRaw < 0 || rsrpRaw > 97)
+			return rsrpRaw + "(raw)";
+		int rsrpDbm = -140 + rsrpRaw;
+		return rsrpRaw + "(" + rsrpDbm + " dBm)";
+	}
+
+	private Integer parseSmsStorageIndex(String cmtiLine) {
+		if (cmtiLine == null) {
+			return null;
+		}
+		String[] parts = cmtiLine.split(",");
+		if (parts.length < 2) {
+			return null;
+		}
+		return safeParseInteger(parts[parts.length - 1]);
+	}
+
+	private ParsedSstr parseSstrLine(String sstrLine) {
+		if (sstrLine == null) {
+			return null;
+		}
+		int colonIdx = sstrLine.indexOf(':');
+		if (colonIdx < 0 || colonIdx + 1 >= sstrLine.length()) {
+			return null;
+		}
+		String[] parts = sstrLine.substring(colonIdx + 1).trim().split(",");
+		if (parts.length < 2) {
+			return null;
+		}
+		Integer state = safeParseInteger(parts[0]);
+		Integer commandType = safeParseInteger(parts[1]);
+		if (state == null || commandType == null) {
+			return null;
+		}
+		boolean ackRequired = (state == 3 || state == 4);
+		return new ParsedSstr(ackRequired, commandType);
+	}
+
+	private Integer parseSstnLine(String sstnLine) {
+		if (sstnLine == null) {
+			return null;
+		}
+		int colonIdx = sstnLine.indexOf(':');
+		if (colonIdx < 0 || colonIdx + 1 >= sstnLine.length()) {
+			return null;
+		}
+		return safeParseInteger(sstnLine.substring(colonIdx + 1).trim());
+	}
+
+	private void updateStartupAndWatchdogFromCops(String copsLine) {
+		ParsedCops parsedCops = parseCopsLine(copsLine);
+		if (parsedCops == null) {
+			startupNetworkReady = false;
+			if ("+COPS: 0".equals(copsLine.trim())) {
+				log.warn("Network selection not usable yet ('+COPS: 0'). Waiting for registration/provider details.");
+			} else {
+				log.warn("Network selection not usable yet. Malformed +COPS response '" + copsLine + "'.");
+			}
+			return;
+		}
+		switch (parsedCops.ratValue) {
+		case 0:
+			log.info("RADIOT: GSM (2G)");
+			watchdogList.set(3, "2G");
+			break;
+		case 1:
+			log.info("RADIOT: GSM Compact (2G)");
+			watchdogList.set(3, "2G");
+			break;
+		case 2:
+			log.info("RADIOT: UTRAN (3G)");
+			watchdogList.set(3, "3G");
+			break;
+		case 3:
+			log.info("RADIOT: GSM w/EGPRS (2G)");
+			watchdogList.set(3, "2G");
+			break;
+		case 4:
+			log.info("RADIOT: UTRAN w/HSDPA (3G)");
+			watchdogList.set(3, "3G");
+			break;
+		case 5:
+			log.info("RADIOT: UTRAN w/HSUPA (3G)");
+			watchdogList.set(3, "3G");
+			break;
+		case 6:
+			log.info("RADIOT: UTRAN w/HSDPA and HSUPA (3G)");
+			watchdogList.set(3, "3G");
+			break;
+		case 7:
+			log.info("RADIOT: E-UTRAN (4G/LTE)");
+			watchdogList.set(3, "4G");
+			break;
+		default:
+			break;
+		}
+		startupProviderName = parsedCops.providerName.isEmpty() ? "n/a" : parsedCops.providerName;
+		startupRatLabel = getRatLabelForSummary(parsedCops.ratValue);
+		watchdogList.set(2, parsedCops.providerName);
+		watchdogList.set(0, new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()));
+		startupNetworkReady = parsedCops.ready;
+	}
+
+	private ParsedCops parseCopsLine(String copsLine) {
+		if (copsLine == null) {
+			return null;
+		}
+		int colonIdx = copsLine.indexOf(':');
+		if (colonIdx < 0 || colonIdx + 1 >= copsLine.length()) {
+			return null;
+		}
+		String[] parts = copsLine.substring(colonIdx + 1).trim().split(",");
+		if (parts.length < 4) {
+			return null;
+		}
+		String providerName = parts[2].replace("\"", "").trim();
+		Integer ratValue = safeParseInteger(parts[3]);
+		if (ratValue == null) {
+			return null;
+		}
+		boolean ready = !providerName.isEmpty() && ratValue >= 0 && ratValue <= 7;
+		return new ParsedCops(providerName, ratValue, ready);
+	}
+
+	private void updateStartupAndWatchdogFromCsq(String csqLine) {
+		Integer csqValue = parseCsqValue(csqLine);
+		if (csqValue == null) {
+			startupSignalReady = false;
+			startupSignalSummary = "n/a";
+			log.warn("Ignoring malformed +CSQ line '" + csqLine + "'.");
+			return;
+		}
+		int percent = Math.round(csqValue * 100 / 31);
+		startupSignalReady = csqValue >= 0 && csqValue <= 31;
+		if (percent > 0 && percent <= 100)
+			watchdogList.set(4, percent + "%");
+		else
+			watchdogList.set(4, "n/a");
+		if (csqValue <= 9) {
+			log.info("SIGNAL: " + csqValue + "/1-9/31 [+---]");
+			watchdogList.set(5, "+---");
+			startupSignalSummary = csqValue + "/31 [+---]," + percent + "%";
+		} else if (csqValue >= 10 && csqValue <= 14) {
+			log.info("SIGNAL: " + csqValue + "/10-14/31 [++--]");
+			watchdogList.set(5, "++--");
+			startupSignalSummary = csqValue + "/31 [++--]," + percent + "%";
+		} else if (csqValue >= 15 && csqValue <= 19) {
+			log.info("SIGNAL: " + csqValue + "/15-19/31 [+++-]");
+			watchdogList.set(5, "+++-");
+			startupSignalSummary = csqValue + "/31 [+++-]," + percent + "%";
+		} else if (csqValue >= 20 && csqValue <= 31) {
+			log.info("SIGNAL: " + csqValue + "/20-31/31 [++++]");
+			watchdogList.set(5, "++++");
+			startupSignalSummary = csqValue + "/31 [++++]," + percent + "%";
+		} else {
+			startupSignalSummary = csqValue + "/31 [n/a]," + percent + "%";
+		}
+	}
+
+	private Integer parseCsqValue(String csqLine) {
+		if (csqLine == null) {
+			return null;
+		}
+		int colonIdx = csqLine.indexOf(':');
+		if (colonIdx < 0 || colonIdx + 1 >= csqLine.length()) {
+			return null;
+		}
+		String[] parts = csqLine.substring(colonIdx + 1).trim().split(",");
+		if (parts.length < 1) {
+			return null;
+		}
+		return safeParseInteger(parts[0]);
+	}
+
+	private Integer safeParseInteger(String value) {
+		if (value == null) {
+			return null;
+		}
+		try {
+			return Integer.parseInt(value.trim());
+		} catch (NumberFormatException e) {
+			return null;
+		}
+	}
+
+	private static class ParsedSstr {
+		private final boolean ackRequired;
+		private final int commandType;
+
+		private ParsedSstr(boolean ackRequired, int commandType) {
+			this.ackRequired = ackRequired;
+			this.commandType = commandType;
+		}
+	}
+
+	private static class ParsedCops {
+		private final String providerName;
+		private final int ratValue;
+		private final boolean ready;
+
+		private ParsedCops(String providerName, int ratValue, boolean ready) {
+			this.providerName = providerName;
+			this.ratValue = ratValue;
+			this.ready = ready;
 		}
 	}
 
@@ -1136,7 +1704,7 @@ public class ATresponder extends Thread {
 	private void close(boolean closePort) {
 		Thread.currentThread().setName(ManagementFactory.getRuntimeMXBean().getName()); // Update thread name
 
-		if (closePort && serPort.isOpen()) {
+		if (closePort && serPort != null && serPort.isOpen()) {
 			log.debug(serPortStr + " trying to close serial port.");
 			
 			if (serPort.closePort())
@@ -1144,6 +1712,8 @@ public class ATresponder extends Thread {
 			else 
 				log.error(serPortStr + " is still open but couldn't be closed.");
 		}
+		if (closePort)
+			serPort = null;
 		
 		try {
 			if (buffReader != null){
