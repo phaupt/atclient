@@ -41,6 +41,8 @@ public class ATresponder extends Thread {
 	private long watchdogActivityStartupGraceMillis = 0;
 	private long watchdogStartedAtMillis = 0;
 	private String maintenanceFile = null;
+	private final Object maintenanceLock = new Object();
+	private volatile boolean maintenanceInFlight = false;
 
 	/**
 	 * Heart beat to detect serial port disconnection in milliseconds
@@ -82,6 +84,8 @@ public class ATresponder extends Thread {
 	private boolean startupNetworkReady = false;
 	private boolean startupSignalReady = false;
 	private String startupRegistrationSource = "unknown";
+	private boolean startupModemIdentityLogged = false;
+	private boolean startupServiceSetLogged = false;
 
 	private static final Pattern KEYWORD_USERDELAY = Pattern.compile("\\bUSERDELAY=(\\d+)\\b");
 	private static final Pattern KEYWORD_RAT = Pattern.compile("\\bRAT=([A072])\\b");
@@ -448,6 +452,8 @@ public class ATresponder extends Thread {
 			send("AT+CPIN?"); // SIM Card status			
 			send("AT+CREG?"); // Network registration
 			send("AT+CEREG?"); // EPS/LTE registration
+			send("ATI1"); // Product identity for conservative startup diagnostics
+			send("AT^SSRVSET=\"current\""); // Active service-set diagnostics for USB/Remote-SAT visibility
 			
 			//send("AT^SMONI"); // supplies information of the serving cell
 			//send("ATI1"); // display product identification information
@@ -479,6 +485,7 @@ public class ATresponder extends Thread {
 				shutdownAndExit("STARTUP NOT READY");
 				return false;
 			}
+			logStartupModeDiagnostics();
 			
 			// Start listening...
 			send("AT^SSTR?", null); // Check for STK Menu initialization
@@ -537,6 +544,7 @@ public class ATresponder extends Thread {
 		String code, rx;
 		int value = 0;
 		boolean ackCmdRequired = false;
+		int consecutiveRxFailures = 0;
 		
 		// Start endless loop...
 		while (isAlive) {
@@ -579,6 +587,7 @@ public class ATresponder extends Thread {
 			}
 			
 			// Listening for incoming notifications (SIM->ME)
+			boolean hadRxLoopFailure = false;
 			try {
 				
 				log.trace("Waiting for RX data..");
@@ -815,9 +824,19 @@ public class ATresponder extends Thread {
 					}			
 					
 				}
-			} catch (Exception e) {
-				log.error("listenForRx() processing failure", e);
+			} catch (IOException | RuntimeException e) {
+				hadRxLoopFailure = true;
+				consecutiveRxFailures++;
+				log.error("listenForRx() processing failure (consecutive=" + consecutiveRxFailures + ")", e);
+				if (consecutiveRxFailures >= 5) {
+					log.error("listenForRx() reached failure threshold. Triggering controlled shutdown/recovery.");
+					shutdownAndExit("RX LOOP FAILURE");
+					return;
+				}
+				Thread.sleep(Math.min(1000L * consecutiveRxFailures, 5000L));
 			} 
+			if (!hadRxLoopFailure)
+				consecutiveRxFailures = 0;
 		}
 		
 	}
@@ -885,7 +904,7 @@ public class ATresponder extends Thread {
 			printStream.write((cmd + "\r\n").getBytes(StandardCharsets.UTF_8));
 			
 			if (expectedRsp != null)
-				return getRx(expectedRsp, timeout, sstr);
+				return getRx(expectedRsp, timeout, sstr, cmd);
 			else
 				return true;
 		} catch (IOException e) {
@@ -897,9 +916,12 @@ public class ATresponder extends Thread {
 		}
 	}
 
-	private boolean getRx(String expectedRx, long timeout, boolean sstr) {
+	private boolean getRx(String expectedRx, long timeout, boolean sstr, String txCmd) {
 		try {
 			String compareStr = (expectedRx == null || expectedRx.trim().isEmpty()) ? "OK" : expectedRx.trim().toUpperCase();
+			String txCmdUpper = txCmd == null ? "" : txCmd.trim().toUpperCase();
+			boolean payloadSensitiveCommand = txCmdUpper.startsWith("AT+CMGR=");
+			int payloadLinesToIgnoreForTerminalMatching = 0;
 
 			long startTime = System.currentTimeMillis();
 
@@ -926,6 +948,7 @@ public class ATresponder extends Thread {
 					
 					if (rx.length() > 0) {
 						log.debug("RX2 <<< " + rx);
+						updateStartupDiagnosticsFromLine(rx);
 						
 						getMeTextAscii(rx);
 						
@@ -958,15 +981,22 @@ public class ATresponder extends Thread {
 						} 
 
 						String normalizedRx = rx.trim().toUpperCase();
-						if (isExplicitModemErrorLine(normalizedRx)) {
-							log.error("Modem returned explicit failure while waiting for '" + compareStr + "': " + rx);
-							return false;
-						}
-						if (isExpectedResponseMatch(normalizedRx, compareStr))
-							return true;
-						if (isStandaloneFinalResultOk(normalizedRx) && !"OK".equals(compareStr)) {
-							log.warn("Received final OK before expected response '" + compareStr + "' for command flow.");
-							return false;
+						if (payloadSensitiveCommand && normalizedRx.startsWith("+CMGR:")) {
+							// Following SMS body line can contain arbitrary text that may look like AT final result codes.
+							payloadLinesToIgnoreForTerminalMatching = 1;
+						} else if (payloadLinesToIgnoreForTerminalMatching > 0) {
+							payloadLinesToIgnoreForTerminalMatching--;
+						} else {
+							if (isExplicitModemErrorLine(normalizedRx)) {
+								log.error("Modem returned explicit failure while waiting for '" + compareStr + "': " + rx);
+								return false;
+							}
+							if (isExpectedResponseMatch(normalizedRx, compareStr))
+								return true;
+							if (isStandaloneFinalResultOk(normalizedRx) && !"OK".equals(compareStr)) {
+								log.warn("Received final OK before expected response '" + compareStr + "' for command flow.");
+								return false;
+							}
 						}
 						
 						// Watchdog: Write/update local file
@@ -1071,6 +1101,13 @@ public class ATresponder extends Thread {
 			log.warn("MAINTENANCE keyword ignored because maintenance.script.file is not configured.");
 			return;
 		}
+		synchronized (maintenanceLock) {
+			if (maintenanceInFlight) {
+				log.info("MAINTENANCE request ignored because a maintenance script is already running.");
+				return;
+			}
+			maintenanceInFlight = true;
+		}
 		Thread maintenanceThread = new Thread(() -> {
 			try {
 				ProcessBuilder pb = new ProcessBuilder(maintenanceFile);
@@ -1082,6 +1119,10 @@ public class ATresponder extends Thread {
 			} catch (InterruptedException e) {
 				Thread.currentThread().interrupt();
 				log.error("Maintenance script execution interrupted.", e);
+			} finally {
+				synchronized (maintenanceLock) {
+					maintenanceInFlight = false;
+				}
 			}
 		}, "maintenance-script");
 		maintenanceThread.setDaemon(true);
@@ -1134,6 +1175,19 @@ public class ATresponder extends Thread {
 		}
 	}
 
+	private void logStartupModeDiagnostics() {
+		if (startupModemIdentityLogged) {
+			log.info("Startup mode diagnostics: modem identity detected.");
+		} else {
+			log.warn("Startup mode diagnostics: modem identity line not detected from ATI1 response.");
+		}
+		if (startupServiceSetLogged) {
+			log.info("Startup mode diagnostics: active service-set information detected.");
+		} else {
+			log.warn("Startup mode diagnostics: active service-set details not detected from ^SSRVSET response.");
+		}
+	}
+
 	private Integer parseRegistrationStatus(String registrationLine) {
 		if (registrationLine == null) {
 			return null;
@@ -1153,6 +1207,22 @@ public class ATresponder extends Thread {
 			}
 		}
 		return safeParseInteger(parts[0]);
+	}
+
+	private void updateStartupDiagnosticsFromLine(String rawLine) {
+		if (rawLine == null) {
+			return;
+		}
+		String normalized = rawLine.trim().toUpperCase();
+		if (!startupModemIdentityLogged
+				&& (normalized.contains("PLS8") || normalized.contains("CINTERION") || normalized.contains("THALES"))) {
+			startupModemIdentityLogged = true;
+			log.info("Startup mode diagnostics: modem identity line '" + rawLine.trim() + "'.");
+		}
+		if (!startupServiceSetLogged && normalized.startsWith("^SSRVSET:")) {
+			startupServiceSetLogged = true;
+			log.info("Startup mode diagnostics: service-set line '" + rawLine.trim() + "'.");
+		}
 	}
 
 	private Integer parseSmsStorageIndex(String cmtiLine) {
