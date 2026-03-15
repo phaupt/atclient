@@ -12,6 +12,7 @@ import java.util.Comparator;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -89,13 +90,22 @@ public class ATresponder extends Thread {
 	private Integer lastCeregStat = null;
 	private String startupProviderName = "n/a";
 	private String startupRatLabel = "n/a";
-	private boolean startupModemIdentityLogged = false;
-	private boolean startupServiceSetLogged = false;
 	private boolean startupRadioqCaptured = false;
+	private String startupModemVendor = "n/a";
+	private String startupModemModel = "n/a";
+	private String startupModemRevision = "n/a";
+	private String startupModemARevision = "n/a";
+	private String startupSrvsetUsbcomp = "n/a";
+	private String startupSrvsetMdm = "n/a";
+	private String startupSrvsetApp = "n/a";
+	private String startupSrvsetNmea = "n/a";
+	private String startupSignalSummary = "n/a";
 
 	private static final Pattern KEYWORD_USERDELAY = Pattern.compile("\\bUSERDELAY=(\\d+)\\b");
 	private static final Pattern KEYWORD_RAT = Pattern.compile("\\bRAT=([A072])\\b");
 	private static final Pattern KEYWORD_HOSTNAME = Pattern.compile("\\bHOSTNAME=(mobileid0\\d{2})\\b");
+	private static final Pattern MODEM_REV_PATTERN = Pattern.compile("^REV(?:ISION)?\\s+(.+)$", Pattern.CASE_INSENSITIVE);
+	private static final Pattern MODEM_A_REV_PATTERN = Pattern.compile("^A-REV(?:ISION)?\\s+(.+)$", Pattern.CASE_INSENSITIVE);
 	
 	private byte opMode; // Switch: 1=ER, 2=AR
 	
@@ -1200,14 +1210,19 @@ public class ATresponder extends Thread {
 	}
 
 	private void logStartupModeDiagnostics() {
-		log.info("MODEM: serial=" + serPortStr + ", identityDetected=" + startupModemIdentityLogged);
-		log.info("SRVSET: activeServiceSetDetected=" + startupServiceSetLogged);
+		log.info("MODEM: " + buildModemSummary());
+		log.info("SRVSET: " + buildSrvsetSummary());
 		log.info("REG: startupSummary source=" + startupRegistrationSource
 				+ ", CREG=" + formatRegistrationStat(lastCregStat)
 				+ ", CEREG=" + formatRegistrationStat(lastCeregStat)
 				+ ", ready=" + startupRegistrationReady);
-		log.info("RADIOT: startup summary provider=" + startupProviderName + ", rat=" + startupRatLabel);
-		log.info("RADIOQ: startup snapshot captured=" + startupRadioqCaptured);
+		log.info("STARTUP: serial=" + serPortStr
+				+ ", modem=" + buildModemIdentityLabel()
+				+ ", reg=" + formatStartupRegistrationSummary()
+				+ ", provider=" + startupProviderName
+				+ ", rat=" + startupRatLabel
+				+ ", signal=" + startupSignalSummary
+				+ ", radioqSnapshot=" + startupRadioqCaptured);
 	}
 
 	private void captureStartupRadioQualitySnapshot() {
@@ -1234,15 +1249,18 @@ public class ATresponder extends Thread {
 	}
 
 	private void logCesqLine(String cesqLine) {
-		String summary = "";
 		Integer[] fields = parseCesqFields(cesqLine);
-		if (fields != null) {
-			Integer rsrq = fields[4];
-			Integer rsrp = fields[5];
-			if (rsrq != null && rsrq != 255 && rsrp != null && rsrp != 255)
-				summary = " (rsrqRaw=" + rsrq + ", rsrpRaw=" + rsrp + ")";
+		if (fields == null) {
+			log.info("RADIOQ: " + cesqLine.trim());
+			return;
 		}
-		log.info("RADIOQ: " + cesqLine.trim() + summary);
+		log.info("RADIOQ: +CESQ"
+				+ " rxlev=" + fields[0]
+				+ " ber=" + fields[1]
+				+ " rscp=" + fields[2]
+				+ " ecno=" + fields[3]
+				+ " rsrq=" + formatCesqRsrq(fields[4])
+				+ " rsrp=" + formatCesqRsrp(fields[5]));
 	}
 
 	private Integer[] parseCesqFields(String cesqLine) {
@@ -1329,16 +1347,146 @@ public class ATresponder extends Thread {
 		if (rawLine == null) {
 			return;
 		}
-		String normalized = rawLine.trim().toUpperCase();
-		if (!startupModemIdentityLogged
-				&& (normalized.contains("PLS8") || normalized.contains("CINTERION") || normalized.contains("THALES"))) {
-			startupModemIdentityLogged = true;
-			log.info("MODEM: " + rawLine.trim());
+		String trimmed = rawLine.trim();
+		String normalized = trimmed.toUpperCase(Locale.ROOT);
+		updateModemIdentityFromLine(trimmed, normalized);
+		if (normalized.startsWith("^SSRVSET:"))
+			updateServiceSetFromLine(trimmed);
+	}
+
+	private String buildModemSummary() {
+		StringBuilder sb = new StringBuilder();
+		appendSummaryField(sb, "vendor", startupModemVendor);
+		appendSummaryField(sb, "model", startupModemModel);
+		appendSummaryField(sb, "revision", startupModemRevision);
+		if (!"n/a".equals(startupModemARevision))
+			appendSummaryField(sb, "a-revision", startupModemARevision);
+		appendSummaryField(sb, "serial", serPortStr == null ? "n/a" : serPortStr);
+		return sb.toString();
+	}
+
+	private String buildSrvsetSummary() {
+		StringBuilder sb = new StringBuilder();
+		appendSummaryField(sb, "usbcomp", startupSrvsetUsbcomp);
+		appendSummaryField(sb, "MDM", startupSrvsetMdm);
+		appendSummaryField(sb, "APP", startupSrvsetApp);
+		appendSummaryField(sb, "NMEA", startupSrvsetNmea);
+		return sb.toString();
+	}
+
+	private String buildModemIdentityLabel() {
+		StringBuilder sb = new StringBuilder();
+		if (!"n/a".equals(startupModemVendor))
+			sb.append(startupModemVendor);
+		if (!"n/a".equals(startupModemModel)) {
+			if (sb.length() > 0)
+				sb.append(" ");
+			sb.append(startupModemModel);
 		}
-		if (!startupServiceSetLogged && normalized.startsWith("^SSRVSET:")) {
-			startupServiceSetLogged = true;
-			log.info("SRVSET: " + rawLine.trim());
+		if (!"n/a".equals(startupModemRevision)) {
+			if (sb.length() > 0)
+				sb.append(" ");
+			sb.append("REV ").append(startupModemRevision);
 		}
+		if (!"n/a".equals(startupModemARevision)) {
+			if (sb.length() > 0)
+				sb.append(" ");
+			sb.append("(A-REV ").append(startupModemARevision).append(")");
+		}
+		if (sb.length() == 0)
+			return "n/a";
+		return sb.toString();
+	}
+
+	private String formatStartupRegistrationSummary() {
+		if ("unknown".equals(startupRegistrationSource))
+			return "unknown";
+		String[] parts = startupRegistrationSource.split(":");
+		if (parts.length != 2)
+			return startupRegistrationSource;
+		Integer stat = safeParseInteger(parts[1]);
+		if (stat == null)
+			return startupRegistrationSource;
+		return parts[0] + ":" + stat + "(" + decodeRegistrationState(stat) + ")";
+	}
+
+	private void appendSummaryField(StringBuilder sb, String key, String value) {
+		if (value == null || value.trim().isEmpty())
+			value = "n/a";
+		if (sb.length() > 0)
+			sb.append(" ");
+		sb.append(key).append("=").append(value);
+	}
+
+	private void updateModemIdentityFromLine(String trimmedLine, String normalizedLine) {
+		if ("CINTERION".equals(normalizedLine))
+			startupModemVendor = "Cinterion";
+		else if ("THALES".equals(normalizedLine))
+			startupModemVendor = "Thales";
+
+		if (normalizedLine.startsWith("PLS"))
+			startupModemModel = trimmedLine;
+
+		Matcher revMatcher = MODEM_REV_PATTERN.matcher(trimmedLine);
+		if (revMatcher.matches())
+			startupModemRevision = revMatcher.group(1).trim();
+
+		Matcher aRevMatcher = MODEM_A_REV_PATTERN.matcher(trimmedLine);
+		if (aRevMatcher.matches())
+			startupModemARevision = aRevMatcher.group(1).trim();
+
+	}
+
+	private void updateServiceSetFromLine(String ssrvsetLine) {
+		String[] tokens = parseSsrvsetQuotedTokens(ssrvsetLine);
+		if (tokens.length < 2)
+			return;
+
+		if ("usbcomp".equalsIgnoreCase(tokens[0])) {
+			startupSrvsetUsbcomp = tokens[1].trim();
+			return;
+		}
+
+		if ("srvmap".equalsIgnoreCase(tokens[0]) && tokens.length >= 4) {
+			String role = tokens[1].trim().toUpperCase(Locale.ROOT);
+			String mapping = tokens[2].trim() + "/" + tokens[3].trim();
+			if ("MDM".equals(role))
+				startupSrvsetMdm = mapping;
+			else if ("APP".equals(role))
+				startupSrvsetApp = mapping;
+			else if ("NMEA".equals(role))
+				startupSrvsetNmea = mapping;
+		}
+	}
+
+	private String[] parseSsrvsetQuotedTokens(String ssrvsetLine) {
+		int colonIdx = ssrvsetLine.indexOf(':');
+		if (colonIdx < 0 || colonIdx + 1 >= ssrvsetLine.length())
+			return new String[0];
+
+		List<String> tokens = new ArrayList<>();
+		Matcher matcher = Pattern.compile("\"([^\"]*)\"").matcher(ssrvsetLine.substring(colonIdx + 1));
+		while (matcher.find())
+			tokens.add(matcher.group(1));
+		return tokens.toArray(new String[0]);
+	}
+
+	private String formatCesqRsrq(Integer rsrqRaw) {
+		if (rsrqRaw == null || rsrqRaw == 255)
+			return "n/a";
+		if (rsrqRaw < 0 || rsrqRaw > 34)
+			return rsrqRaw + "(raw)";
+		double rsrqDb = -19.5 + (0.5 * rsrqRaw);
+		return rsrqRaw + "(" + String.format(Locale.ROOT, "%.1f dB", rsrqDb) + ")";
+	}
+
+	private String formatCesqRsrp(Integer rsrpRaw) {
+		if (rsrpRaw == null || rsrpRaw == 255)
+			return "n/a";
+		if (rsrpRaw < 0 || rsrpRaw > 97)
+			return rsrpRaw + "(raw)";
+		int rsrpDbm = -140 + rsrpRaw;
+		return rsrpRaw + "(" + rsrpDbm + " dBm)";
 	}
 
 	private Integer parseSmsStorageIndex(String cmtiLine) {
@@ -1463,6 +1611,7 @@ public class ATresponder extends Thread {
 		Integer csqValue = parseCsqValue(csqLine);
 		if (csqValue == null) {
 			startupSignalReady = false;
+			startupSignalSummary = "n/a";
 			log.warn("Ignoring malformed +CSQ line '" + csqLine + "'.");
 			return;
 		}
@@ -1475,15 +1624,21 @@ public class ATresponder extends Thread {
 		if (csqValue <= 9) {
 			log.info("SIGNAL: " + csqValue + "/1-9/31 [+---]");
 			watchdogList.set(5, "+---");
+			startupSignalSummary = csqValue + "/31 [+---]," + percent + "%";
 		} else if (csqValue >= 10 && csqValue <= 14) {
 			log.info("SIGNAL: " + csqValue + "/10-14/31 [++--]");
 			watchdogList.set(5, "++--");
+			startupSignalSummary = csqValue + "/31 [++--]," + percent + "%";
 		} else if (csqValue >= 15 && csqValue <= 19) {
 			log.info("SIGNAL: " + csqValue + "/15-19/31 [+++-]");
 			watchdogList.set(5, "+++-");
+			startupSignalSummary = csqValue + "/31 [+++-]," + percent + "%";
 		} else if (csqValue >= 20 && csqValue <= 31) {
 			log.info("SIGNAL: " + csqValue + "/20-31/31 [++++]");
 			watchdogList.set(5, "++++");
+			startupSignalSummary = csqValue + "/31 [++++]," + percent + "%";
+		} else {
+			startupSignalSummary = csqValue + "/31 [n/a]," + percent + "%";
 		}
 	}
 
