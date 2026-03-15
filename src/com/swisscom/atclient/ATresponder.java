@@ -74,6 +74,7 @@ public class ATresponder extends Thread {
 	private int parity;
 	
 	private int atTimeout;
+	private static final long DEGRADED_DIAGNOSTIC_TIMEOUT_MILLIS = 1200;
 	private static final long STARTUP_READINESS_MAX_WAIT_MILLIS = 180000;
 	private static final long STARTUP_READINESS_POLL_MILLIS = 5000;
 	
@@ -1219,12 +1220,17 @@ public class ATresponder extends Thread {
 
 	private void captureDegradedRadioDiagnostics(String reason, boolean includeCellSnapshot) {
 		log.info("FAILCTX: collecting degraded-path diagnostics (" + reason + ")");
-		if (!send("AT+CESQ"))
+		if (!sendDiagnosticBestEffort("AT+CESQ", DEGRADED_DIAGNOSTIC_TIMEOUT_MILLIS))
 			log.warn("RADIOQ: failed to collect +CESQ during " + reason + ".");
-		if (includeCellSnapshot && !send("AT^SMONI"))
+		if (includeCellSnapshot && !sendDiagnosticBestEffort("AT^SMONI", DEGRADED_DIAGNOSTIC_TIMEOUT_MILLIS))
 			log.warn("CELL: failed to collect ^SMONI during " + reason + ".");
-		if (!send("AT+CEER"))
+		if (!sendDiagnosticBestEffort("AT+CEER", DEGRADED_DIAGNOSTIC_TIMEOUT_MILLIS))
 			log.warn("FAILCTX: failed to collect +CEER during " + reason + ".");
+	}
+
+	private boolean sendDiagnosticBestEffort(String cmd, long timeoutMillis) {
+		// Keep degraded-path diagnostics bounded so they don't block recovery for full default timeouts.
+		return send(cmd, "OK", timeoutMillis, false);
 	}
 
 	private void logCesqLine(String cesqLine) {
