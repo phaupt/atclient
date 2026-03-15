@@ -78,6 +78,11 @@ public class ATresponder extends Thread {
 	private static final long DEGRADED_DIAGNOSTIC_TIMEOUT_MILLIS = 1200;
 	private static final long STARTUP_READINESS_MAX_WAIT_MILLIS = 180000;
 	private static final long STARTUP_READINESS_POLL_MILLIS = 5000;
+	private static final int DEGRADED_IDLE_CSQ_THRESHOLD = 9;
+	private static final int DEGRADED_IDLE_CHECKS_BEFORE_RECOVERY = 2;
+	private static final long AUTOMATIC_RADIO_RECOVERY_COOLDOWN_MILLIS = 900000;
+	private static final long RADIO_RESELECTION_TIMEOUT_MILLIS = 60000;
+	private static final long RADIO_RESELECTION_SETTLE_MILLIS = 2000;
 	
 	private String actualCopsMode;
 	private String newCopsMode;
@@ -100,6 +105,9 @@ public class ATresponder extends Thread {
 	private String startupSrvsetApp = "n/a";
 	private String startupSrvsetNmea = "n/a";
 	private String startupSignalSummary = "n/a";
+	private Integer lastCsqValue = null;
+	private int degradedIdleRadioChecks = 0;
+	private long lastAutomaticRadioRecoveryAtMillis = 0;
 
 	private static final Pattern KEYWORD_USERDELAY = Pattern.compile("\\bUSERDELAY=(\\d+)\\b");
 	private static final Pattern KEYWORD_RAT = Pattern.compile("\\bRAT=([A072])\\b");
@@ -516,6 +524,12 @@ public class ATresponder extends Thread {
 		startupRegistrationSource = "unknown";
 		startupNetworkReady = false;
 		startupSignalReady = false;
+		lastCregStat = null;
+		lastCeregStat = null;
+		startupProviderName = "n/a";
+		startupRatLabel = "n/a";
+		startupSignalSummary = "n/a";
+		lastCsqValue = null;
 	}
 
 	private boolean waitForStartupReadiness(long maxWaitMs, long pollMs) throws InterruptedException {
@@ -821,12 +835,7 @@ public class ATresponder extends Thread {
 						case 254:
 							log.info("STK254: SIM Applet returns to main menu");
 							
-							// Check if RAT keyword was set in previous STK call
-							verifyRAT();
-							
-							// Check Signal Data (keep OLED display updated)
-							send("AT+COPS?"); // Provider + access technology
-							send("AT+CSQ"); // Signal Strength
+							handlePostStkMainMenu();
 							send("AT^SSTR?", null);
 							
 							break;
@@ -860,42 +869,148 @@ public class ATresponder extends Thread {
 		
 	}
 
-	private void verifyRAT() {
+	private void handlePostStkMainMenu() throws InterruptedException {
+		verifyRAT();
+		boolean ceregOk = send("AT+CEREG?");
+		boolean copsOk = send("AT+COPS?");
+		boolean csqOk = send("AT+CSQ");
+		if (!ceregOk || !copsOk || !csqOk) {
+			log.warn("RADIOT: post-STK idle refresh incomplete. CMDOK[CEREG/COPS/CSQ]="
+					+ ceregOk + "/" + copsOk + "/" + csqOk + ".");
+		}
+		collectIdleRadioDiagnosticsAndRecoverIfNeeded();
+	}
+
+	private void collectIdleRadioDiagnosticsAndRecoverIfNeeded() throws InterruptedException {
+		boolean degradedIdleRadio = isDegradedIdleRadioState();
+		if (!degradedIdleRadio) {
+			if (degradedIdleRadioChecks > 0) {
+				log.info("RADIOT: degraded idle radio state cleared after " + degradedIdleRadioChecks + " consecutive check(s).");
+			}
+			degradedIdleRadioChecks = 0;
+			return;
+		}
+
+		degradedIdleRadioChecks++;
+		if (!sendDiagnosticBestEffort("AT+CESQ", DEGRADED_DIAGNOSTIC_TIMEOUT_MILLIS))
+			log.warn("RADIOQ: failed to collect +CESQ during post-STK idle check.");
+
+		log.warn("RADIOT: degraded idle radio state after STK254 (count="
+				+ degradedIdleRadioChecks + "/" + DEGRADED_IDLE_CHECKS_BEFORE_RECOVERY
+				+ ", mode=" + actualCopsMode
+				+ ", reg=" + formatRegistrationStat(lastCregStat) + "/" + formatRegistrationStat(lastCeregStat)
+				+ ", provider=" + startupProviderName
+				+ ", rat=" + startupRatLabel
+				+ ", signal=" + startupSignalSummary + ").");
+
+		if (degradedIdleRadioChecks < DEGRADED_IDLE_CHECKS_BEFORE_RECOVERY)
+			return;
+
 		if (rat) {
-			setRAT(false); // reset flag
+			log.warn("RADIOT: idle radio recovery skipped because a RAT change is still pending.");
+			return;
+		}
+
+		if (!"A".equals(actualCopsMode)) {
+			log.info("RADIOT: idle radio recovery skipped because RAT is forced to " + actualCopsMode + ".");
+			return;
+		}
+
+		long now = System.currentTimeMillis();
+		long sinceLastRecovery = now - lastAutomaticRadioRecoveryAtMillis;
+		if (lastAutomaticRadioRecoveryAtMillis > 0 && sinceLastRecovery < AUTOMATIC_RADIO_RECOVERY_COOLDOWN_MILLIS) {
+			log.info("RADIOT: idle radio recovery cooldown active (" + sinceLastRecovery + "ms since last attempt).");
+			return;
+		}
+
+		degradedIdleRadioChecks = 0;
+
+		log.warn("RADIOT: re-triggering automatic network selection after repeated degraded idle radio checks.");
+		if (!send("AT+COPS=0", "OK", RADIO_RESELECTION_TIMEOUT_MILLIS, true)) {
+			log.warn("RADIOT: automatic network reselection attempt failed.");
+			return;
+		}
+		lastAutomaticRadioRecoveryAtMillis = now;
+		log.info("RADIOT: automatic network reselection command accepted. Collecting post-reselection status.");
+
+		sleep(RADIO_RESELECTION_SETTLE_MILLIS);
+		boolean ceregOk = send("AT+CEREG?");
+		boolean copsOk = send("AT+COPS?");
+		boolean csqOk = send("AT+CSQ");
+		if (!ceregOk || !copsOk || !csqOk) {
+			log.warn("RADIOT: post-reselection refresh incomplete. CMDOK[CEREG/COPS/CSQ]="
+					+ ceregOk + "/" + copsOk + "/" + csqOk + ".");
+		} else {
+			log.info("RADIOT: post-reselection refresh completed.");
+		}
+		if (!sendDiagnosticBestEffort("AT+CESQ", DEGRADED_DIAGNOSTIC_TIMEOUT_MILLIS))
+			log.warn("RADIOQ: failed to collect +CESQ after automatic network reselection.");
+	}
+
+	private boolean isDegradedIdleRadioState() {
+		if (!isRegistrationReady())
+			return true;
+		if (!startupNetworkReady || !startupSignalReady)
+			return true;
+		return lastCsqValue == null || lastCsqValue.intValue() <= DEGRADED_IDLE_CSQ_THRESHOLD;
+	}
+
+	private boolean isRegistrationReady() {
+		return isRegistered(lastCregStat) || isRegistered(lastCeregStat);
+	}
+
+	private boolean isRegistered(Integer stat) {
+		return stat != null && (stat.intValue() == 1 || stat.intValue() == 5);
+	}
+
+	private void verifyRAT() {
+		if (!rat)
+			return;
+		if (newCopsMode == null || newCopsMode.trim().isEmpty()) {
+			log.warn("RADIOT: RAT change requested without a target mode. Clearing pending request.");
+			setRAT(false);
+			return;
+		}
+
+		if (actualCopsMode.contentEquals(newCopsMode)) {
+			log.info("RADIOT: Requested RAT " + newCopsMode + " is already active.");
+			setRAT(false);
+			return;
+		}
+
+		boolean commandSucceeded = false;
+		String previousCopsMode = actualCopsMode;
+
+		if (!newCopsMode.contentEquals("A")) {
+			log.info("RADIOT: Force new Radio Access Technology");
 			
-			// Values can be: A=Automatic, 0=2G, 2=3G, 7=4G
-			// Compare 'actualCopsMode' and 'newCopsMode'
+			// Force the mobile terminal to select and register a specific network
+			// AT+COPS=<mode>[, <format>[, <opName>][, <rat>]]
+			// mode 0: Automatic mode; <opName> field is ignored
+			// rat:
+			// 0 GSM (2G)
+			// 2 UTRAN (3G)
+			// 3 GSM w/EGPRS (2G)
+			// 4 UTRAN w/HSDPA (3G)
+			// 6 UTRAN w/HSDPA and HSUPA (3G)
+			// 7 E-UTRAN (4G/LTE)
+			commandSucceeded = send("AT+COPS=0,2,00000," + newCopsMode, "OK", RADIO_RESELECTION_TIMEOUT_MILLIS, true);
+
+		} else if (newCopsMode.contentEquals("A")) {
+			log.info("RADIOT: Set Radio Access Technology to automatic mode");
 			
-			if (!actualCopsMode.contentEquals(newCopsMode)) {
-				// RAT needs to be changed
-				
-				if (!newCopsMode.contentEquals("A")) {
-					log.info("RADIOT: Force new Radio Access Technology");
-					
-					// Force the mobile terminal to select and register a specific network
-					// AT+COPS=<mode>[, <format>[, <opName>][, <rat>]]
-					// mode 0: Automatic mode; <opName> field is ignored
-					// rat:
-					// 0 GSM (2G)
-					// 2 UTRAN (3G)
-					// 3 GSM w/EGPRS (2G)
-					// 4 UTRAN w/HSDPA (3G)
-					// 6 UTRAN w/HSDPA and HSUPA (3G)
-					// 7 E-UTRAN (4G/LTE)
-					if (send("AT+COPS=0,2,00000," + newCopsMode, "OK", 60000, true)) // increase the time waiting for "OK" as it usually takes a few seconds to switch the mode
-						actualCopsMode = newCopsMode; // update actual mode if command was successful
-	
-				} else if (newCopsMode.contentEquals("A")) {
-					log.info("RADIOT: Set Radio Access Technology to automatic mode");
-					
-					// Set automatic mode
-					if (send("AT+COPS=0", "OK", 60000, true))
-						actualCopsMode = newCopsMode; // update actual mode if command was successful
-					
-				}
-			}	
-		} 
+			// Set automatic mode
+			commandSucceeded = send("AT+COPS=0", "OK", RADIO_RESELECTION_TIMEOUT_MILLIS, true);
+		}
+
+		if (commandSucceeded) {
+			actualCopsMode = newCopsMode;
+			degradedIdleRadioChecks = 0;
+			log.info("RADIOT: Requested RAT change accepted (" + previousCopsMode + " -> " + newCopsMode + ").");
+			setRAT(false);
+		} else {
+			log.warn("RADIOT: Requested RAT change to " + newCopsMode + " failed. Will retry on next STK254.");
+		}
 	}
 	
 	public boolean send(String cmd, long timeout, boolean sstr) {
@@ -1203,10 +1318,13 @@ public class ATresponder extends Thread {
 		if (previousStat == null || previousStat.intValue() != stat.intValue())
 			log.info("REG: " + registrationType + " stat=" + stat + " (" + decodeRegistrationState(stat) + ")");
 
-		if (stat == 1 || stat == 5) {
-			startupRegistrationReady = true;
+		startupRegistrationReady = isRegistrationReady();
+		if (isRegistered(lastCeregStat))
+			startupRegistrationSource = "CEREG:" + lastCeregStat;
+		else if (isRegistered(lastCregStat))
+			startupRegistrationSource = "CREG:" + lastCregStat;
+		else
 			startupRegistrationSource = registrationType + ":" + stat;
-		}
 	}
 
 	private void logStartupModeDiagnostics() {
@@ -1536,6 +1654,8 @@ public class ATresponder extends Thread {
 		ParsedCops parsedCops = parseCopsLine(copsLine);
 		if (parsedCops == null) {
 			startupNetworkReady = false;
+			startupProviderName = "n/a";
+			startupRatLabel = "n/a";
 			if ("+COPS: 0".equals(copsLine.trim())) {
 				log.warn("Network selection not usable yet ('+COPS: 0'). Waiting for registration/provider details.");
 			} else {
@@ -1581,7 +1701,7 @@ public class ATresponder extends Thread {
 		}
 		startupProviderName = parsedCops.providerName.isEmpty() ? "n/a" : parsedCops.providerName;
 		startupRatLabel = getRatLabelForSummary(parsedCops.ratValue);
-		watchdogList.set(2, parsedCops.providerName);
+		watchdogList.set(2, startupProviderName);
 		watchdogList.set(0, new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()));
 		startupNetworkReady = parsedCops.ready;
 	}
@@ -1610,13 +1730,22 @@ public class ATresponder extends Thread {
 	private void updateStartupAndWatchdogFromCsq(String csqLine) {
 		Integer csqValue = parseCsqValue(csqLine);
 		if (csqValue == null) {
+			lastCsqValue = null;
 			startupSignalReady = false;
 			startupSignalSummary = "n/a";
 			log.warn("Ignoring malformed +CSQ line '" + csqLine + "'.");
 			return;
 		}
+		lastCsqValue = csqValue;
 		int percent = Math.round(csqValue * 100 / 31);
 		startupSignalReady = csqValue >= 0 && csqValue <= 31;
+		if (!startupSignalReady) {
+			watchdogList.set(4, "n/a");
+			watchdogList.set(5, "n/a");
+			startupSignalSummary = csqValue + "/31 [n/a]";
+			log.warn("SIGNAL: " + csqValue + "/31 not usable yet.");
+			return;
+		}
 		if (percent > 0 && percent <= 100)
 			watchdogList.set(4, percent + "%");
 		else
