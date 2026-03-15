@@ -740,7 +740,8 @@ public class ATresponder extends Thread {
 							if (ackCmdRequired) {
 								// SET UP MENU
 								log.info("STK037: SET UP MENU");
-								send("at^sstgi=" + value, "SSTGI"); // GetInfos
+								// Some modems emit final OK before the ^SSTGI payload during boot.
+								send("at^sstgi=" + value); // GetInfos
 								send("at^sstr=" + value + ",0"); // Confirm
 							}
 							ackCmdRequired = false;
