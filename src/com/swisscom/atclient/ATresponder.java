@@ -84,8 +84,13 @@ public class ATresponder extends Thread {
 	private boolean startupNetworkReady = false;
 	private boolean startupSignalReady = false;
 	private String startupRegistrationSource = "unknown";
+	private Integer lastCregStat = null;
+	private Integer lastCeregStat = null;
+	private String startupProviderName = "n/a";
+	private String startupRatLabel = "n/a";
 	private boolean startupModemIdentityLogged = false;
 	private boolean startupServiceSetLogged = false;
+	private boolean startupRadioqCaptured = false;
 
 	private static final Pattern KEYWORD_USERDELAY = Pattern.compile("\\bUSERDELAY=(\\d+)\\b");
 	private static final Pattern KEYWORD_RAT = Pattern.compile("\\bRAT=([A072])\\b");
@@ -485,6 +490,7 @@ public class ATresponder extends Thread {
 				shutdownAndExit("STARTUP NOT READY");
 				return false;
 			}
+			captureStartupRadioQualitySnapshot();
 			logStartupModeDiagnostics();
 			
 			// Start listening...
@@ -532,6 +538,7 @@ public class ATresponder extends Thread {
 		log.error("Startup readiness timeout after " + maxWaitMs + "ms: SIM=" + startupSimReady
 				+ ", REGISTRATION=" + startupRegistrationReady + "(" + startupRegistrationSource + ")"
 				+ ", NETWORK=" + startupNetworkReady + ", SIGNAL=" + startupSignalReady + ".");
+		captureDegradedRadioDiagnostics("startup-timeout", true);
 		return false;
 	}
 	
@@ -830,6 +837,7 @@ public class ATresponder extends Thread {
 				log.error("listenForRx() processing failure (consecutive=" + consecutiveRxFailures + ")", e);
 				if (consecutiveRxFailures >= 5) {
 					log.error("listenForRx() reached failure threshold. Triggering controlled shutdown/recovery.");
+					captureDegradedRadioDiagnostics("rx-loop-failure", true);
 					shutdownAndExit("RX LOOP FAILURE");
 					return;
 				}
@@ -974,6 +982,12 @@ public class ATresponder extends Thread {
 							updateRegistrationStateFromLine(rx, false);
 						} else if (rx.toUpperCase().startsWith("+CEREG: ")) {
 							updateRegistrationStateFromLine(rx, true);
+						} else if (rx.toUpperCase().startsWith("+CESQ: ")) {
+							logCesqLine(rx);
+						} else if (rx.toUpperCase().startsWith("^SMONI:")) {
+							log.info("CELL: " + rx.trim());
+						} else if (rx.toUpperCase().startsWith("+CEER:")) {
+							log.info("FAILCTX: " + rx.trim());
 						} else if (rx.toUpperCase().startsWith("+CME ERROR: SIM")) {
 							log.error("Please check if SIM is properly inserted.");
 							shutdownAndExit("SIM NOT INSERTED");
@@ -1169,22 +1183,118 @@ public class ATresponder extends Thread {
 			log.warn("Ignoring malformed +" + registrationType + " line '" + rawLine + "'.");
 			return;
 		}
+		String registrationType = epsRegistration ? "CEREG" : "CREG";
+		Integer previousStat = epsRegistration ? lastCeregStat : lastCregStat;
+		if (epsRegistration)
+			lastCeregStat = stat;
+		else
+			lastCregStat = stat;
+		if (previousStat == null || previousStat.intValue() != stat.intValue())
+			log.info("REG: " + registrationType + " stat=" + stat + " (" + decodeRegistrationState(stat) + ")");
+
 		if (stat == 1 || stat == 5) {
 			startupRegistrationReady = true;
-			startupRegistrationSource = epsRegistration ? "CEREG:" + stat : "CREG:" + stat;
+			startupRegistrationSource = registrationType + ":" + stat;
 		}
 	}
 
 	private void logStartupModeDiagnostics() {
-		if (startupModemIdentityLogged) {
-			log.info("Startup mode diagnostics: modem identity detected.");
+		log.info("MODEM: serial=" + serPortStr + ", identityDetected=" + startupModemIdentityLogged);
+		log.info("SRVSET: activeServiceSetDetected=" + startupServiceSetLogged);
+		log.info("REG: startupSummary source=" + startupRegistrationSource
+				+ ", CREG=" + formatRegistrationStat(lastCregStat)
+				+ ", CEREG=" + formatRegistrationStat(lastCeregStat)
+				+ ", ready=" + startupRegistrationReady);
+		log.info("RADIOT: startup summary provider=" + startupProviderName + ", rat=" + startupRatLabel);
+		log.info("RADIOQ: startup snapshot captured=" + startupRadioqCaptured);
+	}
+
+	private void captureStartupRadioQualitySnapshot() {
+		if (send("AT+CESQ")) {
+			startupRadioqCaptured = true;
 		} else {
-			log.warn("Startup mode diagnostics: modem identity line not detected from ATI1 response.");
+			log.warn("RADIOQ: startup snapshot command failed.");
 		}
-		if (startupServiceSetLogged) {
-			log.info("Startup mode diagnostics: active service-set information detected.");
-		} else {
-			log.warn("Startup mode diagnostics: active service-set details not detected from ^SSRVSET response.");
+	}
+
+	private void captureDegradedRadioDiagnostics(String reason, boolean includeCellSnapshot) {
+		log.info("FAILCTX: collecting degraded-path diagnostics (" + reason + ")");
+		if (!send("AT+CESQ"))
+			log.warn("RADIOQ: failed to collect +CESQ during " + reason + ".");
+		if (includeCellSnapshot && !send("AT^SMONI"))
+			log.warn("CELL: failed to collect ^SMONI during " + reason + ".");
+		if (!send("AT+CEER"))
+			log.warn("FAILCTX: failed to collect +CEER during " + reason + ".");
+	}
+
+	private void logCesqLine(String cesqLine) {
+		String summary = "";
+		Integer[] fields = parseCesqFields(cesqLine);
+		if (fields != null) {
+			Integer rsrq = fields[4];
+			Integer rsrp = fields[5];
+			if (rsrq != null && rsrq != 255 && rsrp != null && rsrp != 255)
+				summary = " (rsrqRaw=" + rsrq + ", rsrpRaw=" + rsrp + ")";
+		}
+		log.info("RADIOQ: " + cesqLine.trim() + summary);
+	}
+
+	private Integer[] parseCesqFields(String cesqLine) {
+		int colonIdx = cesqLine.indexOf(':');
+		if (colonIdx < 0 || colonIdx + 1 >= cesqLine.length())
+			return null;
+		String[] parts = cesqLine.substring(colonIdx + 1).trim().split(",");
+		if (parts.length < 6)
+			return null;
+		Integer[] values = new Integer[6];
+		for (int i = 0; i < 6; i++) {
+			values[i] = safeParseInteger(parts[i]);
+			if (values[i] == null)
+				return null;
+		}
+		return values;
+	}
+
+	private String formatRegistrationStat(Integer stat) {
+		if (stat == null)
+			return "n/a";
+		return stat + "(" + decodeRegistrationState(stat) + ")";
+	}
+
+	private String decodeRegistrationState(int stat) {
+		switch (stat) {
+		case 1:
+			return "home-registered";
+		case 5:
+			return "roaming-registered";
+		case 2:
+			return "searching";
+		case 3:
+			return "registration-denied";
+		case 4:
+			return "unknown";
+		case 0:
+			return "not-registered";
+		default:
+			return "stat-" + stat;
+		}
+	}
+
+	private String getRatLabelForSummary(int ratValue) {
+		switch (ratValue) {
+		case 0:
+		case 1:
+		case 3:
+			return "2G";
+		case 2:
+		case 4:
+		case 5:
+		case 6:
+			return "3G";
+		case 7:
+			return "4G/LTE";
+		default:
+			return "n/a";
 		}
 	}
 
@@ -1217,11 +1327,11 @@ public class ATresponder extends Thread {
 		if (!startupModemIdentityLogged
 				&& (normalized.contains("PLS8") || normalized.contains("CINTERION") || normalized.contains("THALES"))) {
 			startupModemIdentityLogged = true;
-			log.info("Startup mode diagnostics: modem identity line '" + rawLine.trim() + "'.");
+			log.info("MODEM: " + rawLine.trim());
 		}
 		if (!startupServiceSetLogged && normalized.startsWith("^SSRVSET:")) {
 			startupServiceSetLogged = true;
-			log.info("Startup mode diagnostics: service-set line '" + rawLine.trim() + "'.");
+			log.info("SRVSET: " + rawLine.trim());
 		}
 	}
 
@@ -1315,6 +1425,8 @@ public class ATresponder extends Thread {
 		default:
 			break;
 		}
+		startupProviderName = parsedCops.providerName.isEmpty() ? "n/a" : parsedCops.providerName;
+		startupRatLabel = getRatLabelForSummary(parsedCops.ratValue);
 		watchdogList.set(2, parsedCops.providerName);
 		watchdogList.set(0, new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()));
 		startupNetworkReady = parsedCops.ready;
