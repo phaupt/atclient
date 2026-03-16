@@ -572,6 +572,8 @@ public class ATresponder extends Thread {
 		// timer variables
 		long heartBeatTimerCurrent, rspTimerCurrent;
 		heartBeatTimerCurrent = rspTimerCurrent = System.currentTimeMillis();
+		boolean heartbeatAckPending = false;
+		boolean heartbeatRadioHealthCheckDue = false;
 		
 		String code, rx;
 		int value = 0;
@@ -584,13 +586,13 @@ public class ATresponder extends Thread {
 			Thread.sleep(sleepWhile);
 			
 			// Enter this condition if heart beat timer is up
-			if ((System.currentTimeMillis() - heartBeatTimerCurrent) >= heartBeatMillis){
+			if ((System.currentTimeMillis() - heartBeatTimerCurrent) >= heartBeatMillis) {
 				// Check every x milliseconds of inactivity
-						
 				send("AT", null); // Send "AT". Next RX shall be received in this thread as it could be some other event coming in.
-				
 				heartBeatTimerCurrent = System.currentTimeMillis();
-			} 
+				heartbeatAckPending = true;
+				heartbeatRadioHealthCheckDue = false;
+			}
 			
 			// Condition below should only occur if no RX received even after heart beat timer
 			else if ((System.currentTimeMillis() - rspTimerCurrent) >= (heartBeatMillis + 5000)) {
@@ -600,7 +602,7 @@ public class ATresponder extends Thread {
 				log.error(serPortStr + " down! Did the modem crash? I'm afraid we have to invoke a REBOOT right now. Bye bye...");
 				rebootAndExit();
 				
-				/*				
+				/*
 				
 				// As an alternative to the rebootAndExit(), the code below may be used.
 				// In this case we will try to re-open the port - though it does not seem to always work as desired.
@@ -621,7 +623,6 @@ public class ATresponder extends Thread {
 			// Listening for incoming notifications (SIM->ME)
 			boolean hadRxLoopFailure = false;
 			try {
-				
 				log.trace("Waiting for RX data..");
 				
 				while (isAlive && buffReader.ready() && (rx = buffReader.readLine()) != null && rx.length() > 0) {
@@ -633,10 +634,19 @@ public class ATresponder extends Thread {
 					// Watchdog: Write/update local file
 					updateWatchdogForCommunicationRx();
 
-					log.debug("RX1 <<< " + rx);
-	
+						log.debug("RX1 <<< " + rx);
+						String normalizedRx = rx.trim().toUpperCase(Locale.ROOT);
+						if (heartbeatAckPending) {
+							if (isStandaloneFinalResultOk(normalizedRx)) {
+								heartbeatRadioHealthCheckDue = true;
+								heartbeatAckPending = false;
+							} else if (isExplicitModemErrorLine(normalizedRx)) {
+								heartbeatAckPending = false;
+							}
+						}
+		
 					getMeTextAscii(rx); // may set the flag such as CANCEL	
-	
+
 					if (rx.toUpperCase().startsWith("+CMTI: ")) {
 						Integer smsIndex = parseSmsStorageIndex(rx);
 						if (smsIndex == null) {
@@ -646,7 +656,7 @@ public class ATresponder extends Thread {
 							send("AT+CMGR=" + smsIndex); // read the SMS data
 							send("AT+CMGD=0,4"); // delete all stored short messages after reading
 						}
-					} else if (rx.toUpperCase().startsWith("^SSTR: ")) {	
+					} else if (rx.toUpperCase().startsWith("^SSTR: ")) {
 						ParsedSstr parsedSstr = parseSstrLine(rx);
 						if (parsedSstr == null) {
 							log.warn("Ignoring malformed ^SSTR line '" + rx + "'.");
@@ -688,17 +698,17 @@ public class ATresponder extends Thread {
 								send("at^sstgi=" + value); // GetInfos
 								getMeTextAscii(rx); // may set the flag such as CANCEL
 								code = "0"; // OK
-								if (cancel){ 
+								if (cancel) {
 									setCancel(false); // reset flag
 									code = "16"; // Proactive SIM session terminated by user
 								} else if (stk_timeout) {
 									setStkTimeout(false); // reset flag
 									code = "18"; // No response from user
-								} 
+								}
 								
 								if (user_delay) {
 									sleep(user_delay_millis);
-									setUserDelay(false); // reset flag		
+									setUserDelay(false); // reset flag
 								}
 								
 								send("at^sstr=" + value + "," + code); // Confirm
@@ -710,9 +720,9 @@ public class ATresponder extends Thread {
 								// GET INPUT
 								log.info("STK035: GET INPUT");
 								send("at^sstgi=" + value); // GetInfos
-								getMeTextAscii(rx); // may set the flag such as CANCEL						
+								getMeTextAscii(rx); // may set the flag such as CANCEL
 								code = "0,," + validPIN; // OK
-								if (cancel){ 
+								if (cancel) {
 									setCancel(false); // reset flag
 									code = "16"; // Proactive SIM session terminated by user
 								} else if (block_pin) {
@@ -721,11 +731,11 @@ public class ATresponder extends Thread {
 										setBlockedPIN(false); // reset flag
 										cntrWrongPinAttempts = maxWrongPinAttempts;
 									}
-									code = "0,," + invalidPIN; 
+									code = "0,," + invalidPIN;
 								} else if (stk_timeout) {
 									setStkTimeout(false); // reset flag
 									code = "18"; // No response from user
-								} 
+								}
 								
 								if (user_delay) {
 									sleep(user_delay_millis);
@@ -763,7 +773,7 @@ public class ATresponder extends Thread {
 						case 19:
 							// SEND MESSAGE
 							log.info("STK019: SEND MESSAGE");
-							send("at^sstgi=" + value); // GetInfos		
+							send("at^sstgi=" + value); // GetInfos
 							send("at^sstr=" + value + ",0"); // Confirm
 							break;
 						case 32:
@@ -778,13 +788,13 @@ public class ATresponder extends Thread {
 							send("at^sstgi=33");
 							getMeTextAscii(rx); // may set the flag such as CANCEL
 							code = "0"; // OK
-							if (cancel){ 
+							if (cancel) {
 								setCancel(false); // reset flag
 								code = "16"; // Proactive SIM session terminated by user
 							} else if (stk_timeout) {
 								setStkTimeout(false); // reset flag
 								code = "18"; // No response from user
-							} 
+							}
 							
 							if (user_delay) {
 								sleep(user_delay_millis);
@@ -797,13 +807,12 @@ public class ATresponder extends Thread {
 							// GET INPUT (Input=123456)
 							log.info("STK035: GET INPUT");
 							send("at^sstgi=35");
-							getMeTextAscii(rx); // may set the flag such as CANCEL							
+							getMeTextAscii(rx); // may set the flag such as CANCEL
 							code = "0,," + validPIN; // OK
-							if (cancel){ 
+							if (cancel) {
 								setCancel(false); // reset flag
 								code = "16"; // Proactive SIM session terminated by user
-							}
-							else if (stk_timeout) {
+							} else if (stk_timeout) {
 								setStkTimeout(false); // reset flag
 								code = "18"; // No response from user
 							} else if (block_pin) {
@@ -812,13 +821,13 @@ public class ATresponder extends Thread {
 									setBlockedPIN(false); // reset flag
 									cntrWrongPinAttempts = maxWrongPinAttempts;
 								}
-								code = "0,," + invalidPIN; 
+								code = "0,," + invalidPIN;
 							}
 							
 							if (user_delay) {
 								sleep(user_delay_millis);
 								setUserDelay(false); // reset flag
-							} 
+							}
 							
 							send("at^sstr=" + value + "," + code); // Confirm
 							break;
@@ -835,26 +844,28 @@ public class ATresponder extends Thread {
 							break;
 						case 254:
 							log.info("STK254: SIM Applet returns to main menu");
-							
 							handlePostStkMainMenu();
 							send("AT^SSTR?", null);
-							
 							break;
 						case 255:
 							log.error("SIM is lost!");
-
 							send("AT+CFUN=1,1"); // force UE restart
-							
 							break;
 						default:
 							break;
 						}
-					}			
-					
+					}
+				}
+
+				if (heartbeatRadioHealthCheckDue) {
+					heartbeatRadioHealthCheckDue = false;
+					handleHeartbeatIdleRadioHealthCheck();
 				}
 			} catch (IOException | RuntimeException e) {
 				hadRxLoopFailure = true;
 				consecutiveRxFailures++;
+				heartbeatAckPending = false;
+				heartbeatRadioHealthCheckDue = false;
 				log.error("listenForRx() processing failure (consecutive=" + consecutiveRxFailures + ")", e);
 				if (consecutiveRxFailures >= 5) {
 					log.error("listenForRx() reached failure threshold. Triggering controlled shutdown/recovery.");
@@ -863,26 +874,37 @@ public class ATresponder extends Thread {
 					return;
 				}
 				Thread.sleep(Math.min(1000L * consecutiveRxFailures, 5000L));
-			} 
+			}
 			if (!hadRxLoopFailure)
 				consecutiveRxFailures = 0;
 		}
-		
 	}
 
 	private void handlePostStkMainMenu() throws InterruptedException {
 		verifyRAT();
+		refreshIdleRadioStatus("post-STK idle");
+		collectIdleRadioDiagnosticsAndRecoverIfNeeded("after STK254");
+	}
+
+	private void handleHeartbeatIdleRadioHealthCheck() throws InterruptedException {
+		refreshIdleRadioStatus("post-heartbeat idle");
+		collectIdleRadioDiagnosticsAndRecoverIfNeeded("after heartbeat");
+	}
+
+	private boolean refreshIdleRadioStatus(String context) throws InterruptedException {
+		boolean cregOk = send("AT+CREG?");
 		boolean ceregOk = send("AT+CEREG?");
 		boolean copsOk = send("AT+COPS?");
 		boolean csqOk = send("AT+CSQ");
-		if (!ceregOk || !copsOk || !csqOk) {
-			log.warn("RADIOT: post-STK idle refresh incomplete. CMDOK[CEREG/COPS/CSQ]="
-					+ ceregOk + "/" + copsOk + "/" + csqOk + ".");
+		if ((!cregOk && !ceregOk) || !copsOk || !csqOk) {
+			log.warn("RADIOT: " + context + " refresh incomplete. CMDOK[CREG/CEREG/COPS/CSQ]="
+					+ cregOk + "/" + ceregOk + "/" + copsOk + "/" + csqOk + ".");
+			return false;
 		}
-		collectIdleRadioDiagnosticsAndRecoverIfNeeded();
+		return true;
 	}
 
-	private void collectIdleRadioDiagnosticsAndRecoverIfNeeded() throws InterruptedException {
+	private void collectIdleRadioDiagnosticsAndRecoverIfNeeded(String triggerContext) throws InterruptedException {
 		boolean degradedIdleRadio = isDegradedIdleRadioState();
 		if (!degradedIdleRadio) {
 			if (degradedIdleRadioChecks > 0) {
@@ -894,9 +916,9 @@ public class ATresponder extends Thread {
 
 		degradedIdleRadioChecks++;
 		if (!sendDiagnosticBestEffort("AT+CESQ", DEGRADED_DIAGNOSTIC_TIMEOUT_MILLIS))
-			log.warn("RADIOQ: failed to collect +CESQ during post-STK idle check.");
+			log.warn("RADIOQ: failed to collect +CESQ during degraded idle check " + triggerContext + ".");
 
-		log.warn("RADIOT: degraded idle radio state after STK254 (count="
+		log.warn("RADIOT: degraded idle radio state " + triggerContext + " (count="
 				+ degradedIdleRadioChecks + "/" + DEGRADED_IDLE_CHECKS_BEFORE_RECOVERY
 				+ ", mode=" + actualCopsMode
 				+ ", reg=" + formatRegistrationStat(lastCregStat) + "/" + formatRegistrationStat(lastCeregStat)
@@ -926,7 +948,7 @@ public class ATresponder extends Thread {
 
 		degradedIdleRadioChecks = 0;
 
-		log.warn("RADIOT: re-triggering automatic network selection after repeated degraded idle radio checks.");
+		log.warn("RADIOT: re-triggering automatic network selection after repeated degraded idle radio checks " + triggerContext + ".");
 		if (!send("AT+COPS=0", "OK", RADIO_RESELECTION_TIMEOUT_MILLIS, true)) {
 			log.warn("RADIOT: automatic network reselection attempt failed.");
 			return;
@@ -935,15 +957,8 @@ public class ATresponder extends Thread {
 		log.info("RADIOT: automatic network reselection command accepted. Collecting post-reselection status.");
 
 		sleep(RADIO_RESELECTION_SETTLE_MILLIS);
-		boolean ceregOk = send("AT+CEREG?");
-		boolean copsOk = send("AT+COPS?");
-		boolean csqOk = send("AT+CSQ");
-		if (!ceregOk || !copsOk || !csqOk) {
-			log.warn("RADIOT: post-reselection refresh incomplete. CMDOK[CEREG/COPS/CSQ]="
-					+ ceregOk + "/" + copsOk + "/" + csqOk + ".");
-		} else {
+		if (refreshIdleRadioStatus("post-reselection"))
 			log.info("RADIOT: post-reselection refresh completed.");
-		}
 		if (!sendDiagnosticBestEffort("AT+CESQ", DEGRADED_DIAGNOSTIC_TIMEOUT_MILLIS))
 			log.warn("RADIOQ: failed to collect +CESQ after automatic network reselection.");
 	}
