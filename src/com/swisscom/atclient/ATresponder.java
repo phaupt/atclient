@@ -1756,6 +1756,18 @@ public class ATresponder extends Thread {
 		int percent = Math.round(csqValue * 100 / 31);
 		startupSignalReady = csqValue >= 0 && csqValue <= 31;
 		if (!startupSignalReady) {
+			// On LTE, AT+CSQ often returns 99 ("not known") because the modem reports
+			// signal via RSRP/RSRQ instead of legacy RSSI. Accept this when registered
+			// on LTE and capture AT+CESQ for actual signal quality diagnostics.
+			if (csqValue == 99 && startupRegistrationReady && startupNetworkReady && "4G".equals(startupRatLabel)) {
+				log.info("SIGNAL: CSQ 99 on LTE — accepting as ready (RSSI not populated on LTE). Capturing +CESQ for diagnostics.");
+				startupSignalReady = true;
+				watchdogList.set(4, "n/a");
+				watchdogList.set(5, "LTE");
+				startupSignalSummary = "99/31 [LTE,+CESQ]";
+				sendDiagnosticBestEffort("AT+CESQ", DEGRADED_DIAGNOSTIC_TIMEOUT_MILLIS);
+				return;
+			}
 			watchdogList.set(4, "n/a");
 			watchdogList.set(5, "n/a");
 			startupSignalSummary = csqValue + "/31 [n/a]";
