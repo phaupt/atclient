@@ -1,37 +1,42 @@
-# atclient
+# ATClient
 
-Automate Mobile ID (SIM Toolkit) user response.
+ATClient automates Mobile ID SIM Toolkit user interaction on Raspberry Pi systems connected to a PLS8-E LTE terminal. It is designed for operational validation, unattended test setups, and watchdog-aware deployments.
 
-![ATClient Hardware](img/RPi4-FullUnitWithRelay_small.png?raw=true)
+<p align="center">
+  <img src="img/atclient-raspi-lte-terminal.jpg" alt="ATClient hardware setup with Raspberry Pi and LTE terminal" width="880">
+</p>
 
-## Features
+## Highlights
 
-* Auto-respond to SIM Toolkit requests, for example a [Mobile ID](https://www.mobileid.ch/en) authentication request
-* Auto detect the SIM terminal (USB port)
-* Configuration of the radio access technology (4G/3G/2G)
+* Automate SIM Toolkit user responses, including [Mobile ID](https://www.mobileid.ch/en) authentication flows
+* Auto-detect the LTE modem serial interface
+* Configure preferred radio access technology (4G/3G/2G)
 * Observe incoming text SMS activity in the application log
-* Write watchdog file for communication health and optional STK activity health
+* Maintain watchdog heartbeats for communication health or meaningful STK activity
 
-## What you will need
+## Recommended hardware
 
-Recommended setup:
+| Component | Recommendation |
+| --- | --- |
+| SIM | [Mobile ID SIM card](https://www.mobileid.ch/en) |
+| Host | [Raspberry Pi 4](https://www.raspberrypi.com/products/raspberry-pi-4-model-b/) |
+| Modem | [PLS8-E LTE terminal](https://www.hcp.rs/en/products/communications-/hit-u4-lte) |
+| Optional | [RPi Relay Board](https://www.waveshare.com/wiki/RPi_Relay_Board) |
 
-* [Mobile ID SIM card](https://www.mobileid.ch/en)
-* [Raspberry Pi 4](https://www.raspberrypi.com/products/raspberry-pi-4-model-b/)
-* [PLS8-E LTE terminal](https://www.hcp.rs/en/products/communications-/hit-u4-lte)
-* [RPi Relay Board](https://www.waveshare.com/wiki/RPi_Relay_Board) (optional)
+## Supported terminal
 
-## Wireless terminal
+ATClient has been tested with Raspberry Pi 4 and a PLS8-E LTE terminal ([HCP HIT U4 LTE](https://www.hcp.rs/en/products/communications-/hit-u4-lte)).
 
-This application has been tested with Raspberry Pi 4 and PLS8-E LTE terminal ([HCP HIT U4 LTE](https://www.hcp.rs/en/products/communications-/hit-u4-lte)).
-
-> **Note:** Official Cinterion / Thales technical documentation and Windows drivers are no longer published on the old public Gemalto URLs.
+> [!NOTE]
+> Official Cinterion / Thales technical documentation and Windows drivers are no longer published on the old public Gemalto URLs.
 > For current documentation and support, use:
 > - [Thales/Gemalto Support Portal](https://supportportal.gemalto.com/csm?id=kb_home_page)
 > - [HCP Support](https://www.hcp.rs/en/support/communications)
 > - [HCP Contact](https://www.hcp.rs/en/contact-us-)
 
 ## Quick start
+
+The commands below cover a basic local build and first-run deployment flow.
 
 ### Clone the repository
 
