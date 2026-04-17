@@ -934,6 +934,90 @@ public class ATresponder extends Thread implements ATCommandSender {
 						default:
 							break;
 						}
+					} else if (modemDriver instanceof SIMComSIM8262Driver && modemDriver.isSTKProactiveURC(rx)) {
+						// SIMCom +STIN:<cmd> dispatch. Structure mirrors the PLS8 ^SSTN branch
+						// above but uses driver-delegated commands (AT+STGI= / AT+STGR=) and
+						// preserves the STKxxx monitoring markers (STK019/033/035/037) so
+						// downstream log tooling does not need modem-specific awareness.
+						value = modemDriver.parseSTKCommandType(rx);
+						if (value < 0) {
+							log.warn("Ignoring malformed +STIN line '" + rx + "'.");
+							continue;
+						}
+						updateWatchdogForStkEvent(value);
+
+						if (value == modemDriver.getSendMessageType()) {
+							log.info("STK019: SEND MESSAGE");
+							send(modemDriver.buildGetInfoCommand(value));
+							modemDriver.acknowledgeProactive(this, value);
+						} else if (value == modemDriver.getPlayToneType()) {
+							log.info("STK032: PLAY TONE");
+							send(modemDriver.buildGetInfoCommand(value));
+							modemDriver.acknowledgeProactive(this, value);
+						} else if (value == modemDriver.getDisplayTextType()) {
+							log.info("STK033: DISPLAY TEXT");
+							send(modemDriver.buildGetInfoCommand(value));
+							getMeTextAscii(rx); // may set the flag such as CANCEL
+
+							if (cancel) {
+								setCancel(false);
+								modemDriver.cancelSession(this, value);
+							} else if (stk_timeout) {
+								setStkTimeout(false);
+								modemDriver.sessionTimeout(this, value);
+							} else {
+								if (user_delay) {
+									sleep(user_delay_millis);
+									setUserDelay(false);
+								}
+								modemDriver.ackDisplayText(this, value);
+							}
+						} else if (value == modemDriver.getGetInputType()) {
+							log.info("STK035: GET INPUT");
+							send(modemDriver.buildGetInfoCommand(value));
+							getMeTextAscii(rx);
+
+							if (cancel) {
+								setCancel(false);
+								modemDriver.cancelSession(this, value);
+							} else if (stk_timeout) {
+								setStkTimeout(false);
+								modemDriver.sessionTimeout(this, value);
+							} else {
+								String pinPlain = "123456"; // valid test PIN
+								if (block_pin) {
+									log.info("BLOCKPIN: Input wrong PIN. Attempt " + (maxWrongPinAttempts - cntrWrongPinAttempts + 1) + " out of " + maxWrongPinAttempts + ".");
+									if (--cntrWrongPinAttempts == 0) {
+										setBlockedPIN(false);
+										cntrWrongPinAttempts = maxWrongPinAttempts;
+									}
+									pinPlain = "654321"; // invalid test PIN (same value PLS8 uses, UCS2-encoded there)
+								}
+								if (user_delay) {
+									sleep(user_delay_millis);
+									setUserDelay(false);
+								}
+								modemDriver.submitInput(this, value, pinPlain);
+							}
+						} else if (value == modemDriver.getSelectItemType()) {
+							log.info("STK036: SELECT ITEM");
+							send(modemDriver.buildGetInfoCommand(value));
+							// Do NOT auto-select: during auth the flow never hits this path,
+							// and auto-selecting can accidentally enter Change-PIN sub-menu
+							// (observed during Phase 0.4 responder debugging).
+						} else if (value == modemDriver.getSetUpMenuType()) {
+							log.info("STK037: SET UP MENU");
+							send(modemDriver.buildGetInfoCommand(value));
+							modemDriver.acknowledgeProactive(this, value);
+							// On SIMCom, SET UP MENU re-emission after a completed auth is the
+							// semantic equivalent of PLS8's STK254 "return to main menu".
+							// Fire post-session recovery (RAT re-check, radio refresh).
+							if (modemDriver.getReturnToMainType() == modemDriver.getSetUpMenuType()) {
+								handlePostStkMainMenu();
+							}
+						} else {
+							log.warn("Unhandled +STIN cmd " + value + " on SIMCom: '" + rx + "'");
+						}
 					}
 				}
 
@@ -1252,26 +1336,15 @@ public class ATresponder extends Thread implements ATCommandSender {
 	}
 
 	private void getMeTextAscii(String rsp) throws UnsupportedEncodingException {
-		// Only in case of UCS2 Mode: Convert to ASCII
-		if (rsp == null || !rsp.contains("^SSTGI:")) {
-			return;
-		}
-		int startIdx = rsp.indexOf(",\"");
-		int endIdx = (startIdx >= 0) ? rsp.indexOf("\",", startIdx + 2) : -1;
-		if (startIdx < 0 || endIdx <= startIdx + 2) {
-			return;
-		}
-		String ucs2Hex = rsp.substring(startIdx + 2, endIdx).trim();
-		if (ucs2Hex.length() == 0) {
-			return;
-		}
-		try {
-			String asciiText = new String(hexToByte(ucs2Hex), StandardCharsets.UTF_16);
-			log.info("UI-TXT: \'" + asciiText + "\'");
-			verifyKeywords(asciiText);
-		} catch (RuntimeException e) {
-			log.warn("Ignoring malformed ^SSTGI UCS2 payload '" + ucs2Hex + "'.");
-		}
+		// Driver-delegated UI-text extraction. PLS8 driver decodes ^SSTGI: UCS-2 hex,
+		// SIMCom driver decodes +STGI: UCS-2 hex (SIMCom's "decoded" mode still wraps
+		// text in UCS-2 hex on the wire).
+		if (rsp == null) return;
+		if (!modemDriver.isSTKInfoResponse(rsp)) return;
+		String asciiText = modemDriver.extractDisplayText(rsp);
+		if (asciiText == null || asciiText.isEmpty()) return;
+		log.info("UI-TXT: \'" + asciiText + "\'");
+		verifyKeywords(asciiText);
 	}
 
 	private void verifyKeywords(String rsp) {
