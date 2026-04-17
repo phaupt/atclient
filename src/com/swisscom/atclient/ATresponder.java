@@ -106,6 +106,7 @@ public class ATresponder extends Thread implements ATCommandSender {
 	private String startupRegistrationSource = "unknown";
 	private Integer lastCregStat = null;
 	private Integer lastCeregStat = null;
+	private Integer lastC5gregStat = null;
 	private String startupProviderName = "n/a";
 	private String startupRatLabel = "n/a";
 	private boolean startupRadioqCaptured = false;
@@ -546,12 +547,14 @@ public class ATresponder extends Thread implements ATCommandSender {
 			//send("AT+CGMM"); // Module model			
 			//send("AT+CGSN"); // Module serial number / IMEI			
 			
-			send("AT+CIMI"); // IMSI		
-			send("AT+CPIN?"); // SIM Card status			
+			send("AT+CIMI"); // IMSI
+			send("AT+CPIN?"); // SIM Card status
 			send("AT+CREG?"); // Network registration
 			send("AT+CEREG?"); // EPS/LTE registration
 			send("ATI1"); // Product identity for conservative startup diagnostics
-			send("AT^SSRVSET=\"current\""); // Active service-set diagnostics for USB/Remote-SAT visibility
+			// Driver-specific introspection (PLS8: AT^SSTR?/AT^SSRVSET?, SIMCom: AT+CNMP?/AT+CGDCONT?).
+			// No STK-mode toggles and no commands that alter radio state.
+			modemDriver.sendStartupCommands(this);
 			
 			//send("AT^SMONI"); // supplies information of the serving cell
 			//send("ATI1"); // display product identification information
@@ -562,20 +565,15 @@ public class ATresponder extends Thread implements ATCommandSender {
 			//send("AT&W"); // Store AT Command Settings to User Defined Profile
 			
 			if (!actualCopsMode.contentEquals("A") && actualCopsMode.length() == 1) {
-				// Force the mobile terminal to select and register a specific network
-				// AT+COPS=<mode>[, <format>[, <opName>][, <rat>]]
-				// mode 0: Automatic mode; <opName> field is ignored
-				// rat:
-				// 0 GSM (2G)
-				// 2 UTRAN (3G)
-				// 3 GSM w/EGPRS (2G)
-				// 4 UTRAN w/HSDPA (3G)
-				// 6 UTRAN w/HSDPA and HSUPA (3G)
-				// 7 E-UTRAN (4G/LTE)
-				send("AT+COPS=0,2,00000," + actualCopsMode, "OK", 60000, true); // increase the time waiting for "OK" as it usually takes a few seconds to switch the mode
+				// Force a specific RAT. On PLS8 the driver emits AT+COPS=0,2,00000,<rat>;
+				// on SIMCom it emits AT+CNMP=<code>. Both are routed through the driver
+				// so the rat/mode code semantics stay appropriate per modem family.
+				String ratCmd = modemDriver.buildRATSelectionCommand(actualCopsMode);
+				send(ratCmd, "OK", 60000, true);
 			} else if (actualCopsMode.contentEquals("A")) {
-				// Set automatic mode
-				send("AT+COPS=0", "OK", 60000, true);
+				// Automatic mode: let the driver choose what "auto" means per modem.
+				String autoCmd = modemDriver.buildRATSelectionCommand("A");
+				send(autoCmd, "OK", 60000, true);
 			}
 			
 			if (!waitForStartupReadiness(STARTUP_READINESS_MAX_WAIT_MILLIS, STARTUP_READINESS_POLL_MILLIS)) {
@@ -600,6 +598,7 @@ public class ATresponder extends Thread implements ATCommandSender {
 		startupSignalReady = false;
 		lastCregStat = null;
 		lastCeregStat = null;
+		lastC5gregStat = null;
 		startupProviderName = "n/a";
 		startupRatLabel = "n/a";
 		startupSignalSummary = "n/a";
@@ -616,10 +615,18 @@ public class ATresponder extends Thread implements ATCommandSender {
 			boolean cpinOk = send("AT+CPIN?");
 			boolean cregOk = send("AT+CREG?");
 			boolean ceregOk = send("AT+CEREG?");
+			boolean c5gregOk = true;
+			if (modemDriver.supports5GRegistration()) {
+				String q = modemDriver.build5GRegistrationQuery();
+				if (q != null) {
+					// Non-fatal: older SIMCom firmware returns ERROR when no SIM is 5G-capable.
+					c5gregOk = send(q);
+				}
+			}
 			boolean copsOk = send("AT+COPS?");
 			boolean csqOk = send("AT+CSQ");
 
-			if (cpinOk && (cregOk || ceregOk) && copsOk && csqOk
+			if (cpinOk && (cregOk || ceregOk || c5gregOk) && copsOk && csqOk
 					&& startupSimReady && startupRegistrationReady && startupNetworkReady && startupSignalReady) {
 				log.info("Startup readiness confirmed after attempt " + attempt + ".");
 				return true;
@@ -628,7 +635,8 @@ public class ATresponder extends Thread implements ATCommandSender {
 			log.warn("Startup readiness pending (attempt " + attempt + "): SIM=" + startupSimReady
 					+ ", REGISTRATION=" + startupRegistrationReady + "(" + startupRegistrationSource + ")"
 					+ ", NETWORK=" + startupNetworkReady + ", SIGNAL=" + startupSignalReady
-					+ ", CMDOK[CPIN/CREG/CEREG/COPS/CSQ]=" + cpinOk + "/" + cregOk + "/" + ceregOk + "/" + copsOk + "/" + csqOk + ".");
+					+ ", CMDOK[CPIN/CREG/CEREG/C5GREG/COPS/CSQ]="
+					+ cpinOk + "/" + cregOk + "/" + ceregOk + "/" + c5gregOk + "/" + copsOk + "/" + csqOk + ".");
 			long remainingMs = maxWaitMs - (System.currentTimeMillis() - startTs);
 			if (remainingMs > 0)
 				sleep(Math.min(pollMs, remainingMs));
@@ -1136,7 +1144,7 @@ public class ATresponder extends Thread implements ATCommandSender {
 	}
 
 	private boolean isRegistrationReady() {
-		return isRegistered(lastCregStat) || isRegistered(lastCeregStat);
+		return isRegistered(lastCregStat) || isRegistered(lastCeregStat) || isRegistered(lastC5gregStat);
 	}
 
 	private boolean isRegistered(Integer stat) {
@@ -1163,24 +1171,13 @@ public class ATresponder extends Thread implements ATCommandSender {
 
 		if (!newCopsMode.contentEquals("A")) {
 			log.info("RADIOT: Force new Radio Access Technology");
-			
-			// Force the mobile terminal to select and register a specific network
-			// AT+COPS=<mode>[, <format>[, <opName>][, <rat>]]
-			// mode 0: Automatic mode; <opName> field is ignored
-			// rat:
-			// 0 GSM (2G)
-			// 2 UTRAN (3G)
-			// 3 GSM w/EGPRS (2G)
-			// 4 UTRAN w/HSDPA (3G)
-			// 6 UTRAN w/HSDPA and HSUPA (3G)
-			// 7 E-UTRAN (4G/LTE)
-			commandSucceeded = send("AT+COPS=0,2,00000," + newCopsMode, "OK", RADIO_RESELECTION_TIMEOUT_MILLIS, true);
-
+			// Driver-routed: PLS8 -> AT+COPS=0,2,00000,<rat>; SIMCom -> AT+CNMP=<code>
+			String ratCmd = modemDriver.buildRATSelectionCommand(newCopsMode);
+			commandSucceeded = send(ratCmd, "OK", RADIO_RESELECTION_TIMEOUT_MILLIS, true);
 		} else if (newCopsMode.contentEquals("A")) {
 			log.info("RADIOT: Set Radio Access Technology to automatic mode");
-			
-			// Set automatic mode
-			commandSucceeded = send("AT+COPS=0", "OK", RADIO_RESELECTION_TIMEOUT_MILLIS, true);
+			String autoCmd = modemDriver.buildRATSelectionCommand("A");
+			commandSucceeded = send(autoCmd, "OK", RADIO_RESELECTION_TIMEOUT_MILLIS, true);
 		}
 
 		if (commandSucceeded) {
@@ -1288,6 +1285,8 @@ public class ATresponder extends Thread implements ATCommandSender {
 							updateRegistrationStateFromLine(rx, false);
 						} else if (rx.toUpperCase().startsWith("+CEREG: ")) {
 							updateRegistrationStateFromLine(rx, true);
+						} else if (rx.toUpperCase().startsWith("+C5GREG: ")) {
+							updateC5gRegistrationStateFromLine(rx);
 						} else if (rx.toUpperCase().startsWith("+CESQ: ")) {
 							logCesqLine(rx);
 						} else if (rx.toUpperCase().startsWith("^SMONI:")) {
@@ -1519,12 +1518,33 @@ public class ATresponder extends Thread implements ATCommandSender {
 			log.info("REG: " + registrationType + " stat=" + stat + " (" + decodeRegistrationState(stat) + ")");
 
 		startupRegistrationReady = isRegistrationReady();
-		if (isRegistered(lastCeregStat))
+		updateRegistrationSourceLabel(registrationType, stat);
+	}
+
+	/** Parse and record a +C5GREG registration update (SIMCom / 5G NR path). */
+	private void updateC5gRegistrationStateFromLine(String rawLine) {
+		Integer stat = parseRegistrationStatus(rawLine);
+		if (stat == null) {
+			log.warn("Ignoring malformed +C5GREG line '" + rawLine + "'.");
+			return;
+		}
+		Integer previousStat = lastC5gregStat;
+		lastC5gregStat = stat;
+		if (previousStat == null || previousStat.intValue() != stat.intValue())
+			log.info("REG: C5GREG stat=" + stat + " (" + decodeRegistrationState(stat) + ")");
+		startupRegistrationReady = isRegistrationReady();
+		updateRegistrationSourceLabel("C5GREG", stat);
+	}
+
+	private void updateRegistrationSourceLabel(String activeType, Integer activeStat) {
+		if (isRegistered(lastC5gregStat))
+			startupRegistrationSource = "C5GREG:" + lastC5gregStat;
+		else if (isRegistered(lastCeregStat))
 			startupRegistrationSource = "CEREG:" + lastCeregStat;
 		else if (isRegistered(lastCregStat))
 			startupRegistrationSource = "CREG:" + lastCregStat;
 		else
-			startupRegistrationSource = registrationType + ":" + stat;
+			startupRegistrationSource = activeType + ":" + activeStat;
 	}
 
 	private void logStartupModeDiagnostics() {
