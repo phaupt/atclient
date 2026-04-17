@@ -26,7 +26,7 @@ import java.util.regex.Pattern;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-public class ATresponder extends Thread {
+public class ATresponder extends Thread implements ATCommandSender {
 	
 	private final Logger log = LogManager.getLogger(ATresponder.class.getName());
 	
@@ -52,6 +52,11 @@ public class ATresponder extends Thread {
 	private String maintenanceFile = null;
 	private final Object maintenanceLock = new Object();
 	private volatile boolean maintenanceInFlight = false;
+
+	// Modem abstraction. Resolved from config property `modem.type` in run() after
+	// property load. Defaults to CinterionPLS8Driver so existing PLS8-E deployments
+	// behave identically to the legacy inline code paths.
+	private ModemDriver modemDriver = new CinterionPLS8Driver();
 
 	/**
 	 * Heart beat to detect serial port disconnection in milliseconds
@@ -198,7 +203,12 @@ public class ATresponder extends Thread {
 
 			heartBeatMillis = requireIntProperty(prop, "atclient.atcommand.heartbeat");
 			log.info("Property atclient.atcommand.heartbeat set to " + heartBeatMillis);
-			
+
+			modemDriver = resolveModemDriver(prop);
+			log.info("Modem driver selected: " + modemDriver.getVendorName()
+					+ " " + modemDriver.getModemFamilyLabel()
+					+ " (modem.type=" + prop.getProperty("modem.type", "cinterion").trim() + ")");
+
 			String configuredCopsMode = prop.getProperty("cops.mode", "").trim().toUpperCase();
 			if (configuredCopsMode.length() == 0) {
 				actualCopsMode = "A";
@@ -312,6 +322,24 @@ public class ATresponder extends Thread {
 	      }
 	      return prop;
 	   }
+
+	/**
+	 * Select the {@link ModemDriver} implementation based on the {@code modem.type}
+	 * config property. Unknown / missing values default to the historical
+	 * {@link CinterionPLS8Driver} so legacy PLS8-E deployments are unaffected.
+	 */
+	private ModemDriver resolveModemDriver(Properties prop) {
+		String type = prop.getProperty("modem.type", "cinterion").trim().toLowerCase();
+		switch (type) {
+			case "simcom":
+				return new SIMComSIM8262Driver();
+			case "cinterion":
+			case "auto":
+			case "":
+			default:
+				return new CinterionPLS8Driver();
+		}
+	}
 
 	private void warnIfConfigWorldReadable(String path) {
 		try {
