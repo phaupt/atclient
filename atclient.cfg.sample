@@ -113,6 +113,50 @@ watchdog.activity.startup.grace = 300000
 # Maintenance Mode [optional]
 ############################################################################################
 # If enabled, ATClient will look for the keyword 'MAINTENANCE' in the Mobile ID message
-# and execute the maintenance shell script as specified below. See example script. 
+# and execute the maintenance shell script as specified below. See example script.
 maintenance.enable      = false
 maintenance.script.file = /home/mid/atclient/maintenance.sh
+
+############################################################################################
+# Modem Driver [optional]
+############################################################################################
+# Controls which modem-family driver handles STK proactive commands, signal probes and
+# network-mode selection. Default keeps the historical Cinterion/Thales PLS8-E behavior.
+#
+#   cinterion : Cinterion/Thales PLS8-E HIT U4 (legacy default, uses AT^SSTA + ^SSTR/^SSTN URCs)
+#   simcom    : SIMCom SIM8262E-M2 5G HAT (uses AT+STK=1 + +STIN URCs)
+#   auto      : detect from ATI / port name (falls back to cinterion if uncertain)
+#
+modem.type = cinterion
+
+############################################################################################
+# SIMCom-specific Configuration [only relevant when modem.type=simcom]
+############################################################################################
+# Auto-detect hint matching the USB-serial product description for the SIM8262E-M2 module.
+port.name.linux.simcom = SimTech
+
+# SIMCom modules run at 115200 baud by default (PLS8 is 9600).
+port.baudrate.simcom = 115200
+
+# STK format requested by the driver at provisioning time.
+#   decoded : AT+STKFMT=0 (recommended; text fields still come UCS-2 hex encoded on wire)
+#   pdu     : AT+STKFMT=1 (not supported by this driver; left for future experimentation)
+simcom.stk.format = decoded
+
+# Network-mode preference used by the driver's buildRATSelectionCommand for SIMCom.
+# Only applies to the RADIO= keyword flow; the cops.mode setting above is PLS8-only.
+#   auto     : AT+CNMP=2     (all RATs auto)
+#   lte_only : AT+CNMP=38    (LTE only)
+#   nr_only  : AT+CNMP=71    (5G NR only; needs SA coverage and SIM entitlement)
+#   lte_nr5g : AT+CNMP=109   (LTE + NR5G; recommended for Switzerland 2026)
+simcom.network.mode = lte_nr5g
+
+# APN used by the QMI data-plane service (modem-data.service). Must match the SIM.
+# Left empty here because the PLS8 legacy path does not use this property.
+simcom.data.apn =
+
+# Watchdog activity events suggested for SIMCom; during Mobile-ID auth the modem
+# emits +STIN:21, +STIN:23, +STIN:25 (the plan's STK019 SEND MESSAGE marker
+# equivalent is not fired by the Mobile-ID applet on SIMCom — see tmp/PHASE0-GATE-RESULT.md).
+# Uncomment to override watchdog.activity.events above when running on SIMCom hardware.
+# watchdog.activity.events = 21,23,25

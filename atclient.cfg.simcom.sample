@@ -1,0 +1,84 @@
+############################################################################################
+# ATClient configuration sample — SIMCom SIM8262E-M2 5G HAT on Raspberry Pi 5
+############################################################################################
+# Copy to /home/mid/atclient/atclient.cfg on the target device and adapt as needed.
+# Validated against Debian 13 trixie, kernel 6.12.47, SIMCom firmware 22131B05X62M44A-M2.
+
+############################################################################################
+# JVM Arguments
+############################################################################################
+# -Dconfig.file=/home/mid/atclient/atclient.cfg
+# -Dlog.file=/var/log/atclient.log
+# -Dlog4j.configurationFile=/home/mid/atclient/log4j2.xml
+# -Dserial.port=/dev/simcom_at   <-- stable udev symlink, see 99-sim8262.rules
+
+############################################################################################
+# Modem Driver
+############################################################################################
+# Explicit selection recommended for first rollout (no auto-detection uncertainty).
+modem.type = simcom
+
+############################################################################################
+# Serial Port Configuration
+############################################################################################
+# Use the stable udev symlink. Don't hard-code /dev/ttyUSB2 — USB re-enumeration after
+# CFUN=1,1 can renumber the devices.
+port.name.linux = SimTech
+
+port.baudrate = 115200
+port.databits = 8
+port.stopbits = 1
+port.parity   = 0
+
+# Longer timeout than PLS8 because SIMCom occasionally responds after ~3s under traffic.
+port.communication.timeout = 5000
+
+# Heartbeat kept at 3 min (same as PLS8 production).
+atclient.atcommand.heartbeat = 180000
+
+############################################################################################
+# STK / SIM Toolkit
+############################################################################################
+# Format to enable and decoded mode. Leave as-is; decoded means AT+STGR responses
+# work with plain-text PIN submissions (AT+STGR=23,"<pin>").
+simcom.stk.format = decoded
+
+############################################################################################
+# Radio Access Technology (SIMCom-specific mode selection)
+############################################################################################
+# Swisscom switched off 3G on 2026-04-07. Use LTE+NR5G as the primary mode.
+# "lte_only" is a safer fallback if 5G NSA coverage is not yet available at the site.
+simcom.network.mode = lte_nr5g
+
+# The legacy cops.mode is PLS8-only and ignored by the SIMCom driver.
+cops.mode =
+
+############################################################################################
+# QMI / Data-plane
+############################################################################################
+# The APN for the SIM's data subscription. For Swisscom Mobile-ID test SIMs:
+simcom.data.apn = gprs.swisscom.ch
+
+############################################################################################
+# Watchdog
+############################################################################################
+watchdog.enable = true
+watchdog.file   = /var/log/watchdog.atclient
+watchdog.mode   = activity
+
+# SIMCom +STIN events observed during Mobile-ID auth: 21 (DISPLAY TEXT), 23 (GET INPUT),
+# 25 (SET UP MENU, also used as post-session return-to-idle marker).
+# +STIN:13 (SEND MESSAGE) is NOT emitted by the Mobile-ID applet on SIMCom — the plan's
+# STK019 equivalent health signal does not exist here. Use the auth-flow markers instead.
+watchdog.activity.events = 21,23,25
+
+watchdog.activity.startup.grace = 300000
+
+############################################################################################
+# Maintenance
+############################################################################################
+# Separate systemd service owns wwan0 + autossh on SIMCom. The maintenance script for
+# PLS8 (wvdial + autossh) does not apply here. Leave disabled until modem-data.service
+# and autossh.service are in place.
+maintenance.enable      = false
+maintenance.script.file = /home/mid/atclient/maintenance.sh
