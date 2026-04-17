@@ -21,6 +21,13 @@
 			<DefaultRolloverStrategy max="10"/>
 		</RollingFile>
 
+		<!--
+			SECURITY NOTE: The Socket appender below sends logs in cleartext UDP.
+			Logs can contain telecom data (operator names, RAT info, SMS metadata).
+			Only keep this appender pointed at "localhost" or a trusted loopback-only
+			syslog collector. If you ever need to forward logs off-host, replace this
+			with an SslSocket appender (TLS) and pin the server cert.
+		-->
 		<Socket name="syslogsocket" host="localhost" port="514"	protocol="UDP">
 			<PatternLayout pattern="%t [%level{WARN=WRN, DEBUG=DBG, ERROR=ERR, TRACE=TRC, INFO=INF}] %m%n" charset="UTF-8"/>
 		</Socket>

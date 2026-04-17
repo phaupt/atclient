@@ -4,6 +4,11 @@ import com.fazecast.jSerialComm.*;
 import java.io.*;
 import java.lang.management.ManagementFactory;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -27,6 +32,9 @@ public class ATresponder extends Thread {
 	
 	private String portStrArr[] = new String[1];
 	
+	// Mobile ID test PINs used to simulate user input in UI flows. Encoded as UCS-2 hex
+	// (validPIN = "123456", invalidPIN = "654321"). These are fixed test vectors, not
+	// production credentials.
 	private final String validPIN = "003100320033003400350036";
 	private final String invalidPIN = "003600350034003300320031";
 	private final int maxWrongPinAttempts = 5;
@@ -114,6 +122,7 @@ public class ATresponder extends Thread {
 	private static final Pattern KEYWORD_HOSTNAME = Pattern.compile("\\bHOSTNAME=(mobileid0\\d{2})\\b");
 	private static final Pattern MODEM_REV_PATTERN = Pattern.compile("^REV(?:ISION)?\\s+(.+)$", Pattern.CASE_INSENSITIVE);
 	private static final Pattern MODEM_A_REV_PATTERN = Pattern.compile("^A-REV(?:ISION)?\\s+(.+)$", Pattern.CASE_INSENSITIVE);
+	private static final Pattern SSRVSET_QUOTED_TOKEN_PATTERN = Pattern.compile("\"([^\"]*)\"");
 	
 	private byte opMode; // Switch: 1=ER, 2=AR
 	
@@ -160,6 +169,7 @@ public class ATresponder extends Thread {
 			Properties prop = null;
 			if (atclientCfg != null) {
 				log.info("Reading Property file at " + atclientCfg);
+				warnIfConfigWorldReadable(atclientCfg);
 				prop = readPropertiesFile(atclientCfg);
 			} else {
 				log.error("Error reading Property file. No -Dconfig.file found.");
@@ -248,8 +258,15 @@ public class ATresponder extends Thread {
 			}
 			
 			if (prop.getProperty("maintenance.enable").trim().equals("true")) {
-				maintenanceFile = prop.getProperty("maintenance.script.file").trim();
-				log.info("Property maintenance.script.file set to " + maintenanceFile);
+				String configuredMaintenance = prop.getProperty("maintenance.script.file").trim();
+				if (isSafeMaintenanceScript(configuredMaintenance)) {
+					maintenanceFile = configuredMaintenance;
+					log.info("Property maintenance.script.file set to " + maintenanceFile);
+				} else {
+					maintenanceFile = null;
+					log.error("Property maintenance.script.file rejected (must be an existing regular-file absolute path, executable, not a symlink): '"
+							+ configuredMaintenance + "'. Maintenance disabled.");
+				}
 			} else {
 				maintenanceFile = null;
 				log.info("Property maintenance disabled");
@@ -295,6 +312,35 @@ public class ATresponder extends Thread {
 	      }
 	      return prop;
 	   }
+
+	private void warnIfConfigWorldReadable(String path) {
+		try {
+			Path p = Paths.get(path);
+			if (!Files.exists(p)) return;
+			Set<PosixFilePermission> perms = Files.getPosixFilePermissions(p);
+			if (perms.contains(PosixFilePermission.OTHERS_READ) || perms.contains(PosixFilePermission.OTHERS_WRITE)) {
+				log.warn("Config file " + path + " has permissions " + PosixFilePermissions.toString(perms)
+						+ " — world-readable/writable. Recommended: chmod 600.");
+			}
+		} catch (UnsupportedOperationException e) {
+			// POSIX not supported (e.g. Windows) — skip silently.
+		} catch (IOException | SecurityException e) {
+			log.debug("Could not inspect config file permissions: " + e.getMessage());
+		}
+	}
+
+	private static boolean isSafeMaintenanceScript(String path) {
+		if (path == null || path.isEmpty()) return false;
+		try {
+			Path p = Paths.get(path);
+			if (!p.isAbsolute()) return false;
+			if (Files.isSymbolicLink(p)) return false;
+			if (!Files.isRegularFile(p)) return false;
+			return Files.isExecutable(p);
+		} catch (SecurityException e) {
+			return false;
+		}
+	}
 
 	private boolean lookupSerialPort(String portStrInput) throws UnsupportedEncodingException, IOException, InterruptedException {
 		log.info("Start serial port initialization.");
@@ -596,28 +642,34 @@ public class ATresponder extends Thread {
 			
 			// Condition below should only occur if no RX received even after heart beat timer
 			else if ((System.currentTimeMillis() - rspTimerCurrent) >= (heartBeatMillis + 5000)) {
-				
-				// It seems that sometimes we end up in this condition because the HCP's modem crashed
-				// In such a case, it seems to be more reliable to invoke a full reboot of the Pi (and HCP terminal/modem)
-				log.error(serPortStr + " down! Did the modem crash? I'm afraid we have to invoke a REBOOT right now. Bye bye...");
-				rebootAndExit();
-				
-				/*
-				
-				// As an alternative to the rebootAndExit(), the code below may be used.
-				// In this case we will try to re-open the port - though it does not seem to always work as desired.
-				
-				log.error(serPortStr + " down! Trying to find the terminal on a different serial port...");
-				close(true);
-				lookupSerialPort(); // try to find and init the new port
+				log.error(serPortStr + " down! Did the modem crash? Attempting bounded recovery before reboot.");
 
-				// reset all timers
-				rspTimerCurrent = System.currentTimeMillis();
-				heartBeatTimerCurrent = rspTimerCurrent;
+				boolean recovered = false;
+				long backoffMillis = 1000;
+				for (int attempt = 1; attempt <= 3 && !recovered && isAlive; attempt++) {
+					try {
+						log.warn("Serial port recovery attempt " + attempt + "/3 (backoff " + backoffMillis + "ms).");
+						Thread.sleep(backoffMillis);
+						close(true);
+						lookupSerialPort(serPortStr);
+						if (send("AT", 1000, false)) {
+							rspTimerCurrent = System.currentTimeMillis();
+							heartBeatTimerCurrent = rspTimerCurrent;
+							recovered = true;
+							log.info("Serial port recovered on attempt " + attempt + ".");
+						} else {
+							log.warn("Serial port probe after recovery attempt " + attempt + " did not respond to AT.");
+						}
+					} catch (Exception e) {
+						log.warn("Serial port recovery attempt " + attempt + " failed: " + e.getMessage());
+					}
+					backoffMillis *= 2;
+				}
 
-				initAtCmd(); // try to init the AT commands
-				
-				*/
+				if (!recovered) {
+					log.error(serPortStr + " still down after bounded retry. Invoking REBOOT.");
+					rebootAndExit();
+				}
 			}
 			
 			// Listening for incoming notifications (SIM->ME)
@@ -1210,16 +1262,17 @@ public class ATresponder extends Thread {
 		Matcher userDelayMatcher = KEYWORD_USERDELAY.matcher(rsp);
 		if (userDelayMatcher.find()) {
 			try {
-				user_delay_millis = Integer.parseInt(userDelayMatcher.group(1)) * 1000;
-				if (user_delay_millis >= 1000 && user_delay_millis <= 9000) {
+				long parsed = Long.parseLong(userDelayMatcher.group(1));
+				if (parsed >= 1 && parsed <= 9) {
+					user_delay_millis = (int) (parsed * 1000L);
 					setUserDelay(true);
-					log.info("'USERDELAY=" + (user_delay_millis/1000) + "'-keyword detected! The current TerminalResponse will be delayed by " + (user_delay_millis/1000) + " seconds.");
+					log.info("'USERDELAY=" + parsed + "'-keyword detected! The current TerminalResponse will be delayed by " + parsed + " seconds.");
 				} else {
 					log.warn("Ignoring out-of-range USERDELAY value in UI text.");
-				} 
-			} catch (Exception e) {
+				}
+			} catch (NumberFormatException e) {
 				log.warn("Ignoring malformed USERDELAY keyword in UI text.");
-			}				
+			}
 		}
 		
 		Matcher ratMatcher = KEYWORD_RAT.matcher(rsp);
@@ -1232,12 +1285,23 @@ public class ATresponder extends Thread {
 		Matcher hostnameMatcher = KEYWORD_HOSTNAME.matcher(rsp);
 		if (hostnameMatcher.find()) {
 			String value = hostnameMatcher.group(1);
+			log.info("'HOSTNAME=" + value + "'-keyword detected. Will change hostname to " + value);
 			try {
-				new ProcessBuilder("sudo", "/home/mid/setHostName", value).inheritIO().start();
+				Process p = new ProcessBuilder("sudo", "/home/mid/setHostName", value).inheritIO().start();
+				Thread waiter = new Thread(() -> {
+					try {
+						int code = p.waitFor();
+						if (code == 0) log.info("setHostName completed successfully.");
+						else log.warn("setHostName exited with non-zero code " + code + ".");
+					} catch (InterruptedException ie) {
+						Thread.currentThread().interrupt();
+					}
+				}, "setHostName-waiter");
+				waiter.setDaemon(true);
+				waiter.start();
 			} catch (IOException e) {
 				log.error("Failed to execute setHostName command", e);
 			}
-			log.info("'HOSTNAME=" + value + "'-keyword detected. Will change hostname to " + value);
 		}
 		
 		if (rsp.contains("MAINTENANCE") && maintenanceFile != null) {
@@ -1281,7 +1345,9 @@ public class ATresponder extends Thread {
 				}
 			}
 		}, "maintenance-script");
-		maintenanceThread.setDaemon(true);
+		// Non-daemon so a JVM shutdown waits for in-flight maintenance to complete
+		// instead of killing it mid-run, which could leave the device in a partial state.
+		maintenanceThread.setDaemon(false);
 		maintenanceThread.start();
 	}
 
@@ -1599,7 +1665,7 @@ public class ATresponder extends Thread {
 			return new String[0];
 
 		List<String> tokens = new ArrayList<>();
-		Matcher matcher = Pattern.compile("\"([^\"]*)\"").matcher(ssrvsetLine.substring(colonIdx + 1));
+		Matcher matcher = SSRVSET_QUOTED_TOKEN_PATTERN.matcher(ssrvsetLine.substring(colonIdx + 1));
 		while (matcher.find())
 			tokens.add(matcher.group(1));
 		return tokens.toArray(new String[0]);
@@ -1850,12 +1916,14 @@ public class ATresponder extends Thread {
 	private void rebootAndExit() {
 		try {
 			new ProcessBuilder("sudo", "reboot").inheritIO().start();
+			log.info("Exiting program after reboot invocation.");
+			System.exit(0);	// Just in case the reboot doesn't work as expected, the watchdog-reboot would be the fall-back
 		} catch (IOException e) {
-			log.error("Failed to execute reboot command", e);
+			// Do NOT System.exit(0) here. A clean exit would stop the watchdog file updates
+			// and hide the failure. Leaving the process alive lets the external hardware/file
+			// watchdog observe staleness and recover the device.
+			log.error("Failed to execute reboot command. Leaving process alive for watchdog-driven recovery.", e);
 		}
-
-		log.info("Exiting program.");
-		System.exit(0);	// Just in case the reboot doesn't work as expected, the watchdog-reboot would be the fall-back
 	}
 
 	private void close(boolean closePort) {
