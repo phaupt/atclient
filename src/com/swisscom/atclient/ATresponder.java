@@ -1464,7 +1464,24 @@ public class ATresponder extends Thread implements ATCommandSender {
 			return true;
 		}
 		String fullPath = normalizedInput.startsWith("/dev/") ? normalizedInput : ("/dev/" + normalizedInput);
-		return fullPath.equals("/dev/" + systemPortName);
+		String systemPath = "/dev/" + systemPortName;
+		if (fullPath.equals(systemPath)) {
+			return true;
+		}
+		// Follow symlinks (e.g. /dev/simcom_at -> /dev/ttyUSB2) so udev-managed
+		// stable names work with the jSerialComm system-port names.
+		try {
+			Path requested = Paths.get(fullPath);
+			if (Files.exists(requested) && Files.isSymbolicLink(requested)) {
+				Path real = requested.toRealPath();
+				if (real.toString().equals(systemPath)) {
+					return true;
+				}
+			}
+		} catch (IOException e) {
+			log.debug("Symlink resolution for " + fullPath + " failed: " + e.getMessage());
+		}
+		return false;
 	}
 
 	private boolean isStandaloneFinalResultOk(String normalizedLineUpper) {
