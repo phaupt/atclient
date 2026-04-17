@@ -583,9 +583,13 @@ public class ATresponder extends Thread implements ATCommandSender {
 			}
 			captureStartupRadioQualitySnapshot();
 			logStartupModeDiagnostics();
-			
-			// Start listening...
-			send("AT^SSTR?", null); // Check for STK Menu initialization
+
+			// Start listening. PLS8 re-arms the SAT handler with AT^SSTR? ; SIMCom has no
+			// equivalent runtime re-arm (STK was enabled once via AT+STK=1 during
+			// provisioning and stays active across sessions).
+			if (modemDriver instanceof CinterionPLS8Driver) {
+				send("AT^SSTR?", null);
+			}
 			return true;
 		}
 	}
@@ -1087,8 +1091,9 @@ public class ATresponder extends Thread implements ATCommandSender {
 		}
 
 		degradedIdleRadioChecks++;
-		if (!sendDiagnosticBestEffort("AT+CESQ", DEGRADED_DIAGNOSTIC_TIMEOUT_MILLIS))
-			log.warn("RADIOQ: failed to collect +CESQ during degraded idle check " + triggerContext + ".");
+		String degradedSignalCmd = modemDriver.buildExtendedSignalCommand();
+		if (degradedSignalCmd != null && !sendDiagnosticBestEffort(degradedSignalCmd, DEGRADED_DIAGNOSTIC_TIMEOUT_MILLIS))
+			log.warn("RADIOQ: failed to collect " + degradedSignalCmd + " during degraded idle check " + triggerContext + ".");
 
 		log.warn("RADIOT: degraded idle radio state " + triggerContext + " (count="
 				+ degradedIdleRadioChecks + "/" + DEGRADED_IDLE_CHECKS_BEFORE_RECOVERY
@@ -1121,7 +1126,8 @@ public class ATresponder extends Thread implements ATCommandSender {
 		degradedIdleRadioChecks = 0;
 
 		log.warn("RADIOT: re-triggering automatic network selection after repeated degraded idle radio checks " + triggerContext + ".");
-		if (!send("AT+COPS=0", "OK", RADIO_RESELECTION_TIMEOUT_MILLIS, true)) {
+		String recoveryCmd = modemDriver.buildRadioRecoveryCommand();
+		if (!send(recoveryCmd, "OK", RADIO_RESELECTION_TIMEOUT_MILLIS, true)) {
 			log.warn("RADIOT: automatic network reselection attempt failed.");
 			return;
 		}
@@ -1131,8 +1137,9 @@ public class ATresponder extends Thread implements ATCommandSender {
 		sleep(RADIO_RESELECTION_SETTLE_MILLIS);
 		if (refreshIdleRadioStatus("post-reselection"))
 			log.info("RADIOT: post-reselection refresh completed.");
-		if (!sendDiagnosticBestEffort("AT+CESQ", DEGRADED_DIAGNOSTIC_TIMEOUT_MILLIS))
-			log.warn("RADIOQ: failed to collect +CESQ after automatic network reselection.");
+		String postSignalCmd = modemDriver.buildExtendedSignalCommand();
+		if (postSignalCmd != null && !sendDiagnosticBestEffort(postSignalCmd, DEGRADED_DIAGNOSTIC_TIMEOUT_MILLIS))
+			log.warn("RADIOQ: failed to collect " + postSignalCmd + " after automatic network reselection.");
 	}
 
 	private boolean isDegradedIdleRadioState() {
@@ -1564,19 +1571,28 @@ public class ATresponder extends Thread implements ATCommandSender {
 	}
 
 	private void captureStartupRadioQualitySnapshot() {
-		if (send("AT+CESQ")) {
+		String signalCmd = modemDriver.buildExtendedSignalCommand();
+		if (signalCmd == null) {
+			log.debug("RADIOQ: driver " + modemDriver.getVendorName() + " has no extended signal command.");
+			return;
+		}
+		if (send(signalCmd)) {
 			startupRadioqCaptured = true;
 		} else {
-			log.warn("RADIOQ: startup snapshot command failed.");
+			log.warn("RADIOQ: startup snapshot (" + signalCmd + ") failed.");
 		}
 	}
 
 	private void captureDegradedRadioDiagnostics(String reason, boolean includeCellSnapshot) {
 		log.info("FAILCTX: collecting degraded-path diagnostics (" + reason + ")");
-		if (!sendDiagnosticBestEffort("AT+CESQ", DEGRADED_DIAGNOSTIC_TIMEOUT_MILLIS))
-			log.warn("RADIOQ: failed to collect +CESQ during " + reason + ".");
-		if (includeCellSnapshot && !sendDiagnosticBestEffort("AT^SMONI", DEGRADED_DIAGNOSTIC_TIMEOUT_MILLIS))
-			log.warn("CELL: failed to collect ^SMONI during " + reason + ".");
+		String signalCmd = modemDriver.buildExtendedSignalCommand();
+		if (signalCmd != null && !sendDiagnosticBestEffort(signalCmd, DEGRADED_DIAGNOSTIC_TIMEOUT_MILLIS))
+			log.warn("RADIOQ: failed to collect " + signalCmd + " during " + reason + ".");
+		if (includeCellSnapshot) {
+			String cellCmd = modemDriver.buildCellInfoCommand();
+			if (cellCmd != null && !sendDiagnosticBestEffort(cellCmd, DEGRADED_DIAGNOSTIC_TIMEOUT_MILLIS))
+				log.warn("CELL: failed to collect " + cellCmd + " during " + reason + ".");
+		}
 		if (!sendDiagnosticBestEffort("AT+CEER", DEGRADED_DIAGNOSTIC_TIMEOUT_MILLIS))
 			log.warn("FAILCTX: failed to collect +CEER during " + reason + ".");
 	}
@@ -1964,12 +1980,16 @@ public class ATresponder extends Thread implements ATCommandSender {
 			// signal via RSRP/RSRQ instead of legacy RSSI. Accept this when registered
 			// on LTE and capture AT+CESQ for actual signal quality diagnostics.
 			if (csqValue == 99 && startupRegistrationReady && startupNetworkReady && "4G/LTE".equals(startupRatLabel)) {
-				log.info("SIGNAL: CSQ 99 on LTE - accepting as ready (RSSI not populated on LTE). Capturing +CESQ for diagnostics.");
+				String extSignalCmd = modemDriver.buildExtendedSignalCommand();
+				String extTag = (extSignalCmd != null) ? extSignalCmd.replace("AT", "+") : "ext";
+				log.info("SIGNAL: CSQ 99 on LTE - accepting as ready (RSSI not populated on LTE). Capturing "
+						+ (extSignalCmd != null ? extSignalCmd : "(no extended signal command)") + " for diagnostics.");
 				startupSignalReady = true;
 				watchdogList.set(4, "n/a");
 				watchdogList.set(5, "LTE");
-				startupSignalSummary = "99/31 [LTE,+CESQ]";
-				sendDiagnosticBestEffort("AT+CESQ", DEGRADED_DIAGNOSTIC_TIMEOUT_MILLIS);
+				startupSignalSummary = "99/31 [LTE," + extTag + "]";
+				if (extSignalCmd != null)
+					sendDiagnosticBestEffort(extSignalCmd, DEGRADED_DIAGNOSTIC_TIMEOUT_MILLIS);
 				return;
 			}
 			watchdogList.set(4, "n/a");
