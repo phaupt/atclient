@@ -195,4 +195,21 @@ public interface ModemDriver {
 
     /** Routine startup commands issued on every ATClient launch (no STK-mode toggles). */
     void sendStartupCommands(ATCommandSender sender);
+
+    // ---- Serial timing tuning -----------------------------------------------
+
+    /**
+     * Interval in milliseconds between buffered-reader polls in the core's receive loops.
+     * Shorter values reduce STK-response latency at the cost of CPU wake-ups. UART-based
+     * modems (9600 baud) need around 150 ms for reliable framing; USB-CDC modems (virtual
+     * serial over USB bulk transfer) can safely use around 50 ms.
+     */
+    int getSerialPollIntervalMillis();
+
+    /**
+     * Sleep before issuing each AT command to let the modem finish processing the previous
+     * one. Necessary for slow UART-based firmware, typically unnecessary for USB-CDC where
+     * commands are framed atomically by the kernel driver. Return 0 to skip.
+     */
+    int getSerialSendPreSleepMillis();
 }

@@ -672,8 +672,8 @@ public class ATresponder extends Thread implements ATCommandSender {
 		
 		// Start endless loop...
 		while (isAlive) {
-			
-			Thread.sleep(sleepWhile);
+
+			Thread.sleep(fastPollMillis());
 			
 			// Enter this condition if heart beat timer is up
 			if ((System.currentTimeMillis() - heartBeatTimerCurrent) >= heartBeatMillis) {
@@ -1225,7 +1225,9 @@ public class ATresponder extends Thread implements ATCommandSender {
 	public boolean send(String cmd, String expectedRsp, long timeout, boolean sstr) {
 		try {
 	
-			sleep(sleepWhile); // Ensure that there is enough time for the terminal to process previous command.
+			int preSleep = sendPreSleepMillis();
+			if (preSleep > 0)
+				sleep(preSleep); // Only UART-based modems (PLS8) need the pre-send settling delay.
 	
 			log.debug("TX0 >>> " + cmd);
 			printStream.write((cmd + "\r\n").getBytes(StandardCharsets.UTF_8));
@@ -1342,9 +1344,9 @@ public class ATresponder extends Thread implements ATCommandSender {
 						updateWatchdogForCommunicationRx();
 
 					}
-					Thread.sleep(sleepWhile);
-				}	
-				Thread.sleep(sleepWhile);
+					Thread.sleep(fastPollMillis());
+				}
+				Thread.sleep(fastPollMillis());
 			}
 		} catch (IOException e) {
 			log.error("receive() IOException : ", e);
@@ -1789,6 +1791,24 @@ public class ATresponder extends Thread implements ATCommandSender {
 		updateModemIdentityFromLine(trimmed, normalized);
 		if (normalized.startsWith("^SSRVSET:"))
 			updateServiceSetFromLine(trimmed);
+	}
+
+	/**
+	 * Polling interval for the core receive loops. Delegates to the active {@link ModemDriver};
+	 * falls back to the legacy {@code sleepWhile} constant if the driver has not been resolved
+	 * yet (early boot / port-lookup phase, before {@code resolveModemDriver} runs).
+	 */
+	private int fastPollMillis() {
+		return modemDriver != null ? modemDriver.getSerialPollIntervalMillis() : sleepWhile;
+	}
+
+	/**
+	 * Pre-send sleep to let the previous AT command settle on the modem side. Driver-specific:
+	 * 150 ms for UART-based PLS8-E, 0 ms for USB-CDC SIMCom. Callers should skip the sleep
+	 * entirely when this returns 0.
+	 */
+	private int sendPreSleepMillis() {
+		return modemDriver != null ? modemDriver.getSerialSendPreSleepMillis() : sleepWhile;
 	}
 
 	private String buildModemSummary() {

@@ -313,6 +313,12 @@ public final class CinterionPLS8Driver implements ModemDriver {
         sender.send("AT^SSRVSET?");    // usbcomp + srvmap diagnostics
     }
 
+    /** PLS8-E behaviour preserved: keep the conservative 150 ms poll + 150 ms pre-send
+     *  sleep the legacy code shipped with. Changing these would alter timings for
+     *  existing production deployments, so the PLS8 driver stays byte-for-byte compatible. */
+    @Override public int getSerialPollIntervalMillis() { return 150; }
+    @Override public int getSerialSendPreSleepMillis() { return 150; }
+
     // ---- Helpers ------------------------------------------------------------
 
     private static boolean isUcs2HexLike(String s) {

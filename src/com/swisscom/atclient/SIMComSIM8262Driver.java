@@ -370,6 +370,17 @@ public final class SIMComSIM8262Driver implements ModemDriver {
         sender.send("AT+CGDCONT?");  // APN contexts for diagnostics
     }
 
+    /**
+     * SIM8262E-M2 is a USB-CDC virtual serial port on Qualcomm X62: commands are framed
+     * atomically by the kernel driver and the modem responds within tens of ms. 50 ms
+     * polling is responsive without wasting CPU. The 150 ms pre-send sleep the legacy code
+     * needed for 9600 baud UART is unnecessary here. Each AT round-trip can start
+     * immediately, saving roughly 150 ms per command and roughly 1.5 s across a full
+     * Mobile-ID auth cycle (~10 AT commands).
+     */
+    @Override public int getSerialPollIntervalMillis() { return 50; }
+    @Override public int getSerialSendPreSleepMillis() { return 0; }
+
     // ---- Helpers ------------------------------------------------------------
 
     private static String afterColon(String line) {
