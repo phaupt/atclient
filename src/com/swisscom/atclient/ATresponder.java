@@ -1024,12 +1024,17 @@ public class ATresponder extends Thread implements ATCommandSender {
 						} else if (value == modemDriver.getSetUpMenuType()) {
 							log.info("STK037: SET UP MENU");
 							send(modemDriver.buildGetInfoCommand(value));
-							modemDriver.acknowledgeProactive(this, value);
-							// On SIMCom, SET UP MENU re-emission after a completed auth is the
-							// semantic equivalent of PLS8's STK254 "return to main menu".
-							// Fire post-session recovery (RAT re-check, radio refresh).
+							// On SIMCom the applet re-broadcasts SET UP MENU when it returns to
+							// idle after a completed auth. The SIM expects a user selection
+							// (AT+STGR=25,<item_id>) or silence; a plain result-code ack
+							// AT+STGR=25,0 is rejected with ERROR because it is not a
+							// valid SET UP MENU response in this state. Skip the ack when
+							// the driver advertises SET UP MENU as its return-to-main trigger
+							// and let handlePostStkMainMenu drive the post-session recovery.
 							if (modemDriver.getReturnToMainType() == modemDriver.getSetUpMenuType()) {
 								handlePostStkMainMenu();
+							} else {
+								modemDriver.acknowledgeProactive(this, value);
 							}
 						} else {
 							log.warn("Unhandled +STIN cmd " + value + " on SIMCom: '" + rx + "'");
