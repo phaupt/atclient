@@ -125,6 +125,10 @@ public class ATresponder extends Thread implements ATCommandSender {
 
 	private static final Pattern KEYWORD_USERDELAY = Pattern.compile("\\bUSERDELAY=(\\d+)\\b");
 	private static final Pattern KEYWORD_RAT = Pattern.compile("\\bRAT=([A072])\\b");
+	// SIMCom-specific radio-mode keyword. AUTO/LTE/NR/LTE_NR map to AT+CNMP=2/38/71/109 via
+	// the driver's buildRATSelectionCommand. Only evaluated when the active driver is SIMCom;
+	// PLS8 deployments continue to use the legacy RAT= keyword only.
+	private static final Pattern KEYWORD_RADIO = Pattern.compile("\\bRADIO=(AUTO|LTE|NR|LTE_NR)\\b");
 	private static final Pattern KEYWORD_HOSTNAME = Pattern.compile("\\bHOSTNAME=(mobileid0\\d{2})\\b");
 	private static final Pattern MODEM_REV_PATTERN = Pattern.compile("^REV(?:ISION)?\\s+(.+)$", Pattern.CASE_INSENSITIVE);
 	private static final Pattern MODEM_A_REV_PATTERN = Pattern.compile("^A-REV(?:ISION)?\\s+(.+)$", Pattern.CASE_INSENSITIVE);
@@ -1296,6 +1300,10 @@ public class ATresponder extends Thread implements ATCommandSender {
 							updateC5gRegistrationStateFromLine(rx);
 						} else if (rx.toUpperCase().startsWith("+CESQ: ")) {
 							logCesqLine(rx);
+						} else if (rx.toUpperCase().startsWith("+CPSI: ")) {
+							logCpsiLine(rx);
+						} else if (rx.toUpperCase().startsWith("+CNWINFO: ")) {
+							log.info("CELL: " + rx.trim());
 						} else if (rx.toUpperCase().startsWith("^SMONI:")) {
 							log.info("CELL: " + rx.trim());
 						} else if (rx.toUpperCase().startsWith("+CEER:")) {
@@ -1387,6 +1395,16 @@ public class ATresponder extends Thread implements ATCommandSender {
 			newCopsMode = ratMatcher.group(1);
 			setRAT(true);
 			log.info("'RAT=" + newCopsMode + "'-keyword detected.");
+		}
+
+		// SIMCom-only RADIO= keyword. Ignored on PLS8 so legacy deployments are unchanged.
+		if (modemDriver instanceof SIMComSIM8262Driver) {
+			Matcher radioMatcher = KEYWORD_RADIO.matcher(rsp);
+			if (radioMatcher.find()) {
+				newCopsMode = radioMatcher.group(1);
+				setRAT(true);
+				log.info("'RADIO=" + newCopsMode + "'-keyword detected (SIMCom buildRATSelectionCommand will translate to AT+CNMP code).");
+			}
 		}
 		
 		Matcher hostnameMatcher = KEYWORD_HOSTNAME.matcher(rsp);
@@ -1617,6 +1635,47 @@ public class ATresponder extends Thread implements ATCommandSender {
 				+ " rsrp=" + formatCesqRsrp(fields[5]));
 	}
 
+	/**
+	 * Parse and log a +CPSI: serving-cell line (SIMCom-specific).
+	 * LTE format: LTE,<op>,<MCC-MNC>,<TAC>,<CID>,<PCI>,<BAND>,<EARFCN>,<ulbw>,<dlbw>,<RSRP>,<RSRQ>,<RSSI>,<SINR>
+	 * NR5G/NR5G_SA format: NR5G[_SA],<op>,<MCC-MNC>,<TAC>,<CID>,<PCI>,<BAND>,<ARFCN>,<RSRP>,<RSRQ>,<SINR>
+	 * NO SERVICE: the whole line collapses to "NO SERVICE,Online" with no fields.
+	 */
+	private void logCpsiLine(String cpsiLine) {
+		int colonIdx = cpsiLine.indexOf(':');
+		if (colonIdx < 0) {
+			log.info("RADIOQ: " + cpsiLine.trim());
+			return;
+		}
+		String payload = cpsiLine.substring(colonIdx + 1).trim();
+		String[] parts = payload.split(",");
+		String mode = parts.length > 0 ? parts[0].trim().toUpperCase() : "";
+		if (mode.startsWith("NO SERVICE") || parts.length < 10) {
+			log.info("RADIOQ: +CPSI " + payload);
+			return;
+		}
+		String op = parts[1].trim();
+		String plmn = parts[2].trim();
+		String band = parts.length > 6 ? parts[6].trim() : "n/a";
+		String earfcn = parts.length > 7 ? parts[7].trim() : "n/a";
+		if ("LTE".equals(mode) && parts.length >= 14) {
+			log.info("RADIOQ: +CPSI mode=" + mode + " op=" + op + " plmn=" + plmn
+					+ " band=" + band + " earfcn=" + earfcn
+					+ " rsrp=" + parts[10].trim()
+					+ " rsrq=" + parts[11].trim()
+					+ " rssi=" + parts[12].trim()
+					+ " sinr=" + parts[13].trim());
+		} else if (mode.startsWith("NR5G") && parts.length >= 11) {
+			log.info("RADIOQ: +CPSI mode=" + mode + " op=" + op + " plmn=" + plmn
+					+ " band=" + band + " arfcn=" + earfcn
+					+ " rsrp=" + parts[8].trim()
+					+ " rsrq=" + parts[9].trim()
+					+ " sinr=" + parts[10].trim());
+		} else {
+			log.info("RADIOQ: +CPSI " + payload);
+		}
+	}
+
 	private Integer[] parseCesqFields(String cesqLine) {
 		int colonIdx = cesqLine.indexOf(':');
 		if (colonIdx < 0 || colonIdx + 1 >= cesqLine.length())
@@ -1671,6 +1730,12 @@ public class ATresponder extends Thread implements ATCommandSender {
 			return "3G";
 		case 7:
 			return "4G/LTE";
+		case 11:
+			return "5G/NR";
+		case 12:
+			return "5G/NSA";
+		case 13:
+			return "5G/NGEN-DC";
 		default:
 			return "n/a";
 		}
@@ -1932,6 +1997,18 @@ public class ATresponder extends Thread implements ATCommandSender {
 			log.info("RADIOT: E-UTRAN (4G/LTE)");
 			watchdogList.set(3, "4G");
 			break;
+		case 11:
+			log.info("RADIOT: NR5G (5G SA)");
+			watchdogList.set(3, "5G");
+			break;
+		case 12:
+			log.info("RADIOT: EN-DC (5G NSA, LTE+NR dual connectivity)");
+			watchdogList.set(3, "5G/NSA");
+			break;
+		case 13:
+			log.info("RADIOT: NGEN-DC (5G NR with E-UTRA dual connectivity)");
+			watchdogList.set(3, "5G/DC");
+			break;
 		default:
 			break;
 		}
@@ -1959,7 +2036,10 @@ public class ATresponder extends Thread implements ATCommandSender {
 		if (ratValue == null) {
 			return null;
 		}
-		boolean ready = !providerName.isEmpty() && ratValue >= 0 && ratValue <= 7;
+		// Accept 0-7 (legacy through LTE) plus 11/12/13 (NR SA, EN-DC NSA, NGEN-DC).
+		// 8-10 are 3GPP-reserved / modem-vendor-specific and currently unused by Swisscom.
+		boolean ready = !providerName.isEmpty()
+				&& ((ratValue >= 0 && ratValue <= 7) || (ratValue >= 11 && ratValue <= 13));
 		return new ParsedCops(providerName, ratValue, ready);
 	}
 
