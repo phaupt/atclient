@@ -23,9 +23,33 @@ ATClient automates Mobile ID SIM Toolkit user interaction on Raspberry Pi system
 | Modem | [PLS8-E LTE terminal](https://www.hcp.rs/en/products/communications-/hit-u4-lte) |
 | Optional | [RPi Relay Board](https://www.waveshare.com/wiki/RPi_Relay_Board) |
 
-## Supported terminal
+## Supported terminals
 
-ATClient has been tested with Raspberry Pi 4 and a PLS8-E LTE terminal ([HCP HIT U4 LTE](https://www.hcp.rs/en/products/communications-/hit-u4-lte)).
+ATClient supports two modem families through its `ModemDriver` abstraction:
+
+- **Cinterion / Thales PLS8-E** (4G/LTE) on Raspberry Pi 4 — the original platform, production-validated
+- **SIMCom SIM8262E-M2** (5G NSA / NR + 4G/LTE) on Raspberry Pi 5 — new, validated on the Waveshare 5G HAT
+
+The driver is selected via `modem.type` in `atclient.cfg`. Legacy configs without that property default to `cinterion`, so existing PLS8 deployments keep their exact behavior.
+
+| Feature | PLS8-E driver | SIMCom SIM8262E-M2 driver |
+| --- | --- | --- |
+| STK activation | `AT^SSTA=1,1` (Explicit Response mode) | `AT+STK=1`, `AT+STKFMT=0` (decoded mode) |
+| STK URC prefix | `^SSTR:` / `^SSTN:` | `+STIN:` |
+| Proactive-command info | `AT^SSTGI=<cmd>` | `AT+STGI=<cmd>` |
+| Terminal response | `AT^SSTR=<cmd>,<code>[,...]` | `AT+STGR=<cmd>,<arg>` |
+| PIN submission format | UCS-2 hex (e.g. `003100320033003400350036`) | plaintext (e.g. `"123456"`) |
+| Extended signal probe | `AT+CESQ` | `AT+CPSI?` |
+| Serving cell info | `AT^SMONI` | `AT+CNWINFO?` |
+| RAT selection command | `AT+COPS=0,2,00000,<rat>` | `AT+CNMP=<code>` |
+| 5G registration query | not supported | `AT+C5GREG?` |
+| Return-to-main marker | `STK254` (explicit event) | `+STIN:25` re-emit of SET UP MENU |
+
+Log markers (`STK019`, `STK033`, `STK035`, `STK037`) are emitted identically across drivers based on semantic command type, so log-analysis tooling does not need to be modem-aware.
+
+### PLS8-E
+
+Tested with Raspberry Pi 4 and a PLS8-E LTE terminal ([HCP HIT U4 LTE](https://www.hcp.rs/en/products/communications-/hit-u4-lte)).
 
 > [!NOTE]
 > Official Cinterion / Thales technical documentation and Windows drivers are no longer published on the old public Gemalto URLs.
@@ -34,9 +58,13 @@ ATClient has been tested with Raspberry Pi 4 and a PLS8-E LTE terminal ([HCP HIT
 > - [HCP Support](https://www.hcp.rs/en/support/communications)
 > - [HCP Contact](https://www.hcp.rs/en/contact-us-)
 
+### SIMCom SIM8262E-M2
+
+Tested with Raspberry Pi 5 (Debian trixie, kernel 6.12.47, default-jdk / OpenJDK 21) and the [Waveshare SIM8262E-M2 5G HAT](https://www.waveshare.com/wiki/SIM8262E-M2_5G_HAT). See the [SIMCom deployment section](#simcom-sim8262e-m2-5g-hat-deployment-raspberry-pi-5) below for the full bring-up sequence.
+
 ## Quick start
 
-The commands below cover a basic local build and first-run deployment flow.
+The commands below cover a basic local build and first-run deployment flow for the **PLS8-E** modem. If you are deploying on a Raspberry Pi 5 with the **SIMCom SIM8262E-M2 5G HAT**, jump to the [SIMCom deployment section](#simcom-sim8262e-m2-5g-hat-deployment-raspberry-pi-5) — the AT-command, serial-port, STK-activation, and data-plane steps all differ from the PLS8 flow.
 
 ### Clone the repository
 
@@ -259,6 +287,141 @@ This sequence highlights the practical dependency chain:
 2. power/initialize attached hardware
 3. wait for LTE terminal readiness
 4. start Java client with explicit serial port and config paths
+
+## SIMCom SIM8262E-M2 5G HAT deployment (Raspberry Pi 5)
+
+End-to-end bring-up sequence for the Waveshare SIM8262E-M2 5G HAT on a Raspberry Pi 5 with Debian 13 (trixie). Validated on 2026-04-18 with a 10-cycle Mobile-ID SIGNATURE regression.
+
+### Hardware prerequisites
+
+- Raspberry Pi 5 with official 27 W USB-C PSU
+- Waveshare SIM8262E-M2 5G HAT, power switch set to **external**, powered via its own USB-C 5 V / 3 A PSU (the HAT's 1.8 A peak TX draws exceed the Pi's USB budget)
+- 4 SMA antennas connected (the wiki labels ANT3 as the GNSS port; all 4 remain connected regardless)
+- USB-A to USB-A cable from Pi to HAT for the data path
+- 2x20 pin header soldered to the Pi GPIO if you plan to use any GPIO power/reset control (optional: all data goes through USB)
+- DIP switches: top block (D5/D4/TX/RX/D6) all **OFF**; bottom "B" row all **ON** (mandatory for SIM82XX family)
+- Nano-SIM with Mobile-ID or 5G-capable subscription in slot 1 (chip facing up, cut corner first)
+
+### OS and base packages
+
+```bash
+sudo apt update
+sudo apt install -y default-jdk libqmi-utils
+```
+
+### udev rule for stable serial symlinks
+
+Copy the sample and reload udev so the AT port is accessible at `/dev/simcom_at` regardless of the (unstable) `ttyUSBN` numbering:
+
+```bash
+sudo cp 99-sim8262.rules.sample /etc/udev/rules.d/99-sim8262.rules
+sudo udevadm control --reload-rules
+sudo udevadm trigger --subsystem-match=tty
+ls -la /dev/simcom_at /dev/simcom_modem
+```
+
+Verify the interface number matches the one the rule pins (expected `02` for AT, `03` for modem):
+
+```bash
+udevadm info -q property -n /dev/ttyUSB2 | grep ID_USB_INTERFACE_NUM
+```
+
+### Disable ModemManager
+
+ModemManager competes for the QMI control port and can confuse the STK flow. Disable it so the data-plane service owns `/dev/cdc-wdm0` cleanly:
+
+```bash
+sudo systemctl disable --now ModemManager
+```
+
+### Provision STK (one-shot)
+
+Enable SIM Toolkit and decoded output on the module. This requires a modem reboot (`AT+CFUN=1,1`) and only needs to be done once per device:
+
+```bash
+python3 <<'EOF'
+import serial, time
+s = serial.Serial("/dev/simcom_at", 115200, timeout=3)
+s.write(b"AT+STK=1\r\n");     time.sleep(1)
+s.write(b"AT+STKFMT=0\r\n");  time.sleep(1)
+s.write(b"AT+CFUN=1,1\r\n");  time.sleep(1)
+s.close()
+EOF
+sleep 30   # wait for modem to come back up
+```
+
+### Configure ATClient
+
+```bash
+git clone https://github.com/phaupt/atclient.git /home/phaupt/atclient
+cd /home/phaupt/atclient
+git checkout feat/sim8262e-modem-driver   # until merged
+mkdir -p class
+javac -proc:none -d ./class -cp "./lib/*" ./src/com/swisscom/atclient/*.java
+cp atclient.cfg.simcom.sample atclient.cfg
+cp log4j2.xml.sample log4j2.xml
+sudo touch /var/log/watchdog.atclient && sudo chmod 666 /var/log/watchdog.atclient
+```
+
+Review `atclient.cfg` and adjust any site-specific paths (APN, data, maintenance).
+
+### QMI data path (optional: for wwan0 + autossh tunnels)
+
+If the deployment needs an IP data connection over cellular (reverse-tunnel, remote-access), deploy the QMI systemd unit:
+
+```bash
+sudo cp modem-data.service.sample /etc/systemd/system/modem-data.service
+# Review APN value in the unit, then:
+sudo systemctl daemon-reload
+sudo systemctl enable --now modem-data.service
+journalctl -u modem-data -n 20
+```
+
+For the reverse tunnel back to a jumphost, copy `autossh-simcom.service.sample` as `autossh-simcom.service`, adjust `JUMPHOST` / `JUMP_USER` / `REMOTE_PORT`, and enable.
+
+### Deploy ATClient as a systemd service
+
+```bash
+sudo cp atclient.service.sample /etc/systemd/system/atclient.service
+# Edit paths (default -Dserial.port=/dev/simcom_at, WorkingDirectory, log paths).
+sudo systemctl daemon-reload
+sudo systemctl enable --now atclient.service
+journalctl -u atclient -f
+```
+
+Expected startup log lines:
+
+```
+Modem driver selected: SIMCom SIM8262E-M2 (modem.type=simcom)
+REG: CEREG stat=1 (home-registered)
+REG: C5GREG stat=0 (not-registered)       # SA not entitled on most Mobile-ID SIMs
+RADIOT: E-UTRAN (4G/LTE)                  # or RADIOT: EN-DC / NR5G in areas with 5G coverage
+RADIOQ: +CPSI mode=LTE ... rsrq=... rsrp=... rssi=... sinr=...
+Startup readiness confirmed after attempt 1.
+```
+
+### Triggering Mobile-ID auth
+
+From the backend host (not the Pi):
+
+```bash
+ssh mobileid
+cd mobileid-midlab/shell/
+./mobileid-sign.sh -t JSON -d <MSISDN> "Test" en
+```
+
+On the Pi the log should show the full cycle end-to-end:
+
+```
+STK033: DISPLAY TEXT
+UI-TXT: 'Test'
+STK035: GET INPUT
+UI-TXT: 'Authenticate with your Mobile ID PIN'
+STK037: SET UP MENU                       # SIMCom's return-to-main marker
+RADIOT: E-UTRAN (4G/LTE)                  # post-session radio refresh
+```
+
+Backend receives `StatusCode 500 SIGNATURE` on success.
 
 ## Logging and monitoring
 
