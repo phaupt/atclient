@@ -1637,9 +1637,11 @@ public class ATresponder extends Thread implements ATCommandSender {
 
 	/**
 	 * Parse and log a +CPSI: serving-cell line (SIMCom-specific).
-	 * LTE format: LTE,<op>,<MCC-MNC>,<TAC>,<CID>,<PCI>,<BAND>,<EARFCN>,<ulbw>,<dlbw>,<RSRP>,<RSRQ>,<RSSI>,<SINR>
-	 * NR5G/NR5G_SA format: NR5G[_SA],<op>,<MCC-MNC>,<TAC>,<CID>,<PCI>,<BAND>,<ARFCN>,<RSRP>,<RSRQ>,<SINR>
-	 * NO SERVICE: the whole line collapses to "NO SERVICE,Online" with no fields.
+	 * Per SIMCom SIM82xx AT Command Reference, LTE format is:
+	 *   LTE,<op>,<MCC-MNC>,<TAC>,<CID>,<PCI>,<BAND>,<EARFCN>,<DL_BW>,<UL_BW>,<RSRQ>,<RSRP>,<RSSI>,<RSSNR>
+	 * All four signal-quality fields are reported in tenths of dB/dBm.
+	 * NR5G / NR5G_SA format drops the UL_BW field so signal starts at index 8.
+	 * NO SERVICE: the whole line collapses to "NO SERVICE,Online" with no further fields.
 	 */
 	private void logCpsiLine(String cpsiLine) {
 		int colonIdx = cpsiLine.indexOf(':');
@@ -1657,22 +1659,33 @@ public class ATresponder extends Thread implements ATCommandSender {
 		String op = parts[1].trim();
 		String plmn = parts[2].trim();
 		String band = parts.length > 6 ? parts[6].trim() : "n/a";
-		String earfcn = parts.length > 7 ? parts[7].trim() : "n/a";
+		String channel = parts.length > 7 ? parts[7].trim() : "n/a";
 		if ("LTE".equals(mode) && parts.length >= 14) {
 			log.info("RADIOQ: +CPSI mode=" + mode + " op=" + op + " plmn=" + plmn
-					+ " band=" + band + " earfcn=" + earfcn
-					+ " rsrp=" + parts[10].trim()
-					+ " rsrq=" + parts[11].trim()
-					+ " rssi=" + parts[12].trim()
-					+ " sinr=" + parts[13].trim());
+					+ " band=" + band + " earfcn=" + channel
+					+ " rsrq=" + formatCpsiTenths(parts[10], "dB")
+					+ " rsrp=" + formatCpsiTenths(parts[11], "dBm")
+					+ " rssi=" + formatCpsiTenths(parts[12], "dBm")
+					+ " sinr=" + formatCpsiTenths(parts[13], "dB"));
 		} else if (mode.startsWith("NR5G") && parts.length >= 11) {
 			log.info("RADIOQ: +CPSI mode=" + mode + " op=" + op + " plmn=" + plmn
-					+ " band=" + band + " arfcn=" + earfcn
-					+ " rsrp=" + parts[8].trim()
-					+ " rsrq=" + parts[9].trim()
-					+ " sinr=" + parts[10].trim());
+					+ " band=" + band + " arfcn=" + channel
+					+ " rsrq=" + formatCpsiTenths(parts[8], "dB")
+					+ " rsrp=" + formatCpsiTenths(parts[9], "dBm")
+					+ " sinr=" + formatCpsiTenths(parts[10], "dB"));
 		} else {
 			log.info("RADIOQ: +CPSI " + payload);
+		}
+	}
+
+	private String formatCpsiTenths(String raw, String unit) {
+		if (raw == null) return "n/a";
+		try {
+			int v = Integer.parseInt(raw.trim());
+			double scaled = v / 10.0;
+			return String.format(Locale.ROOT, "%.1f %s", scaled, unit);
+		} catch (NumberFormatException e) {
+			return raw.trim();
 		}
 	}
 

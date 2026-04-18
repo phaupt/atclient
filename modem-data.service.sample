@@ -1,0 +1,77 @@
+############################################################################################
+# systemd unit sample: modem-data.service
+############################################################################################
+# Owns the QMI data session on the SIM8262E-M2 5G HAT and keeps wwan0 up.
+# Replaces the legacy wvdial + ppp0 stack used for PLS8-E deployments.
+#
+# Prerequisites on the target device:
+#   - ModemManager is DISABLED: systemctl disable --now ModemManager
+#   - udev rule at /etc/udev/rules.d/99-sim8262.rules pins the SIM8262E-M2
+#     interfaces to stable symlinks:
+#       SUBSYSTEM=="tty", ATTRS{idVendor}=="1e0e", ATTRS{idProduct}=="9001",
+#           ENV{ID_USB_INTERFACE_NUM}=="02", SYMLINK+="simcom_at",
+#           ENV{ID_MM_PORT_IGNORE}="1"
+#       SUBSYSTEM=="tty", ATTRS{idVendor}=="1e0e", ATTRS{idProduct}=="9001",
+#           ENV{ID_USB_INTERFACE_NUM}=="03", SYMLINK+="simcom_modem"
+#   - libqmi-utils installed (provides qmicli).
+#
+# Ownership model: this unit owns /dev/cdc-wdm0 (QMI control) and wwan0 (net);
+# ATClient (atclient.service) only owns /dev/simcom_at. ModemManager must stay off
+# so there is no third-party competition.
+#
+# APN: validated on Swisscom Mobile-ID SIMs as "gprs.swisscom.ch". Adjust per SIM.
+#
+# Deployment:
+#   sudo cp modem-data.service.sample /etc/systemd/system/modem-data.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now modem-data.service
+#
+# This unit was validated interactively on raspi on 2026-04-17: qmicli
+# --wds-start-network with APN gprs.swisscom.ch returned a CGNAT IP
+# (10.26.248.106/30), DNS 193.5.23.8/193.247.204.8, and sustained 49 Mbps
+# download on LTE Band 3.
+############################################################################################
+
+[Unit]
+Description=SIM8262E-M2 QMI Data Session (wwan0)
+Documentation=https://www.freedesktop.org/software/libqmi/libqmi-utils/qmicli.1.html
+After=network-pre.target dev-cdc\x2dwdm0.device
+Requires=dev-cdc\x2dwdm0.device
+Conflicts=ModemManager.service
+
+[Service]
+Type=forking
+Environment=APN=gprs.swisscom.ch
+Environment=QMI_DEVICE=/dev/cdc-wdm0
+Environment=WAN_IF=wwan0
+
+# Put the interface into QMI raw-IP mode once per boot
+ExecStartPre=/bin/sh -c 'echo Y > /sys/class/net/${WAN_IF}/qmi/raw_ip'
+ExecStartPre=/usr/sbin/ip link set ${WAN_IF} up
+
+# Bring the modem online and start the packet-data session
+ExecStartPre=-/usr/bin/qmicli -p -d ${QMI_DEVICE} --dms-set-operating-mode=online
+ExecStart=/usr/bin/qmicli -p -d ${QMI_DEVICE} \
+    --wds-start-network=apn=${APN},ip-type=4 \
+    --client-no-release-cid
+
+# After the session is up, fetch the assigned IP and configure wwan0
+ExecStartPost=/bin/sh -c 'set -e; \
+    SETTINGS=$(/usr/bin/qmicli -p -d ${QMI_DEVICE} --wds-get-current-settings); \
+    IP=$(echo "$SETTINGS" | awk "/IPv4 address:/ {print \\$NF; exit}" | tr -d "\047"); \
+    GW=$(echo "$SETTINGS" | awk "/IPv4 gateway/ {print \\$NF; exit}" | tr -d "\047"); \
+    MASK=$(echo "$SETTINGS" | awk "/IPv4 subnet mask:/ {print \\$NF; exit}" | tr -d "\047"); \
+    PFX=$(python3 -c "import ipaddress,sys; print(ipaddress.IPv4Network(f\"0.0.0.0/$MASK\").prefixlen)"); \
+    /usr/sbin/ip addr replace ${IP}/${PFX} dev ${WAN_IF}; \
+    echo "modem-data: wwan0 ${IP}/${PFX} via ${GW}"'
+
+ExecStop=-/usr/bin/qmicli -p -d ${QMI_DEVICE} --wds-stop-network=disable-autoconnect
+ExecStop=-/usr/sbin/ip link set ${WAN_IF} down
+
+Restart=on-failure
+RestartSec=30
+# Give the modem up to 120s to come up after a reboot or hot-insert.
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target

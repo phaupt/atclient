@@ -1,0 +1,33 @@
+############################################################################################
+# udev rule sample: /etc/udev/rules.d/99-sim8262.rules
+############################################################################################
+# Stable symlinks for the Waveshare SIM8262E-M2 5G HAT. Uses the USB interface number
+# (ID_USB_INTERFACE_NUM) instead of the unstable ttyUSBN index so the symlinks survive
+# USB re-enumeration after AT+CFUN=1,1 or a modem hot-reset.
+#
+# Also excludes the AT port from ModemManager via ID_MM_PORT_IGNORE=1, even if
+# ModemManager happens to be running (best-effort; the canonical setup keeps
+# ModemManager disabled entirely).
+#
+# Deployment:
+#   sudo cp 99-sim8262.rules.sample /etc/udev/rules.d/99-sim8262.rules
+#   sudo udevadm control --reload-rules
+#   sudo udevadm trigger --subsystem-match=tty
+#   ls -la /dev/simcom_at /dev/simcom_modem
+#
+# Verify on the device:
+#   udevadm info -a -n /dev/ttyUSB2 | grep ID_USB_INTERFACE_NUM   # should print 02
+#
+# VID:PID 1e0e:9001 applies to the SIMCom 5G Module (SIM8262E-M2 and sibling variants).
+# If you replace the HAT with a different family, re-verify the IDs with
+# lsusb before trusting this rule.
+############################################################################################
+
+# AT / STK primary port (USB interface #02). Excluded from ModemManager.
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1e0e", ATTRS{idProduct}=="9001", \
+    ENV{ID_USB_INTERFACE_NUM}=="02", SYMLINK+="simcom_at", \
+    ENV{ID_MM_PORT_IGNORE}="1"
+
+# Secondary AT / modem port (USB interface #03) for diagnostics or a second AT channel.
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1e0e", ATTRS{idProduct}=="9001", \
+    ENV{ID_USB_INTERFACE_NUM}=="03", SYMLINK+="simcom_modem"
