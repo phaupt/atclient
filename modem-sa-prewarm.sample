@@ -1,0 +1,83 @@
+#!/usr/bin/env python3
+# /usr/local/sbin/modem-sa-prewarm
+#
+# Boot-time helper for SIMCom 5G SA-only monitoring devices.
+# Paired with modem-sa-prewarm.service (systemd oneshot, RemainAfterExit=yes).
+#
+# Actions:
+#   1. Open /dev/simcom_at exclusively
+#   2. Send AT+CFUN=0 (detach baseband)
+#   3. Sleep 8 s
+#   4. Send AT+CFUN=1 (re-attach baseband; wait for +CPIN: READY / SMS DONE)
+#   5. Sleep 10 s
+#   6. Send AT+CNMP=71 (NR-only)
+#   7. Poll AT+C5GREG? up to 180 s; exit 0 when stat=1 (home-registered)
+#
+# Exits non-zero if AT port cannot be opened or SA attach times out, so systemd
+# marks the unit failed and the operator sees it in `systemctl status`.
+
+import sys, time, serial
+
+AT_PORT = "/dev/simcom_at"
+BAUD = 115200
+ATTACH_TIMEOUT_S = 180
+POLL_INTERVAL_S = 3
+
+def at(ser, cmd, wait_s=1.5):
+    ser.reset_input_buffer()
+    ser.write((cmd + "\r\n").encode())
+    ser.flush()
+    deadline = time.time() + wait_s
+    buf = b""
+    while time.time() < deadline:
+        chunk = ser.read(8192)
+        if chunk:
+            buf += chunk
+    out = buf.decode(errors="replace")
+    print(f"[modem-sa-prewarm] {cmd}")
+    for line in out.strip().splitlines():
+        print(f"                  | {line}")
+    return out
+
+def main():
+    try:
+        ser = serial.Serial(AT_PORT, BAUD, timeout=0.5)
+    except Exception as e:
+        print(f"[modem-sa-prewarm] ERROR: cannot open {AT_PORT}: {e}", file=sys.stderr)
+        return 2
+
+    try:
+        at(ser, "AT")
+        at(ser, "AT+CFUN=0", wait_s=2.0)
+        time.sleep(8)
+        at(ser, "AT+CFUN=1", wait_s=3.0)
+        time.sleep(10)
+        at(ser, "AT+CPIN?", wait_s=1.5)
+        at(ser, "AT+CNMP=71", wait_s=1.5)
+
+        print(f"[modem-sa-prewarm] waiting up to {ATTACH_TIMEOUT_S}s for SA attach...")
+        deadline = time.time() + ATTACH_TIMEOUT_S
+        while time.time() < deadline:
+            out = at(ser, "AT+C5GREG?", wait_s=1.5)
+            # Expect "+C5GREG: <n>,<stat>..." with stat=1 (home) or 5 (roaming)
+            for line in out.splitlines():
+                s = line.strip()
+                if s.startswith("+C5GREG:"):
+                    parts = s.split(":", 1)[1].strip().split(",")
+                    if len(parts) >= 2:
+                        stat = parts[1].strip()
+                        if stat in ("1", "5"):
+                            print(f"[modem-sa-prewarm] SA attach OK (+C5GREG stat={stat})")
+                            at(ser, "AT+CPSI?", wait_s=1.5)
+                            return 0
+            time.sleep(POLL_INTERVAL_S)
+
+        print(f"[modem-sa-prewarm] ERROR: SA attach timed out after {ATTACH_TIMEOUT_S}s", file=sys.stderr)
+        at(ser, "AT+CPSI?", wait_s=1.5)
+        at(ser, "AT+COPS?", wait_s=1.5)
+        return 1
+    finally:
+        ser.close()
+
+if __name__ == "__main__":
+    sys.exit(main())

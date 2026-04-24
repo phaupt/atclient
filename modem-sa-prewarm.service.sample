@@ -1,0 +1,44 @@
+# /etc/systemd/system/modem-sa-prewarm.service
+#
+# Swisscom ATClient: 5G Standalone pre-warm for SIMCom modems
+#
+# One-shot unit that runs ONCE at boot, before atclient.service, and flushes the
+# baseband NAS state so that AT+CNMP=71 can actually trigger an SA attach. This is
+# needed because on SIMCom SIM8262E firmware 22131B05X62M44A-M2, switching
+# AT+CNMP=71 from a live LTE camp does not initiate a clean SA search — a cold
+# AT+CFUN=0 / AT+CFUN=1 cycle is required first.
+#
+# Pairs with atclient.cfg simcom.network.mode=nr_only so that atclient's own
+# startup command is AT+CNMP=71 (no-op by the time atclient starts, because this
+# unit already set it).
+#
+# Type=oneshot + RemainAfterExit=yes means this unit does NOT re-run when
+# atclient.service is restarted — only on Pi boot.
+#
+# DO NOT use this unit on devices that need LTE fallback. AT+CNMP=71 blocks
+# every non-NR RAT.
+
+[Unit]
+Description=ATClient 5G Standalone pre-warm (SIMCom SIM8262E-M2)
+Documentation=file:///home/mid/atclient/README.md
+After=dev-simcom_at.device local-fs.target
+Requires=dev-simcom_at.device
+Before=atclient.service
+ConditionPathExists=/dev/simcom_at
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=root
+WorkingDirectory=/home/mid/atclient
+
+# Script does: AT+CFUN=0 / sleep 8 / AT+CFUN=1 / sleep 10 / AT+CNMP=71
+# Then polls AT+C5GREG? up to 180 s waiting for home-registered on NR.
+# Exits 0 on SA attach, 1 on timeout so systemd marks the unit failed.
+ExecStart=/usr/local/sbin/modem-sa-prewarm
+
+# Generous timeout: worst case is ~200 s (CFUN cycle + 180 s attach wait).
+TimeoutStartSec=240
+
+[Install]
+WantedBy=multi-user.target

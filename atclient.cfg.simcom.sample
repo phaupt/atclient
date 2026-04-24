@@ -46,8 +46,18 @@ simcom.stk.format = decoded
 ############################################################################################
 # Radio Access Technology (SIMCom-specific mode selection)
 ############################################################################################
-# Swisscom switched off 3G on 2026-04-07. Use LTE+NR5G as the primary mode.
-# "lte_only" is a safer fallback if 5G NSA coverage is not yet available at the site.
+# Applied at atclient startup AND on runtime RADIO= keyword:
+#   auto     -> AT+CNMP=2    (let modem choose)
+#   lte_only -> AT+CNMP=38   (LTE only; deterministic for SMS-PP delivery)
+#   nr_only  -> AT+CNMP=71   (5G NR SA only; requires SA coverage + SIM entitlement;
+#                             a SA-only device cannot fall back to LTE — use only
+#                             for devices explicitly monitoring 5G SA)
+#   lte_nr5g -> AT+CNMP=109  (LTE + NR5G auto; Switzerland 2026 default)
+#
+# Swisscom switched off 3G on 2026-04-07. Default is lte_nr5g.
+# For a device dedicated to 5G SA monitoring: set nr_only and pair with a systemd
+# pre-start unit that does AT+CFUN=0/1 + CNMP=71 at boot to flush LTE NAS state
+# (plain CNMP=71 from a live LTE camp does not trigger an SA search on this firmware).
 simcom.network.mode = lte_nr5g
 
 # The legacy cops.mode is PLS8-only and ignored by the SIMCom driver.

@@ -99,6 +99,9 @@ public class ATresponder extends Thread implements ATCommandSender {
 	
 	private String actualCopsMode;
 	private String newCopsMode;
+	private boolean simcomStartupRatForced = false;
+	private String simcomStartupRatKeyword = "A";
+	private String simcomNetworkModeProperty = "";
 	private boolean startupSimReady = false;
 	private boolean startupRegistrationReady = false;
 	private boolean startupNetworkReady = false;
@@ -119,6 +122,7 @@ public class ATresponder extends Thread implements ATCommandSender {
 	private String startupSrvsetApp = "n/a";
 	private String startupSrvsetNmea = "n/a";
 	private String startupSignalSummary = "n/a";
+	private String startupQualitySummary = "n/a";
 	private Integer lastCsqValue = null;
 	private int degradedIdleRadioChecks = 0;
 	private long lastAutomaticRadioRecoveryAtMillis = 0;
@@ -225,6 +229,12 @@ public class ATresponder extends Thread implements ATCommandSender {
 			} else {
 				actualCopsMode = "A";
 				log.warn("Property cops.mode has invalid value '" + configuredCopsMode + "'. Fallback to automatic mode.");
+			}
+
+			simcomNetworkModeProperty = prop.getProperty("simcom.network.mode", "").trim().toLowerCase();
+			if (simcomNetworkModeProperty.length() > 0) {
+				log.info("Property simcom.network.mode set to " + simcomNetworkModeProperty
+						+ " (applies at startup when modem.type=simcom).");
 			}
 			
 			if (prop.getProperty("watchdog.enable").trim().equals("true")) {
@@ -576,14 +586,58 @@ public class ATresponder extends Thread implements ATCommandSender {
 				send(ratCmd, "OK", 60000, true);
 			} else if (actualCopsMode.contentEquals("A")) {
 				// Automatic mode: let the driver choose what "auto" means per modem.
-				String autoCmd = modemDriver.buildRATSelectionCommand("A");
+				// SIMCom-specific: honor simcom.network.mode to force a RAT at startup
+				// (e.g. nr_only for SA-only monitoring devices). Falls back to "A" (auto)
+				// when the property is absent or unknown.
+				String startupKeyword = "A";
+				if (modemDriver instanceof SIMComSIM8262Driver) {
+					switch (simcomNetworkModeProperty) {
+						case "auto":     startupKeyword = "AUTO";   break;
+						case "lte_only": startupKeyword = "LTE";    break;
+						case "nr_only":  startupKeyword = "NR";     break;
+						case "lte_nr5g": startupKeyword = "LTE_NR"; break;
+						default:         startupKeyword = "A";      break;
+					}
+				}
+				if (!"A".equals(startupKeyword) && !"AUTO".equals(startupKeyword)) {
+					simcomStartupRatForced = true;
+					simcomStartupRatKeyword = startupKeyword;
+					log.info("SIMCom startup RAT forced to " + startupKeyword
+							+ " via simcom.network.mode=" + simcomNetworkModeProperty
+							+ " (idle radio recovery will be suppressed).");
+				}
+				String autoCmd = modemDriver.buildRATSelectionCommand(startupKeyword);
 				send(autoCmd, "OK", 60000, true);
 			}
 			
 			if (!waitForStartupReadiness(STARTUP_READINESS_MAX_WAIT_MILLIS, STARTUP_READINESS_POLL_MILLIS)) {
-				log.error("Startup readiness was not reached in time. Triggering controlled shutdown/recovery.");
-				shutdownAndExit("STARTUP NOT READY");
-				return false;
+				// Self-healing for SIMCom + simcom.network.mode=nr_only: SA coverage may flap,
+				// leaving the modem stuck in C5GREG stat=2 (searching). A CFUN=0/1 cycle flushes
+				// NAS state and re-triggers an SA cell search. Try once before escalating to
+				// shutdownAndExit (which would only produce a tight systemd restart loop without
+				// CFUN recovery). Skipped for non-forced RATs — PLS8 and auto/LTE modes handle
+				// readiness recovery via their own paths.
+				if (simcomStartupRatForced && "NR".equals(simcomStartupRatKeyword)) {
+					log.warn("SA startup readiness timed out under simcom.network.mode=nr_only. "
+							+ "Attempting CFUN=0/1 cycle to re-trigger SA attach before shutdown.");
+					resetStartupReadinessFlags();
+					send("AT+CFUN=0", "OK", 10000, false);
+					try { Thread.sleep(8000); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+					send("AT+CFUN=1", "OK", 10000, false);
+					try { Thread.sleep(10000); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+					send("AT+CNMP=71", "OK", 10000, false);
+					if (waitForStartupReadiness(STARTUP_READINESS_MAX_WAIT_MILLIS, STARTUP_READINESS_POLL_MILLIS)) {
+						log.info("SA re-attached after CFUN recovery cycle.");
+					} else {
+						log.error("Startup readiness still not reached after CFUN recovery. Triggering controlled shutdown/recovery.");
+						shutdownAndExit("STARTUP NOT READY");
+						return false;
+					}
+				} else {
+					log.error("Startup readiness was not reached in time. Triggering controlled shutdown/recovery.");
+					shutdownAndExit("STARTUP NOT READY");
+					return false;
+				}
 			}
 			captureStartupRadioQualitySnapshot();
 			logStartupModeDiagnostics();
@@ -610,6 +664,7 @@ public class ATresponder extends Thread implements ATCommandSender {
 		startupProviderName = "n/a";
 		startupRatLabel = "n/a";
 		startupSignalSummary = "n/a";
+		startupQualitySummary = "n/a";
 		lastCsqValue = null;
 	}
 
@@ -1125,6 +1180,11 @@ public class ATresponder extends Thread implements ATCommandSender {
 			return;
 		}
 
+		if (simcomStartupRatForced) {
+			log.info("RADIOT: idle radio recovery skipped because SIMCom startup RAT is forced to " + simcomStartupRatKeyword + ".");
+			return;
+		}
+
 		long now = System.currentTimeMillis();
 		long sinceLastRecovery = now - lastAutomaticRadioRecoveryAtMillis;
 		if (lastAutomaticRadioRecoveryAtMillis > 0 && sinceLastRecovery < AUTOMATIC_RADIO_RECOVERY_COOLDOWN_MILLIS) {
@@ -1592,6 +1652,7 @@ public class ATresponder extends Thread implements ATCommandSender {
 				+ ", provider=" + startupProviderName
 				+ ", rat=" + startupRatLabel
 				+ ", signal=" + startupSignalSummary
+				+ ", quality=" + startupQualitySummary
 				+ ", radioqSnapshot=" + startupRadioqCaptured);
 	}
 
@@ -1644,11 +1705,15 @@ public class ATresponder extends Thread implements ATCommandSender {
 
 	/**
 	 * Parse and log a +CPSI: serving-cell line (SIMCom-specific).
-	 * Per SIMCom SIM82xx AT Command Reference, LTE format is:
-	 *   LTE,<op>,<MCC-MNC>,<TAC>,<CID>,<PCI>,<BAND>,<EARFCN>,<DL_BW>,<UL_BW>,<RSRQ>,<RSRP>,<RSSI>,<RSSNR>
-	 * All four signal-quality fields are reported in tenths of dB/dBm.
-	 * NR5G / NR5G_SA format drops the UL_BW field so signal starts at index 8.
+	 * Per SIMCom SIM82xx AT Command Reference:
+	 *   LTE format:     LTE,<op>,<MCC-MNC>,<TAC>,<CID>,<PCI>,<BAND>,<EARFCN>,<DL_BW>,<UL_BW>,<RSRQ>,<RSRP>,<RSSI>,<RSSNR>
+	 *   NR5G_SA format: NR5G_SA,<op>,<MCC-MNC>,<TAC>,<NR-CID>,<PCI>,<BAND>,<NR-ARFCN>,<RSRP>,<RSRQ>,<SS-SINR>
+	 * All signal-quality fields are reported in tenths of dB/dBm.
+	 * Note the NR order: RSRP first, then RSRQ (opposite of LTE's RSRQ-then-RSRP),
+	 * and the RSSI field is not present on NR.
 	 * NO SERVICE: the whole line collapses to "NO SERVICE,Online" with no further fields.
+	 * For both LTE and NR the parser derives a human-readable quality label and percentage
+	 * from RSRP and appends it to the RADIOQ line and the STARTUP summary.
 	 */
 	private void logCpsiLine(String cpsiLine) {
 		int colonIdx = cpsiLine.indexOf(':');
@@ -1668,18 +1733,26 @@ public class ATresponder extends Thread implements ATCommandSender {
 		String band = parts.length > 6 ? parts[6].trim() : "n/a";
 		String channel = parts.length > 7 ? parts[7].trim() : "n/a";
 		if ("LTE".equals(mode) && parts.length >= 14) {
+			Double rsrpDbl = parseCpsiTenthsToDouble(parts[11]);
+			String qualitySuffix = buildRsrpQualitySuffix(rsrpDbl);
 			log.info("RADIOQ: +CPSI mode=" + mode + " op=" + op + " plmn=" + plmn
 					+ " band=" + band + " earfcn=" + channel
 					+ " rsrq=" + formatCpsiTenths(parts[10], "dB")
 					+ " rsrp=" + formatCpsiTenths(parts[11], "dBm")
 					+ " rssi=" + formatCpsiTenths(parts[12], "dBm")
-					+ " sinr=" + formatCpsiTenths(parts[13], "dB"));
+					+ " sinr=" + formatCpsiTenths(parts[13], "dB")
+					+ qualitySuffix);
+			updateStartupQualitySummary(rsrpDbl);
 		} else if (mode.startsWith("NR5G") && parts.length >= 11) {
+			Double rsrpDbl = parseCpsiTenthsToDouble(parts[8]);
+			String qualitySuffix = buildRsrpQualitySuffix(rsrpDbl);
 			log.info("RADIOQ: +CPSI mode=" + mode + " op=" + op + " plmn=" + plmn
 					+ " band=" + band + " arfcn=" + channel
-					+ " rsrq=" + formatCpsiTenths(parts[8], "dB")
-					+ " rsrp=" + formatCpsiTenths(parts[9], "dBm")
-					+ " sinr=" + formatCpsiTenths(parts[10], "dB"));
+					+ " rsrp=" + formatCpsiTenths(parts[8], "dBm")
+					+ " rsrq=" + formatCpsiTenths(parts[9], "dB")
+					+ " sinr=" + formatCpsiTenths(parts[10], "dB")
+					+ qualitySuffix);
+			updateStartupQualitySummary(rsrpDbl);
 		} else {
 			log.info("RADIOQ: +CPSI " + payload);
 		}
@@ -1694,6 +1767,47 @@ public class ATresponder extends Thread implements ATCommandSender {
 		} catch (NumberFormatException e) {
 			return raw.trim();
 		}
+	}
+
+	private Double parseCpsiTenthsToDouble(String raw) {
+		if (raw == null) return null;
+		try {
+			return Integer.parseInt(raw.trim()) / 10.0;
+		} catch (NumberFormatException e) {
+			return null;
+		}
+	}
+
+	/**
+	 * Map RSRP in dBm to a 0-100% quality score. Linear: -120 dBm = 0%, -80 dBm = 100%.
+	 * These thresholds match typical cellular reception guidelines (better than -80 dBm
+	 * is excellent reception; worse than -120 dBm is unusable).
+	 */
+	private int rsrpToQualityPercent(double rsrpDbm) {
+		double pct = (rsrpDbm + 120.0) / 40.0 * 100.0;
+		if (pct < 0) return 0;
+		if (pct > 100) return 100;
+		return (int) Math.round(pct);
+	}
+
+	private String rsrpToQualityLabel(double rsrpDbm) {
+		if (rsrpDbm >= -80)  return "excellent";
+		if (rsrpDbm >= -90)  return "good";
+		if (rsrpDbm >= -100) return "fair";
+		if (rsrpDbm >= -110) return "poor";
+		return "very poor";
+	}
+
+	private String buildRsrpQualitySuffix(Double rsrpDbm) {
+		if (rsrpDbm == null) return "";
+		return " quality=" + rsrpToQualityLabel(rsrpDbm)
+				+ " (" + rsrpToQualityPercent(rsrpDbm) + "%)";
+	}
+
+	private void updateStartupQualitySummary(Double rsrpDbm) {
+		if (rsrpDbm == null) return;
+		startupQualitySummary = String.format(Locale.ROOT, "RSRP %.1f dBm (%d%%, %s)",
+				rsrpDbm, rsrpToQualityPercent(rsrpDbm), rsrpToQualityLabel(rsrpDbm));
 	}
 
 	private Integer[] parseCesqFields(String cesqLine) {
@@ -1749,13 +1863,13 @@ public class ATresponder extends Thread implements ATCommandSender {
 		case 6:
 			return "3G";
 		case 7:
-			return "4G/LTE";
+			return "4G LTE";
 		case 11:
-			return "5G/NR";
+			return "5G SA";
 		case 12:
-			return "5G/NSA";
+			return "5G NSA";
 		case 13:
-			return "5G/NGEN-DC";
+			return "5G NGEN-DC";
 		default:
 			return "n/a";
 		}
