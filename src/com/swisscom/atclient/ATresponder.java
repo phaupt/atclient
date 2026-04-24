@@ -127,6 +127,31 @@ public class ATresponder extends Thread implements ATCommandSender {
 	private int degradedIdleRadioChecks = 0;
 	private long lastAutomaticRadioRecoveryAtMillis = 0;
 
+	// Serving-cell snapshot captured from the most recent +CPSI line. Used by the
+	// heartbeat summary so every 3-minute radio check can print band / RSRP / RSRQ /
+	// SINR alongside the per-RAT registration state in one consolidated block.
+	private String lastCpsiMode = "n/a";
+	private String lastCpsiBand = "n/a";
+	private String lastCpsiPlmn = "n/a";
+	private Double lastCpsiRsrpDbm = null;
+	private Double lastCpsiRsrqDb = null;
+	private Double lastCpsiSinrDb = null;
+	private long lastCpsiAtMillis = 0;
+
+	// SA-recovery state. Only active when modem.type=simcom + simcom.network.mode=nr_only.
+	// The tier thresholds count consecutive heartbeats where C5GREG is not 1 (home) or
+	// 5 (roaming); cooldowns prevent hammering the network with back-to-back attempts.
+	private boolean simcomSaRecoveryEnabled = true;
+	private int saRecoveryTier1Misses = 1;
+	private int saRecoveryTier2Misses = 2;
+	private int saRecoveryTier3Misses = 3;
+	private long saRecoveryCooldownTier1Ms = 180_000L;
+	private long saRecoveryCooldownTier2Ms = 600_000L;
+	private long saRecoveryCooldownTier3Ms = 1_800_000L;
+	private int saRecoveryConsecutiveMisses = 0;
+	private int lastSaRecoveryTier = 0;
+	private long lastSaRecoveryAtMillis = 0;
+
 	private static final Pattern KEYWORD_USERDELAY = Pattern.compile("\\bUSERDELAY=(\\d+)\\b");
 	private static final Pattern KEYWORD_RAT = Pattern.compile("\\bRAT=([A072])\\b");
 	// SIMCom-specific radio-mode keyword. AUTO/LTE/NR/LTE_NR map to AT+CNMP=2/38/71/109 via
@@ -169,6 +194,17 @@ public class ATresponder extends Thread implements ATCommandSender {
 			return Integer.parseInt(value);
 		} catch (NumberFormatException e) {
 			throw new IllegalStateException("Config property '" + key + "' must be numeric, got: " + value);
+		}
+	}
+
+	/** Returns parsed int property value, or the supplied default when missing or non-numeric. */
+	private static int intPropertyOrDefault(Properties prop, String key, int defaultValue) {
+		String value = prop.getProperty(key);
+		if (value == null || value.trim().isEmpty()) return defaultValue;
+		try {
+			return Integer.parseInt(value.trim());
+		} catch (NumberFormatException e) {
+			return defaultValue;
 		}
 	}
 
@@ -236,6 +272,20 @@ public class ATresponder extends Thread implements ATCommandSender {
 				log.info("Property simcom.network.mode set to " + simcomNetworkModeProperty
 						+ " (applies at startup when modem.type=simcom).");
 			}
+
+			simcomSaRecoveryEnabled = "true".equalsIgnoreCase(prop.getProperty("simcom.sa.recovery.enabled", "true").trim());
+			saRecoveryTier1Misses = Math.max(1, intPropertyOrDefault(prop, "simcom.sa.recovery.tier1.misses", 1));
+			saRecoveryTier2Misses = Math.max(saRecoveryTier1Misses, intPropertyOrDefault(prop, "simcom.sa.recovery.tier2.misses", 2));
+			saRecoveryTier3Misses = Math.max(saRecoveryTier2Misses, intPropertyOrDefault(prop, "simcom.sa.recovery.tier3.misses", 3));
+			saRecoveryCooldownTier1Ms = (long) intPropertyOrDefault(prop, "simcom.sa.recovery.cooldown.tier1.seconds", 180) * 1000L;
+			saRecoveryCooldownTier2Ms = (long) intPropertyOrDefault(prop, "simcom.sa.recovery.cooldown.tier2.seconds", 600) * 1000L;
+			saRecoveryCooldownTier3Ms = (long) intPropertyOrDefault(prop, "simcom.sa.recovery.cooldown.tier3.seconds", 1800) * 1000L;
+			log.info("SA recovery settings: enabled=" + simcomSaRecoveryEnabled
+					+ ", tiers misses=" + saRecoveryTier1Misses + "/" + saRecoveryTier2Misses + "/" + saRecoveryTier3Misses
+					+ ", cooldowns=" + (saRecoveryCooldownTier1Ms / 1000L) + "s/"
+					+ (saRecoveryCooldownTier2Ms / 1000L) + "s/"
+					+ (saRecoveryCooldownTier3Ms / 1000L) + "s"
+					+ " (only active when modem.type=simcom and simcom.network.mode=nr_only).");
 			
 			if (prop.getProperty("watchdog.enable").trim().equals("true")) {
 				watchdogFile = prop.getProperty("watchdog.file").trim();
@@ -1123,12 +1173,183 @@ public class ATresponder extends Thread implements ATCommandSender {
 	private void handlePostStkMainMenu() throws InterruptedException {
 		verifyRAT();
 		refreshIdleRadioStatus("post-STK idle");
+		emitHeartbeatSummary("post-STK");
+		evaluateSaRecovery("post-STK");
 		collectIdleRadioDiagnosticsAndRecoverIfNeeded("after STK254");
 	}
 
 	private void handleHeartbeatIdleRadioHealthCheck() throws InterruptedException {
 		refreshIdleRadioStatus("post-heartbeat idle");
+		emitHeartbeatSummary("post-heartbeat");
+		evaluateSaRecovery("post-heartbeat");
 		collectIdleRadioDiagnosticsAndRecoverIfNeeded("after heartbeat");
+	}
+
+	/**
+	 * Consolidated operator-facing radio summary emitted after every heartbeat radio
+	 * refresh. Prints one block covering per-RAT registration, serving cell (band /
+	 * operator from +CPSI) and a uniform 5-level strength label for CSQ, RSRP, RSRQ
+	 * and SINR so the 3-minute heartbeat reads at a glance, even for readers who are
+	 * not modem experts. Kept alongside the existing RADIOQ / REG / SIGNAL lines —
+	 * this is additive, not a replacement.
+	 */
+	private void emitHeartbeatSummary(String context) {
+		boolean forcedNrOnly = simcomStartupRatForced && "NR".equals(simcomStartupRatKeyword);
+		String servingMode = (lastCpsiMode == null || "n/a".equals(lastCpsiMode)) ? "unknown" : lastCpsiMode;
+		String servingHint = RadioGlossary.cpsiModeHint(lastCpsiMode);
+		String bandPretty = ("n/a".equals(lastCpsiBand) || lastCpsiBand == null) ? "n/a" : RadioGlossary.bandHint(lastCpsiBand);
+		String plmnPretty = ("n/a".equals(lastCpsiPlmn) || lastCpsiPlmn == null)
+				? "n/a"
+				: (lastCpsiPlmn + " - " + RadioGlossary.plmnHint(lastCpsiPlmn));
+
+		log.info("HEARTBEAT: " + context
+				+ " | serving=" + servingMode + " (" + servingHint + ")"
+				+ " | band=" + bandPretty
+				+ " | operator=" + startupProviderName + " | plmn=" + plmnPretty);
+
+		String saLine = formatRatRegistrationLine("5G SA ", lastC5gregStat, null);
+		String nsaLine = formatNsaRegistrationLine(forcedNrOnly);
+		String lteLine = formatRatRegistrationLine("LTE   ", lastCeregStat, forcedNrOnly ? "forced NR-only, LTE search disabled" : null);
+		String twogLine = formatRatRegistrationLine("2G/3G ", lastCregStat, forcedNrOnly ? "forced NR-only, legacy RAT search disabled" : null);
+		log.info("HEARTBEAT:   " + saLine);
+		log.info("HEARTBEAT:   " + nsaLine);
+		log.info("HEARTBEAT:   " + lteLine);
+		log.info("HEARTBEAT:   " + twogLine);
+
+		StringBuilder sig = new StringBuilder("HEARTBEAT: signal");
+		if (lastCpsiRsrpDbm != null)
+			sig.append(" RSRP=").append(String.format(Locale.ROOT, "%.1f dBm", lastCpsiRsrpDbm))
+					.append(" (").append(RadioGlossary.classifyRsrp(lastCpsiRsrpDbm).label()).append(")");
+		if (lastCpsiRsrqDb != null)
+			sig.append(" RSRQ=").append(String.format(Locale.ROOT, "%.1f dB", lastCpsiRsrqDb))
+					.append(" (").append(RadioGlossary.classifyRsrq(lastCpsiRsrqDb).label()).append(")");
+		if (lastCpsiSinrDb != null)
+			sig.append(" SINR=").append(String.format(Locale.ROOT, "%.1f dB", lastCpsiSinrDb))
+					.append(" (").append(RadioGlossary.classifySinr(lastCpsiSinrDb).label()).append(")");
+		if (lastCsqValue != null) {
+			sig.append(" CSQ=").append(lastCsqValue).append("/31")
+					.append(" (").append(RadioGlossary.classifyCsq(lastCsqValue).label()).append(")");
+		}
+		log.info(sig.toString());
+	}
+
+	private String formatRatRegistrationLine(String ratLabel, Integer stat, String extraNote) {
+		StringBuilder sb = new StringBuilder();
+		sb.append(ratLabel).append(": ");
+		if (stat == null) {
+			sb.append("no status reported");
+		} else {
+			sb.append("stat=").append(stat).append(" (").append(RadioGlossary.regStatHint(stat)).append(")");
+		}
+		if (extraNote != null && !extraNote.isEmpty())
+			sb.append(" - ").append(extraNote);
+		return sb.toString();
+	}
+
+	private String formatNsaRegistrationLine(boolean forcedNrOnly) {
+		StringBuilder sb = new StringBuilder("5G NSA: ");
+		if ("NR5G_NSA".equalsIgnoreCase(lastCpsiMode) || "LTE_NR5G".equalsIgnoreCase(lastCpsiMode)) {
+			sb.append("active (").append(RadioGlossary.cpsiModeHint(lastCpsiMode)).append(")");
+		} else if (forcedNrOnly) {
+			sb.append("not-anchored - forced NR-only via CNMP=71, EN-DC disabled");
+		} else {
+			sb.append("not-anchored (no EN-DC dual-connectivity reported)");
+		}
+		return sb.toString();
+	}
+
+	/**
+	 * Tiered 5G SA recovery, only active when modem.type=simcom and simcom.network.mode=nr_only.
+	 * Counts consecutive heartbeats where C5GREG is not 1 (home) or 5 (roaming) and escalates:
+	 *   tier 1 (AT+COPS=0 network reselection) - cheapest, network-side re-attach
+	 *   tier 2 (CFUN 0/1 + CNMP=71) - flushes NAS state and re-forces NR-only
+	 *   tier 3 (AT+CFUN=1,1) - full modem reboot. The serial port disappears briefly;
+	 *                          atclient's listenForRx serial-recovery path picks it up,
+	 *                          and if not, systemd restarts the service.
+	 * Cooldowns prevent hammering the network. The counter is cleared once SA re-attaches.
+	 */
+	private void evaluateSaRecovery(String context) throws InterruptedException {
+		if (!simcomSaRecoveryEnabled) return;
+		if (!(modemDriver instanceof SIMComSIM8262Driver)) return;
+		if (!simcomStartupRatForced || !"NR".equals(simcomStartupRatKeyword)) return;
+
+		boolean saAttached = isRegistered(lastC5gregStat);
+		if (saAttached) {
+			if (saRecoveryConsecutiveMisses > 0) {
+				log.info("SA_RECOVERY: 5G SA re-attached after " + saRecoveryConsecutiveMisses
+						+ " miss(es) (lastTier=" + lastSaRecoveryTier + "). Clearing counters.");
+			}
+			saRecoveryConsecutiveMisses = 0;
+			lastSaRecoveryTier = 0;
+			return;
+		}
+
+		if (rat) {
+			log.info("SA_RECOVERY: skipped - RAT change is pending.");
+			return;
+		}
+
+		saRecoveryConsecutiveMisses++;
+		long now = System.currentTimeMillis();
+		long sinceLast = (lastSaRecoveryAtMillis > 0) ? (now - lastSaRecoveryAtMillis) : Long.MAX_VALUE;
+		String c5gregLabel = (lastC5gregStat == null)
+				? "n/a"
+				: (lastC5gregStat + "/" + RadioGlossary.regStatHint(lastC5gregStat));
+		log.warn("SA_RECOVERY: " + context + " - 5G SA not attached (C5GREG=" + c5gregLabel
+				+ "), miss #" + saRecoveryConsecutiveMisses
+				+ " (lastTier=" + lastSaRecoveryTier + ", sinceLastRecovery="
+				+ (lastSaRecoveryAtMillis == 0 ? "never" : (sinceLast + "ms")) + ").");
+
+		int chosenTier = 0;
+		if (saRecoveryConsecutiveMisses >= saRecoveryTier3Misses && sinceLast >= saRecoveryCooldownTier3Ms) {
+			chosenTier = 3;
+		} else if (saRecoveryConsecutiveMisses >= saRecoveryTier2Misses && sinceLast >= saRecoveryCooldownTier2Ms) {
+			chosenTier = 2;
+		} else if (saRecoveryConsecutiveMisses >= saRecoveryTier1Misses && sinceLast >= saRecoveryCooldownTier1Ms) {
+			chosenTier = 1;
+		} else {
+			log.info("SA_RECOVERY: within cooldown, no action this cycle.");
+			return;
+		}
+
+		lastSaRecoveryAtMillis = now;
+		lastSaRecoveryTier = chosenTier;
+
+		switch (chosenTier) {
+			case 1:
+				log.warn("SA_RECOVERY tier=1: AT+COPS=0 network reselection (soft retry toward 5G SA).");
+				send("AT+COPS=0", "OK", RADIO_RESELECTION_TIMEOUT_MILLIS, true);
+				break;
+			case 2:
+				log.warn("SA_RECOVERY tier=2: CFUN 0/1 cycle + CNMP=71 (RF cold restart + re-force NR-only).");
+				send("AT+CFUN=0", "OK", 10000, false);
+				sleep(8000);
+				send("AT+CFUN=1", "OK", 10000, false);
+				sleep(10000);
+				String nrCmd = modemDriver.buildRATSelectionCommand("NR");
+				send(nrCmd, "OK", 10000, false);
+				break;
+			case 3:
+				log.warn("SA_RECOVERY tier=3: AT+CFUN=1,1 full modem reboot. Serial port will disappear briefly; "
+						+ "the listenForRx serial-recovery path or systemd will re-establish the link.");
+				send("AT+CFUN=1,1", "OK", 5000, false);
+				break;
+			default:
+				break;
+		}
+
+		sleep(RADIO_RESELECTION_SETTLE_MILLIS);
+		if (refreshIdleRadioStatus("post-SA-recovery-tier" + chosenTier)) {
+			if (isRegistered(lastC5gregStat)) {
+				log.info("SA_RECOVERY tier=" + chosenTier + " succeeded: 5G SA attached after recovery.");
+				saRecoveryConsecutiveMisses = 0;
+				lastSaRecoveryTier = 0;
+			} else {
+				log.warn("SA_RECOVERY tier=" + chosenTier + " completed but 5G SA still not attached "
+						+ "(C5GREG=" + (lastC5gregStat == null ? "n/a" : lastC5gregStat.toString())
+						+ "). Cooldown now active; next attempt possible after the configured window.");
+			}
+		}
 	}
 
 	private boolean refreshIdleRadioStatus(String context) throws InterruptedException {
@@ -1624,7 +1845,7 @@ public class ATresponder extends Thread implements ATCommandSender {
 		else
 			lastCregStat = stat;
 		if (previousStat == null || previousStat.intValue() != stat.intValue())
-			log.info("REG: " + registrationType + " stat=" + stat + " (" + decodeRegistrationState(stat) + ")");
+			log.info("REG: " + registrationType + " stat=" + stat + " (" + RadioGlossary.regStatHint(stat) + ")");
 
 		startupRegistrationReady = isRegistrationReady();
 		updateRegistrationSourceLabel(registrationType, stat);
@@ -1640,7 +1861,7 @@ public class ATresponder extends Thread implements ATCommandSender {
 		Integer previousStat = lastC5gregStat;
 		lastC5gregStat = stat;
 		if (previousStat == null || previousStat.intValue() != stat.intValue())
-			log.info("REG: C5GREG stat=" + stat + " (" + decodeRegistrationState(stat) + ")");
+			log.info("REG: C5GREG stat=" + stat + " (" + RadioGlossary.regStatHint(stat) + ")");
 		startupRegistrationReady = isRegistrationReady();
 		updateRegistrationSourceLabel("C5GREG", stat);
 	}
@@ -1742,37 +1963,66 @@ public class ATresponder extends Thread implements ATCommandSender {
 		String[] parts = payload.split(",");
 		String mode = parts.length > 0 ? parts[0].trim().toUpperCase() : "";
 		if (mode.startsWith("NO SERVICE") || parts.length < 10) {
-			log.info("RADIOQ: +CPSI " + payload);
+			lastCpsiMode = mode.isEmpty() ? "n/a" : mode;
+			lastCpsiBand = "n/a";
+			lastCpsiPlmn = "n/a";
+			lastCpsiRsrpDbm = null;
+			lastCpsiRsrqDb = null;
+			lastCpsiSinrDb = null;
+			lastCpsiAtMillis = System.currentTimeMillis();
+			log.info("RADIOQ: +CPSI " + payload + " (" + RadioGlossary.cpsiModeHint(mode) + ")");
 			return;
 		}
 		String op = parts[1].trim();
 		String plmn = parts[2].trim();
 		String band = parts.length > 6 ? parts[6].trim() : "n/a";
 		String channel = parts.length > 7 ? parts[7].trim() : "n/a";
+		String bandPretty = RadioGlossary.bandHint(band);
+		String modeHint = RadioGlossary.cpsiModeHint(mode);
+		String plmnHint = RadioGlossary.plmnHint(plmn);
 		if ("LTE".equals(mode) && parts.length >= 14) {
+			Double rsrqDbl = parseCpsiTenthsToDouble(parts[10]);
 			Double rsrpDbl = parseCpsiTenthsToDouble(parts[11]);
+			Double sinrDbl = parseCpsiTenthsToDouble(parts[13]);
 			String qualitySuffix = buildRsrpQualitySuffix(rsrpDbl);
-			log.info("RADIOQ: +CPSI mode=" + mode + " op=" + op + " plmn=" + plmn
-					+ " band=" + band + " earfcn=" + channel
+			log.info("RADIOQ: +CPSI mode=" + mode + " (" + modeHint + ")"
+					+ " op=" + op + " plmn=" + plmn + " (" + plmnHint + ")"
+					+ " band=" + bandPretty + " earfcn=" + channel
 					+ " rsrq=" + formatCpsiTenths(parts[10], "dB")
 					+ " rsrp=" + formatCpsiTenths(parts[11], "dBm")
 					+ " rssi=" + formatCpsiTenths(parts[12], "dBm")
 					+ " sinr=" + formatCpsiTenths(parts[13], "dB")
 					+ qualitySuffix);
+			recordCpsiSnapshot(mode, band, plmn, rsrpDbl, rsrqDbl, sinrDbl);
 			updateStartupQualitySummary(rsrpDbl);
 		} else if (mode.startsWith("NR5G") && parts.length >= 11) {
 			Double rsrpDbl = parseCpsiTenthsToDouble(parts[8]);
+			Double rsrqDbl = parseCpsiTenthsToDouble(parts[9]);
+			Double sinrDbl = parseCpsiTenthsToDouble(parts[10]);
 			String qualitySuffix = buildRsrpQualitySuffix(rsrpDbl);
-			log.info("RADIOQ: +CPSI mode=" + mode + " op=" + op + " plmn=" + plmn
-					+ " band=" + band + " arfcn=" + channel
+			log.info("RADIOQ: +CPSI mode=" + mode + " (" + modeHint + ")"
+					+ " op=" + op + " plmn=" + plmn + " (" + plmnHint + ")"
+					+ " band=" + bandPretty + " arfcn=" + channel
 					+ " rsrp=" + formatCpsiTenths(parts[8], "dBm")
 					+ " rsrq=" + formatCpsiTenths(parts[9], "dB")
 					+ " sinr=" + formatCpsiTenths(parts[10], "dB")
 					+ qualitySuffix);
+			recordCpsiSnapshot(mode, band, plmn, rsrpDbl, rsrqDbl, sinrDbl);
 			updateStartupQualitySummary(rsrpDbl);
 		} else {
-			log.info("RADIOQ: +CPSI " + payload);
+			log.info("RADIOQ: +CPSI " + payload + " (" + modeHint + ")");
 		}
+	}
+
+	private void recordCpsiSnapshot(String mode, String band, String plmn,
+			Double rsrpDbm, Double rsrqDb, Double sinrDb) {
+		lastCpsiMode = (mode == null || mode.isEmpty()) ? "n/a" : mode;
+		lastCpsiBand = (band == null || band.isEmpty()) ? "n/a" : band;
+		lastCpsiPlmn = (plmn == null || plmn.isEmpty()) ? "n/a" : plmn;
+		lastCpsiRsrpDbm = rsrpDbm;
+		lastCpsiRsrqDb = rsrqDb;
+		lastCpsiSinrDb = sinrDb;
+		lastCpsiAtMillis = System.currentTimeMillis();
 	}
 
 	private String formatCpsiTenths(String raw, String unit) {
@@ -2251,22 +2501,23 @@ public class ATresponder extends Thread implements ATCommandSender {
 			watchdogList.set(4, percent + "%");
 		else
 			watchdogList.set(4, "n/a");
+		String strengthLabel = RadioGlossary.classifyCsq(csqValue).label();
 		if (csqValue <= 9) {
-			log.info("SIGNAL: " + csqValue + "/1-9/31 [+---]");
+			log.info("SIGNAL: " + csqValue + "/1-9/31 [+---] " + strengthLabel);
 			watchdogList.set(5, "+---");
-			startupSignalSummary = csqValue + "/31 [+---]," + percent + "%";
+			startupSignalSummary = csqValue + "/31 [+---]," + percent + "%," + strengthLabel;
 		} else if (csqValue >= 10 && csqValue <= 14) {
-			log.info("SIGNAL: " + csqValue + "/10-14/31 [++--]");
+			log.info("SIGNAL: " + csqValue + "/10-14/31 [++--] " + strengthLabel);
 			watchdogList.set(5, "++--");
-			startupSignalSummary = csqValue + "/31 [++--]," + percent + "%";
+			startupSignalSummary = csqValue + "/31 [++--]," + percent + "%," + strengthLabel;
 		} else if (csqValue >= 15 && csqValue <= 19) {
-			log.info("SIGNAL: " + csqValue + "/15-19/31 [+++-]");
+			log.info("SIGNAL: " + csqValue + "/15-19/31 [+++-] " + strengthLabel);
 			watchdogList.set(5, "+++-");
-			startupSignalSummary = csqValue + "/31 [+++-]," + percent + "%";
+			startupSignalSummary = csqValue + "/31 [+++-]," + percent + "%," + strengthLabel;
 		} else if (csqValue >= 20 && csqValue <= 31) {
-			log.info("SIGNAL: " + csqValue + "/20-31/31 [++++]");
+			log.info("SIGNAL: " + csqValue + "/20-31/31 [++++] " + strengthLabel);
 			watchdogList.set(5, "++++");
-			startupSignalSummary = csqValue + "/31 [++++]," + percent + "%";
+			startupSignalSummary = csqValue + "/31 [++++]," + percent + "%," + strengthLabel;
 		} else {
 			startupSignalSummary = csqValue + "/31 [n/a]," + percent + "%";
 		}

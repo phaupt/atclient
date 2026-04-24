@@ -64,6 +64,25 @@ simcom.network.mode = lte_nr5g
 cops.mode =
 
 ############################################################################################
+# 5G SA Auto-Recovery (SIMCom + simcom.network.mode=nr_only only)
+############################################################################################
+# When pinned to 5G SA, atclient watches C5GREG every heartbeat. On repeated misses it
+# escalates automatically:
+#   tier 1 (misses = 1): AT+COPS=0 (network reselection, soft retry)
+#   tier 2 (misses = 2): CFUN 0/1 cycle + CNMP=71 (RF cold restart)
+#   tier 3 (misses = 3): AT+CFUN=1,1 (full modem reboot; serial port disappears briefly,
+#                         listenForRx serial-recovery or systemd re-establishes the link)
+# Cooldowns prevent hammering the network with back-to-back attempts.
+# Disabled automatically on PLS8 and when simcom.network.mode is not nr_only.
+simcom.sa.recovery.enabled                   = true
+simcom.sa.recovery.tier1.misses              = 1
+simcom.sa.recovery.tier2.misses              = 2
+simcom.sa.recovery.tier3.misses              = 3
+simcom.sa.recovery.cooldown.tier1.seconds    = 180
+simcom.sa.recovery.cooldown.tier2.seconds    = 600
+simcom.sa.recovery.cooldown.tier3.seconds    = 1800
+
+############################################################################################
 # QMI / Data-plane
 ############################################################################################
 # The APN for the SIM's data subscription. For Swisscom Mobile-ID test SIMs:
