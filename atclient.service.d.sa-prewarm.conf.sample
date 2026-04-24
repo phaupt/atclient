@@ -1,0 +1,31 @@
+# /etc/systemd/system/atclient.service.d/sa-prewarm.conf
+#
+# Drop-in for atclient.service on a 5G-SA-only monitoring device.
+# Install when simcom.network.mode=nr_only is set in atclient.cfg.
+#
+# Behaviour:
+#   - At boot, ordered after modem-sa-prewarm.service so the cold-boot CFUN=0/1
+#     cycle + AT+CNMP=71 runs first (required on SIMCom SIM8262E firmware
+#     22131B05X62M44A-M2 — plain CNMP switch from a live LTE camp does not trigger
+#     SA search).
+#   - Deliberately NOT using Wants=modem-sa-prewarm.service. With Wants=, prewarm
+#     would re-run on every atclient restart at runtime and add ~180 s per cycle
+#     while SA is out, cutting atclient availability to ~65 percent during an SA
+#     outage. Runtime SA recovery is handled by atclient itself via its in-code
+#     AT+CFUN=0/1 retry when startup readiness times out.
+#   - Restart=always + short RestartSec so the monitor catches SA as soon as it
+#     returns (atclient's shutdownAndExit exits cleanly, which is not an error
+#     from systemd's POV, so Restart=on-failure would NOT cycle it).
+#
+# Install:
+#   sudo install -m 0644 atclient.service.d.sa-prewarm.conf.sample \
+#     /etc/systemd/system/atclient.service.d/sa-prewarm.conf
+#   sudo systemctl daemon-reload
+#   sudo systemctl restart atclient.service
+
+[Unit]
+After=modem-sa-prewarm.service
+
+[Service]
+Restart=always
+RestartSec=30
