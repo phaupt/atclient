@@ -1134,11 +1134,28 @@ public class ATresponder extends Thread implements ATCommandSender {
 	private boolean refreshIdleRadioStatus(String context) throws InterruptedException {
 		boolean cregOk = send("AT+CREG?");
 		boolean ceregOk = send("AT+CEREG?");
+		// On 5G SA the UE is attached via C5GREG only (CREG/CEREG both report 0), so include
+		// C5GREG in the heartbeat probe when the driver supports it. Without this, the
+		// heartbeat would incorrectly report "no registration" for SA-pinned devices.
+		boolean c5gregOk = true;
+		if (modemDriver.supports5GRegistration()) {
+			c5gregOk = send(modemDriver.build5GRegistrationQuery());
+		}
 		boolean copsOk = send("AT+COPS?");
 		boolean csqOk = send("AT+CSQ");
-		if ((!cregOk && !ceregOk) || !copsOk || !csqOk) {
-			log.warn("RADIOT: " + context + " refresh incomplete. CMDOK[CREG/CEREG/COPS/CSQ]="
-					+ cregOk + "/" + ceregOk + "/" + copsOk + "/" + csqOk + ".");
+		// Also emit an extended-signal snapshot (AT+CPSI? on SIMCom) on every heartbeat, not
+		// only on degraded-idle path. This gives every Mobile-ID auth attempt a nearby RSRP/
+		// RSRQ/SINR stamp in the log for direct signal-vs-outcome correlation at marginal SA
+		// coverage. logCpsiLine also populates startupQualitySummary / RADIOQ quality suffix.
+		boolean extSignalOk = true;
+		String extSignalCmd = modemDriver.buildExtendedSignalCommand();
+		if (extSignalCmd != null) {
+			extSignalOk = send(extSignalCmd);
+		}
+		boolean anyRegOk = cregOk || ceregOk || c5gregOk;
+		if (!anyRegOk || !copsOk || !csqOk) {
+			log.warn("RADIOT: " + context + " refresh incomplete. CMDOK[CREG/CEREG/C5GREG/COPS/CSQ/EXTSIG]="
+					+ cregOk + "/" + ceregOk + "/" + c5gregOk + "/" + copsOk + "/" + csqOk + "/" + extSignalOk + ".");
 			return false;
 		}
 		return true;
