@@ -1,113 +1,55 @@
 ############################################################################################
-# ATClient configuration sample — SIMCom SIM8262E-M2 5G HAT on Raspberry Pi 5
+# ATClient drop in config for a SIMCom SIM8262E-M2 5G HAT on Raspberry Pi 5
 ############################################################################################
-# Copy to /home/mid/atclient/atclient.cfg on the target device and adapt as needed.
-# Validated against Debian 13 trixie, kernel 6.12.47, SIMCom firmware 22131B05X62M44A-M2.
+# This is a ready to use SIMCom variant of atclient.cfg.sample. Copy to
+# /home/mid/atclient/atclient.cfg and adjust per device. Validated on Debian 13 trixie,
+# kernel 6.12.47, SIMCom firmware 22131B05X62M44A-M2.
+#
+# See atclient.cfg.sample for the full option list and inline documentation. This file
+# only lists the values that differ from the generic sample.
 
-############################################################################################
-# JVM Arguments
-############################################################################################
-# -Dconfig.file=/home/mid/atclient/atclient.cfg
-# -Dlog.file=/var/log/atclient.log
-# -Dlog4j.configurationFile=/home/mid/atclient/log4j2.xml
-# -Dserial.port=/dev/simcom_at   <-- stable udev symlink, see 99-sim8262.rules
-
-############################################################################################
-# Modem Driver
-############################################################################################
-# Explicit selection recommended for first rollout (no auto-detection uncertainty).
 modem.type = simcom
 
-############################################################################################
-# Serial Port Configuration
-############################################################################################
-# Use the stable udev symlink. Don't hard-code /dev/ttyUSB2 — USB re-enumeration after
-# CFUN=1,1 can renumber the devices.
-port.name.linux = SimTech
-
-port.baudrate = 115200
-port.databits = 8
-port.stopbits = 1
-port.parity   = 0
-
-# Longer timeout than PLS8 because SIMCom occasionally responds after ~3s under traffic.
+# Stable udev symlink for the AT port (see 99-sim8262.rules). Do not hard code
+# /dev/ttyUSB2; USB re enumeration after AT+CFUN=1,1 can renumber devices.
+port.name.linux   = SimTech
+port.name.windows = SimTech
+port.baudrate     = 115200
+port.databits     = 8
+port.stopbits     = 1
+port.parity       = 0
 port.communication.timeout = 5000
 
-# Heartbeat kept at 3 min (same as PLS8 production).
 atclient.atcommand.heartbeat = 180000
 
-############################################################################################
-# STK / SIM Toolkit
-############################################################################################
-# Format to enable and decoded mode. Leave as-is; decoded means AT+STGR responses
-# work with plain-text PIN submissions (AT+STGR=23,"<pin>").
-simcom.stk.format = decoded
-
-############################################################################################
-# Radio Access Technology (SIMCom-specific mode selection)
-############################################################################################
-# Applied at atclient startup AND on runtime RADIO= keyword:
-#   auto     -> AT+CNMP=2    (let modem choose)
-#   lte_only -> AT+CNMP=38   (LTE only; deterministic for SMS-PP delivery)
-#   nr_only  -> AT+CNMP=71   (5G NR SA only; requires SA coverage + SIM entitlement;
-#                             a SA-only device cannot fall back to LTE — use only
-#                             for devices explicitly monitoring 5G SA)
-#   lte_nr5g -> AT+CNMP=109  (LTE + NR5G auto; Switzerland 2026 default)
-#
-# Swisscom switched off 3G on 2026-04-07. Default is lte_nr5g.
-# For a device dedicated to 5G SA monitoring: set nr_only and pair with a systemd
-# pre-start unit that does AT+CFUN=0/1 + CNMP=71 at boot to flush LTE NAS state
-# (plain CNMP=71 from a live LTE camp does not trigger an SA search on this firmware).
+# Default to LTE plus NR5G. Switch to nr_only for a device dedicated to 5G SA monitoring.
 simcom.network.mode = lte_nr5g
 
-# The legacy cops.mode is PLS8-only and ignored by the SIMCom driver.
+# Left blank on SIMCom. cops.mode is PLS8 only and ignored by the SIMCom driver.
 cops.mode =
 
-############################################################################################
-# 5G SA Auto-Recovery (SIMCom + simcom.network.mode=nr_only only)
-############################################################################################
-# When pinned to 5G SA, atclient watches C5GREG every heartbeat. On repeated misses it
-# escalates automatically:
-#   tier 1 (misses = 1): AT+COPS=0 (network reselection, soft retry)
-#   tier 2 (misses = 2): CFUN 0/1 cycle + CNMP=71 (RF cold restart)
-#   tier 3 (misses = 3): AT+CFUN=1,1 (full modem reboot; serial port disappears briefly,
-#                         listenForRx serial-recovery or systemd re-establishes the link)
-# Cooldowns prevent hammering the network with back-to-back attempts.
-# Disabled automatically on PLS8 and when simcom.network.mode is not nr_only.
-simcom.sa.recovery.enabled                   = true
-simcom.sa.recovery.tier1.misses              = 1
-simcom.sa.recovery.tier2.misses              = 2
-simcom.sa.recovery.tier3.misses              = 3
-simcom.sa.recovery.cooldown.tier1.seconds    = 180
-simcom.sa.recovery.cooldown.tier2.seconds    = 600
-simcom.sa.recovery.cooldown.tier3.seconds    = 1800
+# 5G SA auto recovery. Only takes effect when simcom.network.mode = nr_only.
+simcom.sa.recovery.enabled                = true
+simcom.sa.recovery.tier1.misses           = 1
+simcom.sa.recovery.tier2.misses           = 2
+simcom.sa.recovery.tier3.misses           = 3
+simcom.sa.recovery.cooldown.tier1.seconds = 180
+simcom.sa.recovery.cooldown.tier2.seconds = 600
+simcom.sa.recovery.cooldown.tier3.seconds = 1800
 
-############################################################################################
-# QMI / Data-plane
-############################################################################################
-# The APN for the SIM's data subscription. For Swisscom Mobile-ID test SIMs:
-simcom.data.apn = gprs.swisscom.ch
+simcom.stk.format = decoded
+simcom.data.apn   = gprs.swisscom.ch
 
-############################################################################################
-# Watchdog
-############################################################################################
-watchdog.enable = true
-watchdog.file   = /var/log/watchdog.atclient
-watchdog.mode   = activity
-
-# SIMCom +STIN events observed during Mobile-ID auth: 21 (DISPLAY TEXT), 23 (GET INPUT),
-# 25 (SET UP MENU, also used as post-session return-to-idle marker).
-# +STIN:13 (SEND MESSAGE) is NOT emitted by the Mobile-ID applet on SIMCom — the plan's
-# STK019 equivalent health signal does not exist here. Use the auth-flow markers instead.
-watchdog.activity.events = 21,23,25
-
+# Watchdog events match the +STIN codes that Mobile ID emits on SIMCom:
+# 21 DISPLAY TEXT, 23 GET INPUT, 25 SET UP MENU (post session return to idle marker).
+# +STIN:13 (SEND MESSAGE) is not emitted by the Mobile ID applet on SIMCom.
+watchdog.enable                 = true
+watchdog.file                   = /var/log/watchdog.atclient
+watchdog.mode                   = activity
+watchdog.activity.events        = 21,23,25
 watchdog.activity.startup.grace = 300000
 
-############################################################################################
-# Maintenance
-############################################################################################
-# Separate systemd service owns wwan0 + autossh on SIMCom. The maintenance script for
-# PLS8 (wvdial + autossh) does not apply here. Leave disabled until modem-data.service
-# and autossh.service are in place.
+# Maintenance script is not used on SIMCom; modem-data.service and autossh.service
+# own the data path and reverse tunnel.
 maintenance.enable      = false
 maintenance.script.file = /home/mid/atclient/maintenance.sh

@@ -1,162 +1,138 @@
 ############################################################################################
-# JVM Arguments
+# ATClient configuration sample
 ############################################################################################
-# Some argument may be set via system properties:
-
-# -Dconfig.file=/home/pi/atclient/atclient.cfg 
-#      -> location of the ATClient configuration file
-
-# -Dlog.file=/home/pi/atclient/atclient.log
-#      -> location of the ATClient log file
-
-# -Dlog4j.configurationFile=/home/pi/atclient/log4j2.xml
-#      -> location of the Log4j2 configuration file
-
-# -Dserial.port=/dev/ttyACM1 
-#      -> force a specific serial port (optional)
-
-# -DproxySet=true -DproxyHost=my-host -DproxyPort=8080
-#      -> proxy server configuration (optional)
+# Copy this file to atclient.cfg and edit the values for your deployment.
+# Two modem families are supported:
+#   SIMCom SIM8262E-M2   5G, Raspberry Pi 5 (current default)
+#   Cinterion PLS8-E     4G LTE, Raspberry Pi 4 (legacy HCP HIT U4)
+# Properties that apply to only one modem family are tagged [SIMCom] or [PLS8].
 
 ############################################################################################
-# Serial Port Configuration
+# JVM arguments (passed on the java command line, not in this file)
 ############################################################################################
-# default port name of the PLS8-E LTE wireless terminal (HIT U4)
-# required for auto detection
-port.name.windows = Gemalto M2M ALSx PLSx LTE USB serial Port
-port.name.linux   = LTE Modem
+# -Dconfig.file=/home/mid/atclient/atclient.cfg             location of this config
+# -Dlog.file=/var/log/atclient.log                          application log file
+# -Dlog4j.configurationFile=/home/mid/atclient/log4j2.xml   log4j config file
+# -Dserial.port=/dev/simcom_at                              force a specific port (optional)
 
-# USB port parameters
-port.baudrate = 9600
+############################################################################################
+# Modem driver
+############################################################################################
+# Which modem family atclient should talk to.
+#   simcom      SIMCom SIM8262E-M2 5G HAT
+#   cinterion   Cinterion / Thales PLS8-E 4G LTE terminal
+#   auto        detect from the USB port description at startup
+modem.type = simcom
+
+############################################################################################
+# Serial port
+############################################################################################
+# Substring matched against the USB product description for automatic detection.
+#   SimTech     for SIMCom SIM8262E-M2 (5G HAT)
+#   LTE Modem   for Cinterion PLS8-E (HIT U4)
+port.name.linux   = SimTech
+port.name.windows = SimTech
+
+# USB serial port parameters.
+#   port.baudrate   115200 for SIMCom USB CDC, 9600 for Cinterion PLS8 UART
+#   port.databits   always 8
+#   port.stopbits   always 1
+#   port.parity     0 means none
+port.baudrate = 115200
 port.databits = 8
 port.stopbits = 1
 port.parity   = 0
 
-# default timeout until AT response received from the terminal
+# AT response timeout in milliseconds.
 port.communication.timeout = 5000
 
-# send AT test command every x milliseconds of inactivity.
+# Idle heartbeat interval in milliseconds. Every interval atclient probes registration,
+# signal quality and serving cell, then emits a consolidated HEARTBEAT log block.
+# 180000 (3 minutes) is the recommended production value.
 atclient.atcommand.heartbeat = 180000
 
 ############################################################################################
-# Radio Access Technology
+# Radio access technology
 ############################################################################################
-# Force the mobile terminal to select and register a specific network
-# <empty> = Automatic mode, default
-#       0 = GSM (2G)
-#       2 = UTRAN (3G)
-#       7 = E-UTRAN (4G/LTE)
-# invalid non-empty values fall back to automatic mode
-cops.mode = 
+# [SIMCom] Network mode preference, mapped to AT+CNMP=<code>.
+#   auto       any RAT, modem chooses (CNMP=2)
+#   lte_only   LTE only (CNMP=38)
+#   nr_only    5G NR standalone only (CNMP=71). Requires SA coverage and SIM entitlement.
+#   lte_nr5g   LTE with NR5G preferred via EN-DC (CNMP=109). Swisscom 2026 default.
+simcom.network.mode = lte_nr5g
+
+# [PLS8] Force a specific RAT via AT+COPS. Empty means automatic.
+#   empty     automatic, modem chooses
+#   0         GSM (2G)
+#   2         UTRAN (3G). Swisscom switched off 3G on 2026-04-07.
+#   7         E-UTRAN (4G LTE)
+# Ignored when modem.type = simcom.
+cops.mode =
 
 ############################################################################################
-# Watchdog [optional]
+# [SIMCom] 5G SA auto recovery
 ############################################################################################
-# If enabled, ATClient writes/refreshes a watchdog file.
-# Important: ATClient only updates the file; Linux watchdog daemon decides when stale
-# file age should trigger recovery action (for example reboot).
-# Refer to https://linux.die.net/man/5/watchdog.conf
-#
-# Operational intent:
-# - communication mode checks low-level AT/RX liveness.
-# - activity mode checks higher-level Mobile ID/SIM Toolkit activity.
+# Active only when modem.type = simcom AND simcom.network.mode = nr_only.
+# atclient watches the 5G registration state C5GREG on every heartbeat and, on repeated
+# misses, escalates recovery through three tiers:
+#   tier 1   AT+COPS=0 network reselection, soft retry
+#   tier 2   CFUN 0/1 cycle plus CNMP=71 re-assert, RF cold restart
+#   tier 3   AT+CFUN=1,1 full modem reboot, last resort
+# Cooldowns per tier prevent back to back attempts.
+simcom.sa.recovery.enabled                = true
+simcom.sa.recovery.tier1.misses           = 1
+simcom.sa.recovery.tier2.misses           = 2
+simcom.sa.recovery.tier3.misses           = 3
+simcom.sa.recovery.cooldown.tier1.seconds = 180
+simcom.sa.recovery.cooldown.tier2.seconds = 600
+simcom.sa.recovery.cooldown.tier3.seconds = 1800
+
+############################################################################################
+# [SIMCom] SIM Toolkit format
+############################################################################################
+# STK response format negotiated during provisioning.
+#   decoded   AT+STKFMT=0, recommended. PIN is submitted as plain text in double quotes.
+#   pdu       AT+STKFMT=1, not supported by this driver.
+simcom.stk.format = decoded
+
+############################################################################################
+# [SIMCom] Data plane APN
+############################################################################################
+# APN for the SIM data subscription. Consumed by the separate modem-data.service (QMI);
+# atclient itself does not dial data. Leave empty on devices that do not need the data path.
+#   gprs.swisscom.ch   Swisscom Mobile ID test SIMs
+simcom.data.apn = gprs.swisscom.ch
+
+############################################################################################
+# Watchdog (optional)
+############################################################################################
+# When enabled, atclient refreshes a file that an external watchdog daemon checks for
+# freshness. See /etc/watchdog.conf for the daemon side.
 #
 # watchdog.mode:
-#   communication (default): refresh file on incoming AT RX traffic (legacy behavior)
-#   activity              : refresh only on meaningful STK activity events
+#   communication   refresh on any incoming AT response. Low level liveness.
+#   activity        refresh only on STK events. Higher level Mobile ID liveness.
 #
-# STK event semantics in this project:
-# The modem reports STK via ^SSTR / ^SSTN notifications; ATClient logs these as STKxxx markers.
-#   19  = SEND MESSAGE  (STK019)  <-- strongest recommended production health signal
-#   33  = DISPLAY TEXT  (STK033)  (UI/context marker)
-#   35  = GET INPUT     (STK035)  (UI/context marker)
-#   37  = SET UP MENU   (STK037)  (lifecycle marker)
-#   254 = Applet returns to main menu (STK254) (lifecycle marker)
+# watchdog.activity.events: comma separated STK event codes that count as activity.
+#   [SIMCom]  Mobile ID emits +STIN: 21 (DISPLAY TEXT), 23 (GET INPUT),
+#             25 (SET UP MENU, post session return to idle marker).
+#   [PLS8]    Mobile ID emits ^SSTR / ^SSTN types 19 (SEND MESSAGE, strongest health
+#             signal), 33 (DISPLAY TEXT), 35 (GET INPUT), 37 (SET UP MENU),
+#             254 (applet back to main menu).
 #
-# watchdog.activity.events:
-#   comma-separated STK event allowlist used only in watchdog.mode=activity
-#   default/fallback is: 19,33,35,37,254
-#   recommended production focus: 19
-#
-# watchdog.activity.startup.grace:
-#   startup grace window in milliseconds (ms) for activity mode.
-#   During this time, communication RX can still refresh the watchdog file to reduce
-#   early reboot-loop risk while modem/SIM is still initializing.
-#   0 = disabled
-#
-# Linux watchdog integration hint (separate from ATClient config):
-#   Recommended production target state uses one productive watchdog file only:
-#     /var/log/watchdog.atclient
-#   Legacy paths for older setups (not recommended as parallel production model):
-#     /home/mid/atclient/watchdog.atclient
-#     /var/log/watchdog-keywordcheck.atclient
-#   Example /etc/watchdog.conf:
-#     file = /var/log/watchdog.atclient
-#     change = 900    # conservative production starting point (15 minutes, seconds)
-#
-# Operational commands:
-#   sudo systemctl status watchdog
-#   sudo systemctl stop watchdog
-#   sudo systemctl start watchdog
-#   stat /var/log/watchdog.atclient
-#
-# Sample defaults below follow recommended production baseline for activity semantics,
-# but watchdog remains disabled by default for safe local/manual usage.
-#
-watchdog.enable = false
-watchdog.file   = /var/log/watchdog.atclient
-watchdog.mode   = activity
-watchdog.activity.events = 19
+# watchdog.activity.startup.grace: milliseconds after boot during which ordinary AT RX
+#   also refreshes the watchdog, so a slow initial SA attach does not trigger an early
+#   reboot. 0 disables the grace window.
+watchdog.enable                 = false
+watchdog.file                   = /var/log/watchdog.atclient
+watchdog.mode                   = activity
+watchdog.activity.events        = 21,23,25
 watchdog.activity.startup.grace = 300000
 
 ############################################################################################
-# Maintenance Mode [optional]
+# Maintenance (optional)
 ############################################################################################
-# If enabled, ATClient will look for the keyword 'MAINTENANCE' in the Mobile ID message
-# and execute the maintenance shell script as specified below. See example script.
+# If enabled, atclient executes the maintenance script when a Mobile ID message contains
+# the keyword MAINTENANCE. Leave disabled unless the script is deployed on the device.
 maintenance.enable      = false
 maintenance.script.file = /home/mid/atclient/maintenance.sh
-
-############################################################################################
-# Modem Driver [optional]
-############################################################################################
-# Controls which modem-family driver handles STK proactive commands, signal probes and
-# network-mode selection. Default keeps the historical Cinterion/Thales PLS8-E behavior.
-#
-#   cinterion : Cinterion/Thales PLS8-E HIT U4 (legacy default, uses AT^SSTA + ^SSTR/^SSTN URCs)
-#   simcom    : SIMCom SIM8262E-M2 5G HAT (uses AT+STK=1 + +STIN URCs)
-#   auto      : detect from ATI / port name (falls back to cinterion if uncertain)
-#
-modem.type = cinterion
-
-############################################################################################
-# SIMCom-specific Configuration [only relevant when modem.type=simcom]
-############################################################################################
-# Auto-detect hint matching the USB-serial product description for the SIM8262E-M2 module.
-port.name.linux.simcom = SimTech
-
-# SIMCom modules run at 115200 baud by default (PLS8 is 9600).
-port.baudrate.simcom = 115200
-
-# STK format requested by the driver at provisioning time.
-#   decoded : AT+STKFMT=0 (recommended; text fields still come UCS-2 hex encoded on wire)
-#   pdu     : AT+STKFMT=1 (not supported by this driver; left for future experimentation)
-simcom.stk.format = decoded
-
-# Network-mode preference used by the driver's buildRATSelectionCommand for SIMCom.
-# Only applies to the RADIO= keyword flow; the cops.mode setting above is PLS8-only.
-#   auto     : AT+CNMP=2     (all RATs auto)
-#   lte_only : AT+CNMP=38    (LTE only)
-#   nr_only  : AT+CNMP=71    (5G NR only; needs SA coverage and SIM entitlement)
-#   lte_nr5g : AT+CNMP=109   (LTE + NR5G; recommended for Switzerland 2026)
-simcom.network.mode = lte_nr5g
-
-# APN used by the QMI data-plane service (modem-data.service). Must match the SIM.
-# Left empty here because the PLS8 legacy path does not use this property.
-simcom.data.apn =
-
-# Watchdog activity events suggested for SIMCom; during Mobile-ID auth the modem
-# emits +STIN:21, +STIN:23, +STIN:25 (the plan's STK019 SEND MESSAGE marker
-# equivalent is not fired by the Mobile-ID applet on SIMCom — see tmp/PHASE0-GATE-RESULT.md).
-# Uncomment to override watchdog.activity.events above when running on SIMCom hardware.
-# watchdog.activity.events = 21,23,25
