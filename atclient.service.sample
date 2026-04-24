@@ -1,34 +1,30 @@
 ############################################################################################
 # systemd unit sample: atclient.service
 ############################################################################################
-# Runs the ATClient Java application as a managed service on a Raspberry Pi device.
-# Works for both PLS8-E and SIMCom SIM8262E-M2 deployments; the modem family is chosen
-# through the modem.type property in atclient.cfg.
+# Runs the ATClient Java application as a managed service on a Raspberry Pi 5 with the
+# SIMCom SIM8262E-M2 5G HAT.
 #
 # Prerequisites:
 #   - Java 17+ available (tested with default-jdk = OpenJDK 21 on Debian trixie).
 #   - Source tree deployed at /home/mid/atclient with class/ lib/ atclient.cfg log4j2.xml.
-#   - atclient.cfg configured. For SIMCom, see atclient.cfg.simcom.sample; for PLS8, see
-#     atclient.cfg.sample. modem.type selects the right driver.
-#   - For SIMCom deployments, the stable serial symlink /dev/simcom_at must exist
-#     (install 99-sim8262.rules.sample into /etc/udev/rules.d/). For PLS8, the default
-#     auto-detection or /dev/ttyACM1 style override in atclient.cfg applies.
-#   - For SIMCom data-plane, modem-data.service and autossh-simcom.service should be
-#     enabled BEFORE atclient.service so the wwan0 session is up by the time ATClient
-#     starts its watchdog.
+#   - atclient.cfg configured. See atclient.cfg.sample for the full option list.
+#   - The stable serial symlink /dev/simcom_at must exist
+#     (install 99-sim8262.rules.sample into /etc/udev/rules.d/).
+#   - For the optional QMI data plane, modem-data.service and autossh-simcom.service should
+#     be enabled BEFORE atclient.service so wwan0 is up by the time ATClient starts its
+#     watchdog.
 #
 # Deployment:
 #   sudo cp atclient.service.sample /etc/systemd/system/atclient.service
-#   # Edit the -Dserial.port value if you need PLS8 (/dev/ttyACM1) instead of SIMCom.
 #   sudo systemctl daemon-reload
 #   sudo systemctl enable --now atclient.service
 #   journalctl -u atclient -f
 #
 # Operational notes:
-#   - User=root is required for STK-triggered keywords like HOSTNAME / MAINTENANCE /
-#     REBOOT which invoke sudo-owned helper scripts.
+#   - User=root is required for STK triggered keywords like HOSTNAME / MAINTENANCE /
+#     REBOOT which invoke sudo owned helper scripts.
 #   - Restart=on-failure lets systemd relaunch after unexpected exits (serial port loss,
-#     startup-readiness timeouts, etc). shutdownAndExit returns a non-zero status so
+#     startup readiness timeouts, etc). shutdownAndExit returns a non-zero status so
 #     restart kicks in.
 #   - The watchdog.atclient file path in atclient.cfg should match what /etc/watchdog.conf
 #     polls so kernel watchdog reboots fire if ATClient stops refreshing it.
@@ -38,16 +34,13 @@
 Description=Swisscom ATClient (Mobile-ID SIM Toolkit responder)
 Documentation=https://github.com/phaupt/atclient
 After=network-online.target modem-data.service
-Wants=network-online.target
-# On PLS8 deployments modem-data.service does not exist, so make the dependency optional.
-# systemd will still start ATClient if modem-data is absent.
+Wants=network-online.target modem-data.service
 
 [Service]
 Type=simple
 User=root
 WorkingDirectory=/home/mid/atclient
 
-# -Dserial.port: for SIMCom use /dev/simcom_at ; for PLS8-E use /dev/ttyACM1
 ExecStart=/usr/bin/java \
     -Dconfig.file=/home/mid/atclient/atclient.cfg \
     -Dlog.file=/var/log/atclient.log \

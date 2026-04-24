@@ -53,10 +53,10 @@ public class ATresponder extends Thread implements ATCommandSender {
 	private final Object maintenanceLock = new Object();
 	private volatile boolean maintenanceInFlight = false;
 
-	// Modem abstraction. Resolved from config property `modem.type` in run() after
-	// property load. Defaults to CinterionPLS8Driver so existing PLS8-E deployments
-	// behave identically to the legacy inline code paths.
-	private ModemDriver modemDriver = new CinterionPLS8Driver();
+	// Modem abstraction. This branch ships only the SIMCom SIM8262E-M2 driver; the
+	// abstraction is kept so future modem families can be added without rewiring
+	// the core, but every call site assumes SIMCom today.
+	private ModemDriver modemDriver = new SIMComSIM8262Driver();
 
 	/**
 	 * Heart beat to detect serial port disconnection in milliseconds
@@ -97,10 +97,11 @@ public class ATresponder extends Thread implements ATCommandSender {
 	private static final long RADIO_RESELECTION_TIMEOUT_MILLIS = 60000;
 	private static final long RADIO_RESELECTION_SETTLE_MILLIS = 2000;
 	
-	private String actualCopsMode;
-	private String newCopsMode;
+	// Requested RAT change via RADIO= keyword. Applied by verifyRAT() on the next
+	// post STK idle refresh.
+	private String newRadioMode;
 	private boolean simcomStartupRatForced = false;
-	private String simcomStartupRatKeyword = "A";
+	private String simcomStartupRatKeyword = "AUTO";
 	private String simcomNetworkModeProperty = "";
 	private boolean startupSimReady = false;
 	private boolean startupRegistrationReady = false;
@@ -113,14 +114,6 @@ public class ATresponder extends Thread implements ATCommandSender {
 	private String startupProviderName = "n/a";
 	private String startupRatLabel = "n/a";
 	private boolean startupRadioqCaptured = false;
-	private String startupModemVendor = "n/a";
-	private String startupModemModel = "n/a";
-	private String startupModemRevision = "n/a";
-	private String startupModemARevision = "n/a";
-	private String startupSrvsetUsbcomp = "n/a";
-	private String startupSrvsetMdm = "n/a";
-	private String startupSrvsetApp = "n/a";
-	private String startupSrvsetNmea = "n/a";
 	private String startupSignalSummary = "n/a";
 	private String startupQualitySummary = "n/a";
 	private Integer lastCsqValue = null;
@@ -153,15 +146,10 @@ public class ATresponder extends Thread implements ATCommandSender {
 	private long lastSaRecoveryAtMillis = 0;
 
 	private static final Pattern KEYWORD_USERDELAY = Pattern.compile("\\bUSERDELAY=(\\d+)\\b");
-	private static final Pattern KEYWORD_RAT = Pattern.compile("\\bRAT=([A072])\\b");
-	// SIMCom-specific radio-mode keyword. AUTO/LTE/NR/LTE_NR map to AT+CNMP=2/38/71/109 via
-	// the driver's buildRATSelectionCommand. Only evaluated when the active driver is SIMCom;
-	// PLS8 deployments continue to use the legacy RAT= keyword only.
+	// Radio access technology keyword. AUTO / LTE / NR / LTE_NR map to AT+CNMP=2/38/71/109
+	// via the SIMCom driver's buildRATSelectionCommand.
 	private static final Pattern KEYWORD_RADIO = Pattern.compile("\\bRADIO=(AUTO|LTE|NR|LTE_NR)\\b");
 	private static final Pattern KEYWORD_HOSTNAME = Pattern.compile("\\bHOSTNAME=(mobileid0\\d{2})\\b");
-	private static final Pattern MODEM_REV_PATTERN = Pattern.compile("^REV(?:ISION)?\\s+(.+)$", Pattern.CASE_INSENSITIVE);
-	private static final Pattern MODEM_A_REV_PATTERN = Pattern.compile("^A-REV(?:ISION)?\\s+(.+)$", Pattern.CASE_INSENSITIVE);
-	private static final Pattern SSRVSET_QUOTED_TOKEN_PATTERN = Pattern.compile("\"([^\"]*)\"");
 	
 	private byte opMode; // Switch: 1=ER, 2=AR
 	
@@ -249,28 +237,11 @@ public class ATresponder extends Thread implements ATCommandSender {
 			heartBeatMillis = requireIntProperty(prop, "atclient.atcommand.heartbeat");
 			log.info("Property atclient.atcommand.heartbeat set to " + heartBeatMillis);
 
-			modemDriver = resolveModemDriver(prop);
-			log.info("Modem driver selected: " + modemDriver.getVendorName()
-					+ " " + modemDriver.getModemFamilyLabel()
-					+ " (modem.type=" + prop.getProperty("modem.type", "cinterion").trim() + ")");
-
-			String configuredCopsMode = prop.getProperty("cops.mode", "").trim().toUpperCase();
-			if (configuredCopsMode.length() == 0) {
-				actualCopsMode = "A";
-				log.info("Property cops.mode set to automatic");
-			} else if (configuredCopsMode.contentEquals("A") || configuredCopsMode.contentEquals("0") || configuredCopsMode.contentEquals("2")
-					|| configuredCopsMode.contentEquals("7")) {
-				actualCopsMode = configuredCopsMode;
-				log.info("Property cops.mode set to " + actualCopsMode);
-			} else {
-				actualCopsMode = "A";
-				log.warn("Property cops.mode has invalid value '" + configuredCopsMode + "'. Fallback to automatic mode.");
-			}
+			log.info("Modem driver: " + modemDriver.getVendorName() + " " + modemDriver.getModemFamilyLabel());
 
 			simcomNetworkModeProperty = prop.getProperty("simcom.network.mode", "").trim().toLowerCase();
 			if (simcomNetworkModeProperty.length() > 0) {
-				log.info("Property simcom.network.mode set to " + simcomNetworkModeProperty
-						+ " (applies at startup when modem.type=simcom).");
+				log.info("Property simcom.network.mode set to " + simcomNetworkModeProperty + " (applied at startup).");
 			}
 
 			simcomSaRecoveryEnabled = "true".equalsIgnoreCase(prop.getProperty("simcom.sa.recovery.enabled", "true").trim());
@@ -285,7 +256,7 @@ public class ATresponder extends Thread implements ATCommandSender {
 					+ ", cooldowns=" + (saRecoveryCooldownTier1Ms / 1000L) + "s/"
 					+ (saRecoveryCooldownTier2Ms / 1000L) + "s/"
 					+ (saRecoveryCooldownTier3Ms / 1000L) + "s"
-					+ " (only active when modem.type=simcom and simcom.network.mode=nr_only).");
+					+ " (only active when simcom.network.mode=nr_only).");
 			
 			if (prop.getProperty("watchdog.enable").trim().equals("true")) {
 				watchdogFile = prop.getProperty("watchdog.file").trim();
@@ -387,24 +358,6 @@ public class ATresponder extends Thread implements ATCommandSender {
 	      }
 	      return prop;
 	   }
-
-	/**
-	 * Select the {@link ModemDriver} implementation based on the {@code modem.type}
-	 * config property. Unknown / missing values default to the historical
-	 * {@link CinterionPLS8Driver} so legacy PLS8-E deployments are unaffected.
-	 */
-	private ModemDriver resolveModemDriver(Properties prop) {
-		String type = prop.getProperty("modem.type", "cinterion").trim().toLowerCase();
-		switch (type) {
-			case "simcom":
-				return new SIMComSIM8262Driver();
-			case "cinterion":
-			case "auto":
-			case "":
-			default:
-				return new CinterionPLS8Driver();
-		}
-	}
 
 	private void warnIfConfigWorldReadable(String path) {
 		try {
@@ -553,39 +506,9 @@ public class ATresponder extends Thread implements ATCommandSender {
 	}
 
 	private boolean initAtCmd() throws InterruptedException {
-		
-		if (opMode == 1) {	
-			log.info("Switch to Explicit Response (ER) and enable modem usage");
-			send("AT^SSTA=1,1"); // enable Explicit Response (ER) Mode with alphabet type UCS2
-			
-			send("ATI1"); // display product identification information
-			
-			send("AT^SCFG?"); // Extended Configuration Settings: read command returns a list of all supported parameters and their current values.
-			
-			send("AT^SSRVSET?"); // list possible settings for the Service Interface Configuration
-			send("AT^SSRVSET=\"current\""); // check currently active settings
-			
-			// Set 1: MDM=ASC0,MUX0 | APP=USB1,MUX1 | NMEA=USB2,MUX2 | RSA=USB3,MUX3
-			// Set 2: MDM=USB0,MUX0 | APP=USB1,MUX1 | NMEA=USB2,MUX2 | RSA=USB3,MUX3
-			// Set 3: MDM=ASC0,MUX0 | APP=NONE,MUX1 | NMEA=NONE,MUX2 | RSA=NONE,MUX3
-			// ASC0 = UART (async serial interface)
-			// MDM = Modem, APP = Application
-			send("AT^SSRVSET=\"actSrvSet\",2"); // set service set number 2 (USB only; enables modem usage). activated after next UE restart only.
-			
-			shutdownAndExit(null);
-			return false; // exit
-		} else if (opMode == 2) {
-			log.info("Switch to Automatic Response (AR) and reset AT command settings to factory default values");
-			send("AT^SSTA=0"); // enable Automatic Response (AR) Mode
-			
-			send("AT&F[0]"); // reset AT Command Settings to Factory Default Values
-			
-			shutdownAndExit(null);
-			return false; // exit
-		} else {
-			
+		{
 			// CONFIGURATION
-			
+
 			if (!send("AT+CPIN?")) { // Check if SIM is correctly inserted and SIM PIN is ready
 				log.error("Startup initialization failed: no response for AT+CPIN?.");
 				return false;
@@ -603,70 +526,41 @@ public class ATresponder extends Thread implements ATCommandSender {
 			send("AT+CNMI=1,1"); // Activate the display of a URC on every received SMS
 			
 			send("AT+CMGD=0,4"); // delete all stored short messages
-			
-			//send("AT^SCFG?"); // Extended Configuration Settings: read command returns a list of all supported parameters and their current values.
-			//send("AT^SSRVSET=\"current\""); // check currently active settings			
-			
-			//send("AT+CGMI"); // Module manufacturers
-			//send("AT+CGMM"); // Module model			
-			//send("AT+CGSN"); // Module serial number / IMEI			
-			
-			send("AT+CIMI"); // IMSI
-			send("AT+CPIN?"); // SIM Card status
-			send("AT+CREG?"); // Network registration
-			send("AT+CEREG?"); // EPS/LTE registration
-			send("ATI1"); // Product identity for conservative startup diagnostics
-			// Driver-specific introspection (PLS8: AT^SSTR?/AT^SSRVSET?, SIMCom: AT+CNMP?/AT+CGDCONT?).
-			// No STK-mode toggles and no commands that alter radio state.
+
+			send("AT+CIMI");   // IMSI
+			send("AT+CPIN?");  // SIM Card status
+			send("AT+CREG?");  // 2G/3G registration
+			send("AT+CEREG?"); // LTE (EPS) registration
+			send("ATI1");      // Product identity for startup diagnostics
+			// Read only driver introspection (AT+CNMP?, AT+CGDCONT?). No STK mode toggles.
 			modemDriver.sendStartupCommands(this);
-			
-			//send("AT^SMONI"); // supplies information of the serving cell
-			//send("ATI1"); // display product identification information
-			//send("AT^SCFG=\"SAT/URC\",\"1\""); // enable modem logging
-			//send("AT+CEER"); // returns an extended error report (of previous error)
-			//send("AT+CEER=0"); // reset the extended error report to initial value
-			
-			//send("AT&W"); // Store AT Command Settings to User Defined Profile
-			
-			if (!actualCopsMode.contentEquals("A") && actualCopsMode.length() == 1) {
-				// Force a specific RAT. On PLS8 the driver emits AT+COPS=0,2,00000,<rat>;
-				// on SIMCom it emits AT+CNMP=<code>. Both are routed through the driver
-				// so the rat/mode code semantics stay appropriate per modem family.
-				String ratCmd = modemDriver.buildRATSelectionCommand(actualCopsMode);
-				send(ratCmd, "OK", 60000, true);
-			} else if (actualCopsMode.contentEquals("A")) {
-				// Automatic mode: let the driver choose what "auto" means per modem.
-				// SIMCom-specific: honor simcom.network.mode to force a RAT at startup
-				// (e.g. nr_only for SA-only monitoring devices). Falls back to "A" (auto)
-				// when the property is absent or unknown.
-				String startupKeyword = "A";
-				if (modemDriver instanceof SIMComSIM8262Driver) {
-					switch (simcomNetworkModeProperty) {
-						case "auto":     startupKeyword = "AUTO";   break;
-						case "lte_only": startupKeyword = "LTE";    break;
-						case "nr_only":  startupKeyword = "NR";     break;
-						case "lte_nr5g": startupKeyword = "LTE_NR"; break;
-						default:         startupKeyword = "A";      break;
-					}
-				}
-				if (!"A".equals(startupKeyword) && !"AUTO".equals(startupKeyword)) {
-					simcomStartupRatForced = true;
-					simcomStartupRatKeyword = startupKeyword;
-					log.info("SIMCom startup RAT forced to " + startupKeyword
-							+ " via simcom.network.mode=" + simcomNetworkModeProperty
-							+ " (idle radio recovery will be suppressed).");
-				}
-				String autoCmd = modemDriver.buildRATSelectionCommand(startupKeyword);
-				send(autoCmd, "OK", 60000, true);
+
+			String startupKeyword;
+			switch (simcomNetworkModeProperty) {
+				case "auto":     startupKeyword = "AUTO";   break;
+				case "lte_only": startupKeyword = "LTE";    break;
+				case "nr_only":  startupKeyword = "NR";     break;
+				case "lte_nr5g": startupKeyword = "LTE_NR"; break;
+				case "":         startupKeyword = "AUTO";   break;
+				default:
+					log.warn("Property simcom.network.mode has unknown value '" + simcomNetworkModeProperty + "'. Falling back to AUTO.");
+					startupKeyword = "AUTO";
+					break;
 			}
-			
+			if (!"AUTO".equals(startupKeyword)) {
+				simcomStartupRatForced = true;
+				simcomStartupRatKeyword = startupKeyword;
+				log.info("Startup RAT forced to " + startupKeyword + " via simcom.network.mode=" + simcomNetworkModeProperty
+						+ " (idle radio recovery is suppressed; the tiered SA recovery in the heartbeat path handles 5G SA attach).");
+			}
+			String startupRatCmd = modemDriver.buildRATSelectionCommand(startupKeyword);
+			send(startupRatCmd, "OK", 60000, true);
+
 			if (!waitForStartupReadiness(STARTUP_READINESS_MAX_WAIT_MILLIS, STARTUP_READINESS_POLL_MILLIS)) {
-				// Self-healing for SIMCom + simcom.network.mode=nr_only: SA coverage may flap,
-				// leaving the modem stuck in C5GREG stat=2 (searching). A CFUN=0/1 cycle flushes
-				// NAS state and re-triggers an SA cell search. Try once before escalating to
-				// shutdownAndExit (which would only produce a tight systemd restart loop without
-				// CFUN recovery). Skipped for non-forced RATs — PLS8 and auto/LTE modes handle
-				// readiness recovery via their own paths.
+				// Self healing for simcom.network.mode=nr_only: SA coverage may flap, leaving
+				// the modem stuck in C5GREG stat=2 (searching). A CFUN=0/1 cycle flushes NAS
+				// state and retriggers an SA cell search. Try once before escalating to
+				// shutdownAndExit (which would produce a tight systemd restart loop otherwise).
 				if (simcomStartupRatForced && "NR".equals(simcomStartupRatKeyword)) {
 					log.warn("SA startup readiness timed out under simcom.network.mode=nr_only. "
 							+ "Attempting CFUN=0/1 cycle to re-trigger SA attach before shutdown.");
@@ -691,13 +585,6 @@ public class ATresponder extends Thread implements ATCommandSender {
 			}
 			captureStartupRadioQualitySnapshot();
 			logStartupModeDiagnostics();
-
-			// Start listening. PLS8 re-arms the SAT handler with AT^SSTR? ; SIMCom has no
-			// equivalent runtime re-arm (STK was enabled once via AT+STK=1 during
-			// provisioning and stays active across sessions).
-			if (modemDriver instanceof CinterionPLS8Driver) {
-				send("AT^SSTR?", null);
-			}
 			return true;
 		}
 	}
@@ -770,9 +657,8 @@ public class ATresponder extends Thread implements ATCommandSender {
 		boolean heartbeatAckPending = false;
 		boolean heartbeatRadioHealthCheckDue = false;
 		
-		String code, rx;
-		int value = 0;
-		boolean ackCmdRequired = false;
+		String rx;
+		int value;
 		int consecutiveRxFailures = 0;
 		
 		// Start endless loop...
@@ -857,209 +743,10 @@ public class ATresponder extends Thread implements ATCommandSender {
 							send("AT+CMGR=" + smsIndex); // read the SMS data
 							send("AT+CMGD=0,4"); // delete all stored short messages after reading
 						}
-					} else if (rx.toUpperCase().startsWith("^SSTR: ")) {
-						ParsedSstr parsedSstr = parseSstrLine(rx);
-						if (parsedSstr == null) {
-							log.warn("Ignoring malformed ^SSTR line '" + rx + "'.");
-							continue;
-						}
-						value = parsedSstr.commandType;
-						updateWatchdogForStkEvent(value);
-
-						// ^SSTR: 2,?? | ^SSTR: 3,?? | ^SSTR: 4,??
-						// ^SSTR: <state>,<cmdType>
-						// <state>: 0=RESET, 1=OFF, 2=IDLE, 3=PAC, 4=WAIT
-						// <cmdType>: only valid in case of <state> is PAC or WAIT
-						ackCmdRequired = parsedSstr.ackRequired;
-						
-						// Check Proactive Command Type
-						switch (value) {
-						case 19: // ^SSTR: 3,19
-							if (ackCmdRequired) {
-								// SEND MESSAGE
-								log.info("STK019: SEND MESSAGE");
-								send("at^sstgi=" + value); // GetInfos
-								send("at^sstr=" + value + ",0"); // Confirm
-							}
-							ackCmdRequired = false;
-							break;
-						case 32: // ^SSTR: 3,32
-							if (ackCmdRequired) {
-								// PLAY TONE
-								log.info("STK032: PLAY TONE");
-								send("at^sstgi=" + value); // GetInfos
-								send("at^sstr=" + value + ",0"); // Confirm
-							}
-							ackCmdRequired = false;
-							break;
-						case 33: // ^SSTR: 3,33
-							if (ackCmdRequired) {
-								// DISPLAY TEXT
-								log.info("STK033: DISPLAY TEXT");
-								send("at^sstgi=" + value); // GetInfos
-								getMeTextAscii(rx); // may set the flag such as CANCEL
-								code = "0"; // OK
-								if (cancel) {
-									setCancel(false); // reset flag
-									code = "16"; // Proactive SIM session terminated by user
-								} else if (stk_timeout) {
-									setStkTimeout(false); // reset flag
-									code = "18"; // No response from user
-								}
-								
-								if (user_delay) {
-									sleep(user_delay_millis);
-									setUserDelay(false); // reset flag
-								}
-								
-								send("at^sstr=" + value + "," + code); // Confirm
-							}
-							ackCmdRequired = false;
-							break;
-						case 35: // ^SSTR: 3,35
-							if (ackCmdRequired) {
-								// GET INPUT
-								log.info("STK035: GET INPUT");
-								send("at^sstgi=" + value); // GetInfos
-								getMeTextAscii(rx); // may set the flag such as CANCEL
-								code = "0,," + validPIN; // OK
-								if (cancel) {
-									setCancel(false); // reset flag
-									code = "16"; // Proactive SIM session terminated by user
-								} else if (block_pin) {
-									log.info("BLOCKPIN: Input wrong PIN. Attempt " + (maxWrongPinAttempts-cntrWrongPinAttempts+1) + " out of " + maxWrongPinAttempts + ".");
-									if (--cntrWrongPinAttempts == 0) {
-										setBlockedPIN(false); // reset flag
-										cntrWrongPinAttempts = maxWrongPinAttempts;
-									}
-									code = "0,," + invalidPIN;
-								} else if (stk_timeout) {
-									setStkTimeout(false); // reset flag
-									code = "18"; // No response from user
-								}
-								
-								if (user_delay) {
-									sleep(user_delay_millis);
-									setUserDelay(false); // reset flag
-								}
-								
-								send("at^sstr=" + value + "," + code); // Confirm
-							}
-							ackCmdRequired = false;
-							break;
-						case 37: // ^SSTR: 3,37
-							if (ackCmdRequired) {
-								// SET UP MENU
-								log.info("STK037: SET UP MENU");
-								// Some modems emit final OK before the ^SSTGI payload during boot.
-								send("at^sstgi=" + value); // GetInfos
-								send("at^sstr=" + value + ",0"); // Confirm
-							}
-							ackCmdRequired = false;
-							break;
-						default:
-							break;
-						}
-					} else if (rx.toUpperCase().startsWith("^SSTN: ")) {
-						Integer sstnValue = parseSstnLine(rx);
-						if (sstnValue == null) {
-							log.warn("Ignoring malformed ^SSTN line '" + rx + "'.");
-							continue;
-						}
-						value = sstnValue; // ^SSTN: 19
-						updateWatchdogForStkEvent(value);
-
-						// Check Proactive Command Type
-						switch (value) {
-						case 19:
-							// SEND MESSAGE
-							log.info("STK019: SEND MESSAGE");
-							send("at^sstgi=" + value); // GetInfos
-							send("at^sstr=" + value + ",0"); // Confirm
-							break;
-						case 32:
-							// PLAY TONE
-							log.info("STK032: PLAY TONE");
-							send("at^sstgi=32");
-							send("at^sstr=32,0"); // TerminalResponse=0 (OK)
-							break;
-						case 33:
-							// DISPLAY TEXT
-							log.info("STK033: DISPLAY TEXT");
-							send("at^sstgi=33");
-							getMeTextAscii(rx); // may set the flag such as CANCEL
-							code = "0"; // OK
-							if (cancel) {
-								setCancel(false); // reset flag
-								code = "16"; // Proactive SIM session terminated by user
-							} else if (stk_timeout) {
-								setStkTimeout(false); // reset flag
-								code = "18"; // No response from user
-							}
-							
-							if (user_delay) {
-								sleep(user_delay_millis);
-								setUserDelay(false); // reset flag
-							}
-
-							send("at^sstr=33," + code); // Confirm
-							break;
-						case 35:
-							// GET INPUT (Input=123456)
-							log.info("STK035: GET INPUT");
-							send("at^sstgi=35");
-							getMeTextAscii(rx); // may set the flag such as CANCEL
-							code = "0,," + validPIN; // OK
-							if (cancel) {
-								setCancel(false); // reset flag
-								code = "16"; // Proactive SIM session terminated by user
-							} else if (stk_timeout) {
-								setStkTimeout(false); // reset flag
-								code = "18"; // No response from user
-							} else if (block_pin) {
-								log.info("BLOCKPIN: Input wrong PIN. Attempt " + (maxWrongPinAttempts-cntrWrongPinAttempts+1) + " out of " + maxWrongPinAttempts + ".");
-								if (--cntrWrongPinAttempts == 0) {
-									setBlockedPIN(false); // reset flag
-									cntrWrongPinAttempts = maxWrongPinAttempts;
-								}
-								code = "0,," + invalidPIN;
-							}
-							
-							if (user_delay) {
-								sleep(user_delay_millis);
-								setUserDelay(false); // reset flag
-							}
-							
-							send("at^sstr=" + value + "," + code); // Confirm
-							break;
-						case 36:
-							// SELECT ITEM
-							log.info("STK036: SELECT ITEM");
-							send("at^sstgi=36"); // GetInformation
-							break;
-						case 37:
-							// SET UP MENU
-							log.info("STK037: SET UP MENU");
-							send("at^sstgi=37"); // Get Information
-							send("at^sstr=37,0"); // Remote-SAT Response
-							break;
-						case 254:
-							log.info("STK254: SIM Applet returns to main menu");
-							handlePostStkMainMenu();
-							send("AT^SSTR?", null);
-							break;
-						case 255:
-							log.error("SIM is lost!");
-							send("AT+CFUN=1,1"); // force UE restart
-							break;
-						default:
-							break;
-						}
-					} else if (modemDriver instanceof SIMComSIM8262Driver && modemDriver.isSTKProactiveURC(rx)) {
-						// SIMCom +STIN:<cmd> dispatch. Structure mirrors the PLS8 ^SSTN branch
-						// above but uses driver-delegated commands (AT+STGI= / AT+STGR=) and
-						// preserves the STKxxx monitoring markers (STK019/033/035/037) so
-						// downstream log tooling does not need modem-specific awareness.
+					} else if (modemDriver.isSTKProactiveURC(rx)) {
+						// SIMCom +STIN:<cmd> dispatch. Uses driver delegated commands
+						// (AT+STGI= / AT+STGR=) and emits STKxxx log markers so downstream
+						// log tooling can match on proactive command type.
 						value = modemDriver.parseSTKCommandType(rx);
 						if (value < 0) {
 							log.warn("Ignoring malformed +STIN line '" + rx + "'.");
@@ -1112,7 +799,7 @@ public class ATresponder extends Thread implements ATCommandSender {
 										setBlockedPIN(false);
 										cntrWrongPinAttempts = maxWrongPinAttempts;
 									}
-									pinPlain = "654321"; // invalid test PIN (same value PLS8 uses, UCS2-encoded there)
+									pinPlain = "654321"; // invalid test PIN
 								}
 								if (user_delay) {
 									sleep(user_delay_millis);
@@ -1399,7 +1086,7 @@ public class ATresponder extends Thread implements ATCommandSender {
 
 		log.warn("RADIOT: degraded idle radio state " + triggerContext + " (count="
 				+ degradedIdleRadioChecks + "/" + DEGRADED_IDLE_CHECKS_BEFORE_RECOVERY
-				+ ", mode=" + actualCopsMode
+				+ ", mode=" + simcomNetworkModeProperty
 				+ ", reg=" + formatRegistrationStat(lastCregStat) + "/" + formatRegistrationStat(lastCeregStat)
 				+ ", provider=" + startupProviderName
 				+ ", rat=" + startupRatLabel
@@ -1413,13 +1100,9 @@ public class ATresponder extends Thread implements ATCommandSender {
 			return;
 		}
 
-		if (!"A".equals(actualCopsMode)) {
-			log.info("RADIOT: idle radio recovery skipped because RAT is forced to " + actualCopsMode + ".");
-			return;
-		}
-
 		if (simcomStartupRatForced) {
-			log.info("RADIOT: idle radio recovery skipped because SIMCom startup RAT is forced to " + simcomStartupRatKeyword + ".");
+			log.info("RADIOT: idle radio recovery skipped because startup RAT is forced to " + simcomStartupRatKeyword
+					+ " (SA recovery tiers in the heartbeat path handle attach).");
 			return;
 		}
 
@@ -1468,39 +1151,21 @@ public class ATresponder extends Thread implements ATCommandSender {
 	private void verifyRAT() {
 		if (!rat)
 			return;
-		if (newCopsMode == null || newCopsMode.trim().isEmpty()) {
-			log.warn("RADIOT: RAT change requested without a target mode. Clearing pending request.");
+		if (newRadioMode == null || newRadioMode.trim().isEmpty()) {
+			log.warn("RADIOT: RADIO change requested without a target mode. Clearing pending request.");
 			setRAT(false);
 			return;
 		}
 
-		if (actualCopsMode.contentEquals(newCopsMode)) {
-			log.info("RADIOT: Requested RAT " + newCopsMode + " is already active.");
-			setRAT(false);
-			return;
-		}
-
-		boolean commandSucceeded = false;
-		String previousCopsMode = actualCopsMode;
-
-		if (!newCopsMode.contentEquals("A")) {
-			log.info("RADIOT: Force new Radio Access Technology");
-			// Driver-routed: PLS8 -> AT+COPS=0,2,00000,<rat>; SIMCom -> AT+CNMP=<code>
-			String ratCmd = modemDriver.buildRATSelectionCommand(newCopsMode);
-			commandSucceeded = send(ratCmd, "OK", RADIO_RESELECTION_TIMEOUT_MILLIS, true);
-		} else if (newCopsMode.contentEquals("A")) {
-			log.info("RADIOT: Set Radio Access Technology to automatic mode");
-			String autoCmd = modemDriver.buildRATSelectionCommand("A");
-			commandSucceeded = send(autoCmd, "OK", RADIO_RESELECTION_TIMEOUT_MILLIS, true);
-		}
-
+		log.info("RADIOT: Applying RADIO=" + newRadioMode + " via AT+CNMP.");
+		String ratCmd = modemDriver.buildRATSelectionCommand(newRadioMode);
+		boolean commandSucceeded = send(ratCmd, "OK", RADIO_RESELECTION_TIMEOUT_MILLIS, true);
 		if (commandSucceeded) {
-			actualCopsMode = newCopsMode;
 			degradedIdleRadioChecks = 0;
-			log.info("RADIOT: Requested RAT change accepted (" + previousCopsMode + " -> " + newCopsMode + ").");
+			log.info("RADIOT: RADIO=" + newRadioMode + " accepted.");
 			setRAT(false);
 		} else {
-			log.warn("RADIOT: Requested RAT change to " + newCopsMode + " failed. Will retry on next STK254.");
+			log.warn("RADIOT: RADIO=" + newRadioMode + " change failed. Will retry after the next post STK idle refresh.");
 		}
 	}
 	
@@ -1525,7 +1190,7 @@ public class ATresponder extends Thread implements ATCommandSender {
 	
 			int preSleep = sendPreSleepMillis();
 			if (preSleep > 0)
-				sleep(preSleep); // Only UART-based modems (PLS8) need the pre-send settling delay.
+				sleep(preSleep); // Driver dictates the pre send settling delay; SIMCom USB CDC uses 0 ms.
 	
 			log.debug("TX0 >>> " + cmd);
 			printStream.write((cmd + "\r\n").getBytes(StandardCharsets.UTF_8));
@@ -1603,13 +1268,9 @@ public class ATresponder extends Thread implements ATCommandSender {
 							updateRegistrationStateFromLine(rx, true);
 						} else if (rx.toUpperCase().startsWith("+C5GREG: ")) {
 							updateC5gRegistrationStateFromLine(rx);
-						} else if (rx.toUpperCase().startsWith("+CESQ: ")) {
-							logCesqLine(rx);
 						} else if (rx.toUpperCase().startsWith("+CPSI: ")) {
 							logCpsiLine(rx);
 						} else if (rx.toUpperCase().startsWith("+CNWINFO: ")) {
-							log.info("CELL: " + rx.trim());
-						} else if (rx.toUpperCase().startsWith("^SMONI:")) {
 							log.info("CELL: " + rx.trim());
 						} else if (rx.toUpperCase().startsWith("+CEER:")) {
 							log.info("FAILCTX: " + rx.trim());
@@ -1655,9 +1316,8 @@ public class ATresponder extends Thread implements ATCommandSender {
 	}
 
 	private void getMeTextAscii(String rsp) throws UnsupportedEncodingException {
-		// Driver-delegated UI-text extraction. PLS8 driver decodes ^SSTGI: UCS-2 hex,
-		// SIMCom driver decodes +STGI: UCS-2 hex (SIMCom's "decoded" mode still wraps
-		// text in UCS-2 hex on the wire).
+		// Driver delegated UI text extraction. SIMCom driver decodes +STGI: UCS-2 hex
+		// (SIMCom's "decoded" mode still wraps text in UCS-2 hex on the wire).
 		if (rsp == null) return;
 		if (!modemDriver.isSTKInfoResponse(rsp)) return;
 		String asciiText = modemDriver.extractDisplayText(rsp);
@@ -1695,21 +1355,11 @@ public class ATresponder extends Thread implements ATCommandSender {
 			}
 		}
 		
-		Matcher ratMatcher = KEYWORD_RAT.matcher(rsp);
-		if (ratMatcher.find()) {
-			newCopsMode = ratMatcher.group(1);
+		Matcher radioMatcher = KEYWORD_RADIO.matcher(rsp);
+		if (radioMatcher.find()) {
+			newRadioMode = radioMatcher.group(1);
 			setRAT(true);
-			log.info("'RAT=" + newCopsMode + "'-keyword detected.");
-		}
-
-		// SIMCom-only RADIO= keyword. Ignored on PLS8 so legacy deployments are unchanged.
-		if (modemDriver instanceof SIMComSIM8262Driver) {
-			Matcher radioMatcher = KEYWORD_RADIO.matcher(rsp);
-			if (radioMatcher.find()) {
-				newCopsMode = radioMatcher.group(1);
-				setRAT(true);
-				log.info("'RADIO=" + newCopsMode + "'-keyword detected (SIMCom buildRATSelectionCommand will translate to AT+CNMP code).");
-			}
+			log.info("'RADIO=" + newRadioMode + "'-keyword detected (driver translates to AT+CNMP).");
 		}
 		
 		Matcher hostnameMatcher = KEYWORD_HOSTNAME.matcher(rsp);
@@ -1878,14 +1528,14 @@ public class ATresponder extends Thread implements ATCommandSender {
 	}
 
 	private void logStartupModeDiagnostics() {
-		log.info("MODEM: " + buildModemSummary());
-		log.info("SRVSET: " + buildSrvsetSummary());
+		log.info("MODEM: " + modemDriver.getIdentitySummary());
 		log.info("REG: startupSummary source=" + startupRegistrationSource
 				+ ", CREG=" + formatRegistrationStat(lastCregStat)
 				+ ", CEREG=" + formatRegistrationStat(lastCeregStat)
+				+ ", C5GREG=" + formatRegistrationStat(lastC5gregStat)
 				+ ", ready=" + startupRegistrationReady);
 		log.info("STARTUP: serial=" + serPortStr
-				+ ", modem=" + buildModemIdentityLabel()
+				+ ", modem=" + modemDriver.getIdentitySummary()
 				+ ", reg=" + formatStartupRegistrationSummary()
 				+ ", provider=" + startupProviderName
 				+ ", rat=" + startupRatLabel
@@ -1924,21 +1574,6 @@ public class ATresponder extends Thread implements ATCommandSender {
 	private boolean sendDiagnosticBestEffort(String cmd, long timeoutMillis) {
 		// Keep degraded-path diagnostics bounded so they don't block recovery for full default timeouts.
 		return send(cmd, "OK", timeoutMillis, false);
-	}
-
-	private void logCesqLine(String cesqLine) {
-		Integer[] fields = parseCesqFields(cesqLine);
-		if (fields == null) {
-			log.info("RADIOQ: " + cesqLine.trim());
-			return;
-		}
-		log.info("RADIOQ: +CESQ"
-				+ " rxlev=" + fields[0]
-				+ " ber=" + fields[1]
-				+ " rscp=" + fields[2]
-				+ " ecno=" + fields[3]
-				+ " rsrq=" + formatCesqRsrq(fields[4])
-				+ " rsrp=" + formatCesqRsrp(fields[5]));
 	}
 
 	/**
@@ -2077,22 +1712,6 @@ public class ATresponder extends Thread implements ATCommandSender {
 				rsrpDbm, rsrpToQualityPercent(rsrpDbm), rsrpToQualityLabel(rsrpDbm));
 	}
 
-	private Integer[] parseCesqFields(String cesqLine) {
-		int colonIdx = cesqLine.indexOf(':');
-		if (colonIdx < 0 || colonIdx + 1 >= cesqLine.length())
-			return null;
-		String[] parts = cesqLine.substring(colonIdx + 1).trim().split(",");
-		if (parts.length < 6)
-			return null;
-		Integer[] values = new Integer[6];
-		for (int i = 0; i < 6; i++) {
-			values[i] = safeParseInteger(parts[i]);
-			if (values[i] == null)
-				return null;
-		}
-		return values;
-	}
-
 	private String formatRegistrationStat(Integer stat) {
 		if (stat == null)
 			return "n/a";
@@ -2167,73 +1786,15 @@ public class ATresponder extends Thread implements ATCommandSender {
 		if (rawLine == null) {
 			return;
 		}
-		String trimmed = rawLine.trim();
-		String normalized = trimmed.toUpperCase(Locale.ROOT);
-		updateModemIdentityFromLine(trimmed, normalized);
-		if (normalized.startsWith("^SSRVSET:"))
-			updateServiceSetFromLine(trimmed);
+		modemDriver.updateIdentityFromLine(rawLine);
 	}
 
-	/**
-	 * Polling interval for the core receive loops. Delegates to the active {@link ModemDriver};
-	 * falls back to the legacy {@code sleepWhile} constant if the driver has not been resolved
-	 * yet (early boot / port-lookup phase, before {@code resolveModemDriver} runs).
-	 */
 	private int fastPollMillis() {
 		return modemDriver != null ? modemDriver.getSerialPollIntervalMillis() : sleepWhile;
 	}
 
-	/**
-	 * Pre-send sleep to let the previous AT command settle on the modem side. Driver-specific:
-	 * 150 ms for UART-based PLS8-E, 0 ms for USB-CDC SIMCom. Callers should skip the sleep
-	 * entirely when this returns 0.
-	 */
 	private int sendPreSleepMillis() {
 		return modemDriver != null ? modemDriver.getSerialSendPreSleepMillis() : sleepWhile;
-	}
-
-	private String buildModemSummary() {
-		StringBuilder sb = new StringBuilder();
-		appendSummaryField(sb, "vendor", startupModemVendor);
-		appendSummaryField(sb, "model", startupModemModel);
-		appendSummaryField(sb, "revision", startupModemRevision);
-		if (!"n/a".equals(startupModemARevision))
-			appendSummaryField(sb, "a-revision", startupModemARevision);
-		appendSummaryField(sb, "serial", serPortStr == null ? "n/a" : serPortStr);
-		return sb.toString();
-	}
-
-	private String buildSrvsetSummary() {
-		StringBuilder sb = new StringBuilder();
-		appendSummaryField(sb, "usbcomp", startupSrvsetUsbcomp);
-		appendSummaryField(sb, "MDM", startupSrvsetMdm);
-		appendSummaryField(sb, "APP", startupSrvsetApp);
-		appendSummaryField(sb, "NMEA", startupSrvsetNmea);
-		return sb.toString();
-	}
-
-	private String buildModemIdentityLabel() {
-		StringBuilder sb = new StringBuilder();
-		if (!"n/a".equals(startupModemVendor))
-			sb.append(startupModemVendor);
-		if (!"n/a".equals(startupModemModel)) {
-			if (sb.length() > 0)
-				sb.append(" ");
-			sb.append(startupModemModel);
-		}
-		if (!"n/a".equals(startupModemRevision)) {
-			if (sb.length() > 0)
-				sb.append(" ");
-			sb.append("REV ").append(startupModemRevision);
-		}
-		if (!"n/a".equals(startupModemARevision)) {
-			if (sb.length() > 0)
-				sb.append(" ");
-			sb.append("(A-REV ").append(startupModemARevision).append(")");
-		}
-		if (sb.length() == 0)
-			return "n/a";
-		return sb.toString();
 	}
 
 	private String formatStartupRegistrationSummary() {
@@ -2248,85 +1809,6 @@ public class ATresponder extends Thread implements ATCommandSender {
 		return parts[0] + ":" + stat + "(" + decodeRegistrationState(stat) + ")";
 	}
 
-	private void appendSummaryField(StringBuilder sb, String key, String value) {
-		if (value == null || value.trim().isEmpty())
-			value = "n/a";
-		if (sb.length() > 0)
-			sb.append(" ");
-		sb.append(key).append("=").append(value);
-	}
-
-	private void updateModemIdentityFromLine(String trimmedLine, String normalizedLine) {
-		if ("CINTERION".equals(normalizedLine))
-			startupModemVendor = "Cinterion";
-		else if ("THALES".equals(normalizedLine))
-			startupModemVendor = "Thales";
-
-		if (normalizedLine.startsWith("PLS"))
-			startupModemModel = trimmedLine;
-
-		Matcher revMatcher = MODEM_REV_PATTERN.matcher(trimmedLine);
-		if (revMatcher.matches())
-			startupModemRevision = revMatcher.group(1).trim();
-
-		Matcher aRevMatcher = MODEM_A_REV_PATTERN.matcher(trimmedLine);
-		if (aRevMatcher.matches())
-			startupModemARevision = aRevMatcher.group(1).trim();
-
-	}
-
-	private void updateServiceSetFromLine(String ssrvsetLine) {
-		String[] tokens = parseSsrvsetQuotedTokens(ssrvsetLine);
-		if (tokens.length < 2)
-			return;
-
-		if ("usbcomp".equalsIgnoreCase(tokens[0])) {
-			startupSrvsetUsbcomp = tokens[1].trim();
-			return;
-		}
-
-		if ("srvmap".equalsIgnoreCase(tokens[0]) && tokens.length >= 4) {
-			String role = tokens[1].trim().toUpperCase(Locale.ROOT);
-			String mapping = tokens[2].trim() + "/" + tokens[3].trim();
-			if ("MDM".equals(role))
-				startupSrvsetMdm = mapping;
-			else if ("APP".equals(role))
-				startupSrvsetApp = mapping;
-			else if ("NMEA".equals(role))
-				startupSrvsetNmea = mapping;
-		}
-	}
-
-	private String[] parseSsrvsetQuotedTokens(String ssrvsetLine) {
-		int colonIdx = ssrvsetLine.indexOf(':');
-		if (colonIdx < 0 || colonIdx + 1 >= ssrvsetLine.length())
-			return new String[0];
-
-		List<String> tokens = new ArrayList<>();
-		Matcher matcher = SSRVSET_QUOTED_TOKEN_PATTERN.matcher(ssrvsetLine.substring(colonIdx + 1));
-		while (matcher.find())
-			tokens.add(matcher.group(1));
-		return tokens.toArray(new String[0]);
-	}
-
-	private String formatCesqRsrq(Integer rsrqRaw) {
-		if (rsrqRaw == null || rsrqRaw == 255)
-			return "n/a";
-		if (rsrqRaw < 0 || rsrqRaw > 34)
-			return rsrqRaw + "(raw)";
-		double rsrqDb = -19.5 + (0.5 * rsrqRaw);
-		return rsrqRaw + "(" + String.format(Locale.ROOT, "%.1f dB", rsrqDb) + ")";
-	}
-
-	private String formatCesqRsrp(Integer rsrpRaw) {
-		if (rsrpRaw == null || rsrpRaw == 255)
-			return "n/a";
-		if (rsrpRaw < 0 || rsrpRaw > 97)
-			return rsrpRaw + "(raw)";
-		int rsrpDbm = -140 + rsrpRaw;
-		return rsrpRaw + "(" + rsrpDbm + " dBm)";
-	}
-
 	private Integer parseSmsStorageIndex(String cmtiLine) {
 		if (cmtiLine == null) {
 			return null;
@@ -2336,38 +1818,6 @@ public class ATresponder extends Thread implements ATCommandSender {
 			return null;
 		}
 		return safeParseInteger(parts[parts.length - 1]);
-	}
-
-	private ParsedSstr parseSstrLine(String sstrLine) {
-		if (sstrLine == null) {
-			return null;
-		}
-		int colonIdx = sstrLine.indexOf(':');
-		if (colonIdx < 0 || colonIdx + 1 >= sstrLine.length()) {
-			return null;
-		}
-		String[] parts = sstrLine.substring(colonIdx + 1).trim().split(",");
-		if (parts.length < 2) {
-			return null;
-		}
-		Integer state = safeParseInteger(parts[0]);
-		Integer commandType = safeParseInteger(parts[1]);
-		if (state == null || commandType == null) {
-			return null;
-		}
-		boolean ackRequired = (state == 3 || state == 4);
-		return new ParsedSstr(ackRequired, commandType);
-	}
-
-	private Integer parseSstnLine(String sstnLine) {
-		if (sstnLine == null) {
-			return null;
-		}
-		int colonIdx = sstnLine.indexOf(':');
-		if (colonIdx < 0 || colonIdx + 1 >= sstnLine.length()) {
-			return null;
-		}
-		return safeParseInteger(sstnLine.substring(colonIdx + 1).trim());
 	}
 
 	private void updateStartupAndWatchdogFromCops(String copsLine) {
@@ -2477,7 +1927,7 @@ public class ATresponder extends Thread implements ATCommandSender {
 		if (!startupSignalReady) {
 			// On LTE, AT+CSQ often returns 99 ("not known") because the modem reports
 			// signal via RSRP/RSRQ instead of legacy RSSI. Accept this when registered
-			// on LTE and capture AT+CESQ for actual signal quality diagnostics.
+			// on LTE and capture AT+CPSI for actual signal quality diagnostics.
 			if (csqValue == 99 && startupRegistrationReady && startupNetworkReady && "4G/LTE".equals(startupRatLabel)) {
 				String extSignalCmd = modemDriver.buildExtendedSignalCommand();
 				String extTag = (extSignalCmd != null) ? extSignalCmd.replace("AT", "+") : "ext";
@@ -2546,16 +1996,6 @@ public class ATresponder extends Thread implements ATCommandSender {
 			return Integer.parseInt(value.trim());
 		} catch (NumberFormatException e) {
 			return null;
-		}
-	}
-
-	private static class ParsedSstr {
-		private final boolean ackRequired;
-		private final int commandType;
-
-		private ParsedSstr(boolean ackRequired, int commandType) {
-			this.ackRequired = ackRequired;
-			this.commandType = commandType;
 		}
 	}
 

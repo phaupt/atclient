@@ -2,7 +2,6 @@
 # systemd unit sample: modem-data.service
 ############################################################################################
 # Owns the QMI data session on the SIM8262E-M2 5G HAT and keeps wwan0 up.
-# Replaces the legacy wvdial + ppp0 stack used for PLS8-E deployments.
 #
 # Prerequisites on the target device:
 #   - ModemManager is DISABLED: systemctl disable --now ModemManager

@@ -1,11 +1,9 @@
 ############################################################################################
-# ATClient configuration sample
+# ATClient configuration sample (SIMCom SIM8262E-M2 5G HAT)
 ############################################################################################
-# Copy this file to atclient.cfg and edit the values for your deployment.
-# Two modem families are supported:
-#   SIMCom SIM8262E-M2   5G, Raspberry Pi 5 (current default)
-#   Cinterion PLS8-E     4G LTE, Raspberry Pi 4 (legacy HCP HIT U4)
-# Properties that apply to only one modem family are tagged [SIMCom] or [PLS8].
+# Copy this file to atclient.cfg and adjust values for your deployment.
+# Only the SIMCom SIM8262E-M2 5G HAT on Raspberry Pi 5 is supported on this branch.
+# The 5G HAT can run in LTE, NR5G, or SA mode depending on simcom.network.mode below.
 
 ############################################################################################
 # JVM arguments (passed on the java command line, not in this file)
@@ -16,25 +14,15 @@
 # -Dserial.port=/dev/simcom_at                              force a specific port (optional)
 
 ############################################################################################
-# Modem driver
-############################################################################################
-# Which modem family atclient should talk to.
-#   simcom      SIMCom SIM8262E-M2 5G HAT
-#   cinterion   Cinterion / Thales PLS8-E 4G LTE terminal
-#   auto        detect from the USB port description at startup
-modem.type = simcom
-
-############################################################################################
 # Serial port
 ############################################################################################
-# Substring matched against the USB product description for automatic detection.
-#   SimTech     for SIMCom SIM8262E-M2 (5G HAT)
-#   LTE Modem   for Cinterion PLS8-E (HIT U4)
+# USB product description substring used for automatic port detection.
+# The Waveshare 5G HAT enumerates as "SimTech".
 port.name.linux   = SimTech
 port.name.windows = SimTech
 
 # USB serial port parameters.
-#   port.baudrate   115200 for SIMCom USB CDC, 9600 for Cinterion PLS8 UART
+#   port.baudrate   115200 (SIMCom USB CDC default)
 #   port.databits   always 8
 #   port.stopbits   always 1
 #   port.parity     0 means none
@@ -54,25 +42,17 @@ atclient.atcommand.heartbeat = 180000
 ############################################################################################
 # Radio access technology
 ############################################################################################
-# [SIMCom] Network mode preference, mapped to AT+CNMP=<code>.
+# Network mode preference, mapped to AT+CNMP=<code>.
 #   auto       any RAT, modem chooses (CNMP=2)
 #   lte_only   LTE only (CNMP=38)
 #   nr_only    5G NR standalone only (CNMP=71). Requires SA coverage and SIM entitlement.
 #   lte_nr5g   LTE with NR5G preferred via EN-DC (CNMP=109). Swisscom 2026 default.
 simcom.network.mode = lte_nr5g
 
-# [PLS8] Force a specific RAT via AT+COPS. Empty means automatic.
-#   empty     automatic, modem chooses
-#   0         GSM (2G)
-#   2         UTRAN (3G). Swisscom switched off 3G on 2026-04-07.
-#   7         E-UTRAN (4G LTE)
-# Ignored when modem.type = simcom.
-cops.mode =
-
 ############################################################################################
-# [SIMCom] 5G SA auto recovery
+# 5G SA auto recovery
 ############################################################################################
-# Active only when modem.type = simcom AND simcom.network.mode = nr_only.
+# Active only when simcom.network.mode = nr_only.
 # atclient watches the 5G registration state C5GREG on every heartbeat and, on repeated
 # misses, escalates recovery through three tiers:
 #   tier 1   AT+COPS=0 network reselection, soft retry
@@ -88,7 +68,7 @@ simcom.sa.recovery.cooldown.tier2.seconds = 600
 simcom.sa.recovery.cooldown.tier3.seconds = 1800
 
 ############################################################################################
-# [SIMCom] SIM Toolkit format
+# SIM Toolkit format
 ############################################################################################
 # STK response format negotiated during provisioning.
 #   decoded   AT+STKFMT=0, recommended. PIN is submitted as plain text in double quotes.
@@ -96,7 +76,7 @@ simcom.sa.recovery.cooldown.tier3.seconds = 1800
 simcom.stk.format = decoded
 
 ############################################################################################
-# [SIMCom] Data plane APN
+# Data plane APN
 ############################################################################################
 # APN for the SIM data subscription. Consumed by the separate modem-data.service (QMI);
 # atclient itself does not dial data. Leave empty on devices that do not need the data path.
@@ -114,11 +94,8 @@ simcom.data.apn = gprs.swisscom.ch
 #   activity        refresh only on STK events. Higher level Mobile ID liveness.
 #
 # watchdog.activity.events: comma separated STK event codes that count as activity.
-#   [SIMCom]  Mobile ID emits +STIN: 21 (DISPLAY TEXT), 23 (GET INPUT),
-#             25 (SET UP MENU, post session return to idle marker).
-#   [PLS8]    Mobile ID emits ^SSTR / ^SSTN types 19 (SEND MESSAGE, strongest health
-#             signal), 33 (DISPLAY TEXT), 35 (GET INPUT), 37 (SET UP MENU),
-#             254 (applet back to main menu).
+#   Mobile ID auth on the 5G HAT emits +STIN: 21 (DISPLAY TEXT), 23 (GET INPUT),
+#   25 (SET UP MENU, also the post session return to idle marker).
 #
 # watchdog.activity.startup.grace: milliseconds after boot during which ordinary AT RX
 #   also refreshes the watchdog, so a slow initial SA attach does not trigger an early

@@ -1,9 +1,8 @@
 ############################################################################################
 # systemd unit sample: autossh-simcom.service
 ############################################################################################
-# Reverse-tunnel service gated on modem-data.service. Starts only after the SIM8262E
-# QMI session has an IP on wwan0. This is the SIMCom replacement for the legacy
-# maintenance.sh + wvdial + manual autossh invocation used on PLS8-E deployments.
+# Reverse tunnel service gated on modem-data.service. Starts only after the SIM8262E
+# QMI session has an IP on wwan0.
 #
 # The jumphost pattern mirrors the mobileid013/005 deployments: remote port is
 # 19<hostnumber>, forwards to localhost:5000 on the Pi.

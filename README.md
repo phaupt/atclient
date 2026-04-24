@@ -1,70 +1,30 @@
 # ATClient
 
-ATClient automates Mobile ID SIM Toolkit user interaction on Raspberry Pi systems connected to a PLS8-E LTE terminal. It is designed for operational validation, unattended test setups, and watchdog-aware deployments.
-
-<p align="center">
-  <img src="img/atclient-raspi-lte-terminal.jpg" alt="ATClient hardware setup with Raspberry Pi and LTE terminal" width="880">
-</p>
+ATClient automates Mobile ID SIM Toolkit user interaction on a Raspberry Pi 5 with a SIMCom SIM8262E-M2 5G HAT. It is built for operational validation, unattended test setups, and watchdog aware deployments.
 
 ## Highlights
 
 * Automate SIM Toolkit user responses, including [Mobile ID](https://www.mobileid.ch/en) authentication flows
-* Auto-detect the LTE modem serial interface
-* Configure preferred radio access technology (4G/3G/2G)
+* Configure preferred radio access technology (LTE, NR5G SA, LTE plus NR5G)
+* Per heartbeat HEARTBEAT log block with band, operator and signal strength hints
+* Tiered 5G SA auto recovery (COPS reselect, CFUN cycle, full modem reboot) with cooldowns
 * Observe incoming text SMS activity in the application log
 * Maintain watchdog heartbeats for communication health or meaningful STK activity
 
-## Recommended hardware
+## Supported hardware
 
 | Component | Recommendation |
 | --- | --- |
 | SIM | [Mobile ID SIM card](https://www.mobileid.ch/en) |
-| Host | [Raspberry Pi 4](https://www.raspberrypi.com/products/raspberry-pi-4-model-b/) |
-| Modem | [PLS8-E LTE terminal](https://www.hcp.rs/en/products/communications-/hit-u4-lte) |
+| Host | [Raspberry Pi 5](https://www.raspberrypi.com/products/raspberry-pi-5/) |
+| Modem | [Waveshare SIM8262E-M2 5G HAT](https://www.waveshare.com/wiki/SIM8262E-M2_5G_HAT) (SIMCom SIM8262E-M2) |
 | Optional | [RPi Relay Board](https://www.waveshare.com/wiki/RPi_Relay_Board) |
 
-## Supported terminals
+Tested with Raspberry Pi 5 on Debian 13 (trixie), kernel 6.12.47, OpenJDK 21, and SIMCom firmware `22131B05X62M44A-M2`.
 
-ATClient supports two modem families through its `ModemDriver` abstraction:
-
-- **Cinterion / Thales PLS8-E** (4G/LTE) on Raspberry Pi 4 — the original platform, production-validated
-- **SIMCom SIM8262E-M2** (5G NSA / NR + 4G/LTE) on Raspberry Pi 5 — new, validated on the Waveshare 5G HAT
-
-The driver is selected via `modem.type` in `atclient.cfg`. Legacy configs without that property default to `cinterion`, so existing PLS8 deployments keep their exact behavior.
-
-| Feature | PLS8-E driver | SIMCom SIM8262E-M2 driver |
-| --- | --- | --- |
-| STK activation | `AT^SSTA=1,1` (Explicit Response mode) | `AT+STK=1`, `AT+STKFMT=0` (decoded mode) |
-| STK URC prefix | `^SSTR:` / `^SSTN:` | `+STIN:` |
-| Proactive-command info | `AT^SSTGI=<cmd>` | `AT+STGI=<cmd>` |
-| Terminal response | `AT^SSTR=<cmd>,<code>[,...]` | `AT+STGR=<cmd>,<arg>` |
-| PIN submission format | UCS-2 hex (e.g. `003100320033003400350036`) | plaintext (e.g. `"123456"`) |
-| Extended signal probe | `AT+CESQ` | `AT+CPSI?` |
-| Serving cell info | `AT^SMONI` | `AT+CNWINFO?` |
-| RAT selection command | `AT+COPS=0,2,00000,<rat>` | `AT+CNMP=<code>` |
-| 5G registration query | not supported | `AT+C5GREG?` |
-| Return-to-main marker | `STK254` (explicit event) | `+STIN:25` re-emit of SET UP MENU |
-
-Log markers (`STK019`, `STK033`, `STK035`, `STK037`) are emitted identically across drivers based on semantic command type, so log-analysis tooling does not need to be modem-aware.
-
-### PLS8-E
-
-Tested with Raspberry Pi 4 and a PLS8-E LTE terminal ([HCP HIT U4 LTE](https://www.hcp.rs/en/products/communications-/hit-u4-lte)).
-
-> [!NOTE]
-> Official Cinterion / Thales technical documentation and Windows drivers are no longer published on the old public Gemalto URLs.
-> For current documentation and support, use:
-> - [Thales/Gemalto Support Portal](https://supportportal.gemalto.com/csm?id=kb_home_page)
-> - [HCP Support](https://www.hcp.rs/en/support/communications)
-> - [HCP Contact](https://www.hcp.rs/en/contact-us-)
-
-### SIMCom SIM8262E-M2
-
-Tested with Raspberry Pi 5 (Debian trixie, kernel 6.12.47, default-jdk / OpenJDK 21) and the [Waveshare SIM8262E-M2 5G HAT](https://www.waveshare.com/wiki/SIM8262E-M2_5G_HAT). See the [SIMCom deployment section](#simcom-sim8262e-m2-5g-hat-deployment-raspberry-pi-5) below for the full bring-up sequence.
+The 5G HAT can run in LTE only, NR5G SA only, or LTE plus NR5G preferred, controlled by `simcom.network.mode` in `atclient.cfg`.
 
 ## Quick start
-
-The commands below cover a basic local build and first-run deployment flow for the **PLS8-E** modem. If you are deploying on a Raspberry Pi 5 with the **SIMCom SIM8262E-M2 5G HAT**, jump to the [SIMCom deployment section](#simcom-sim8262e-m2-5g-hat-deployment-raspberry-pi-5) — the AT-command, serial-port, STK-activation, and data-plane steps all differ from the PLS8 flow.
 
 ### Clone the repository
 
@@ -82,37 +42,17 @@ javac -d ./class -cp "./lib/*" ./src/com/swisscom/atclient/*.java
 
 ### Serial device detection
 
-The wireless modem may appear as different ACM devices depending on setup and boot order:
+The stable udev symlink `/dev/simcom_at` is set up via `99-sim8262.rules.sample` (see the deployment section). Without that symlink the AT port typically shows up as `/dev/ttyUSB2`. Confirm with:
 
 ```bash
-ls -l /dev/ttyACM*
+ls -l /dev/ttyUSB* /dev/simcom_at 2>/dev/null
 ```
-
-You may see `/dev/ttyACM0`, `/dev/ttyACM1`, or `/dev/ttyACM2`. To identify which port belongs to the modem, unplug the terminal, run `sudo dmesg -c`, plug it back in, wait a few seconds, then run `sudo dmesg`.
 
 ### Run the application
 
-#### First run: switch to Explicit Response (ER) mode
-
-As a first step, switch the terminal from factory default Automatic Response (AR) mode to Explicit Response (ER) mode:
-
 ```bash
 sudo /usr/bin/java \
-  -Dserial.port=/dev/ttyACM1 \
-  -Dconfig.file=/home/mid/atclient/atclient.cfg \
-  -Dlog.file=/var/log/atclient.log \
-  -Dlog4j.configurationFile=/home/mid/atclient/log4j2.xml \
-  -cp "/home/mid/atclient/class:/home/mid/atclient/lib/*" \
-  com.swisscom.atclient.ATClient ER
-```
-
-#### Normal operation: user emulation
-
-Once your terminal is in ER mode, run the ATClient in normal mode:
-
-```bash
-sudo /usr/bin/java \
-  -Dserial.port=/dev/ttyACM1 \
+  -Dserial.port=/dev/simcom_at \
   -Dconfig.file=/home/mid/atclient/atclient.cfg \
   -Dlog.file=/var/log/atclient.log \
   -Dlog4j.configurationFile=/home/mid/atclient/log4j2.xml \
@@ -120,20 +60,15 @@ sudo /usr/bin/java \
   com.swisscom.atclient.ATClient
 ```
 
-#### Application help
+### Application help
 
 ```
-Usage: ATClient [<MODE>]
+Usage: ATClient
 
-<MODE>  Switch operation mode:
-        ER      Switch to Explicit Response (ER) and enable modem usage.
-        AR      Switch to Automatic Response (AR) and reset AT command settings to factory default values.
-
-If no <MODE> argument found: Run user emulation with automatic serial port detection (ER operation mode only)
-
+        -Dconfig.file=atclient.cfg             # Application config file
         -Dlog.file=atclient.log                # Application log file
-        -Dlog4j.configurationFile=log4j2.xml   # Location of log4j2.xml configuration file
-        -Dserial.port=/dev/ttyACM1             # Select specific serial port (no automatic port detection)
+        -Dlog4j.configurationFile=log4j2.xml   # Log4j config file
+        -Dserial.port=/dev/simcom_at           # Force a specific serial port
 ```
 
 ## Configuration files
@@ -158,7 +93,7 @@ Watchdog modes:
 * `watchdog.activity.events=<csv>`: optional STK event allowlist for activity mode (default/fallback `19,33,35,37,254`)
 * `watchdog.activity.startup.grace=<ms>`: optional grace window in milliseconds for activity mode; during grace, communication RX still refreshes watchdog
 
-Meaningful STK activity is derived from modem `^SSTR` / `^SSTN` notifications. ATClient parses those command/event codes and logs them as `STKxxx` markers. For production health monitoring, `STK019: SEND MESSAGE` is the recommended primary signal because it best reflects end-to-end Mobile ID activity.
+Meaningful STK activity is derived from the SIMCom `+STIN:` proactive command URCs. ATClient parses those command codes and logs them as `STKxxx` markers. On the 5G HAT, Mobile ID auth emits `+STIN: 21` (DISPLAY TEXT), `+STIN: 23` (GET INPUT) and `+STIN: 25` (SET UP MENU), which is also re emitted as the post session return to idle marker.
 
 Recommended production starting point:
 * `watchdog.file=/var/log/watchdog.atclient` (single productive watchdog file path)
@@ -254,7 +189,7 @@ User=root
 WantedBy=multi-user.target
 ```
 
-The 80 second sleep is recommended because the PLS8-E LTE terminal requires 30–40 seconds to boot.
+The 80 second sleep gives the 5G HAT time to enumerate its USB interfaces and complete initial radio probing before atclient opens the AT port.
 
 Alternatively, you can use `/etc/rc.local` (add before `exit 0`):
 
@@ -358,7 +293,7 @@ cd /home/phaupt/atclient
 git checkout feat/sim8262e-modem-driver   # until merged
 mkdir -p class
 javac -proc:none -d ./class -cp "./lib/*" ./src/com/swisscom/atclient/*.java
-cp atclient.cfg.simcom.sample atclient.cfg
+cp atclient.cfg.sample atclient.cfg
 cp log4j2.xml.sample log4j2.xml
 sudo touch /var/log/watchdog.atclient && sudo chmod 666 /var/log/watchdog.atclient
 ```

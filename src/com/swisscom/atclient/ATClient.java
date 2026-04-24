@@ -1,42 +1,25 @@
 package com.swisscom.atclient;
 
-import com.swisscom.atclient.ATresponder;
-
 public class ATClient {
 
-    public static void main(String[] args) throws InterruptedException {
+    public static void main(String[] args) {
 
-        ATresponder atClient = null;
-
-        if (args.length == 1 && args[0].toUpperCase().equals("ER")) {
-            atClient = new ATresponder((byte) 1);
-            new Thread(atClient).start();
-            
-        } else if (args.length == 1 && args[0].toUpperCase().equals("AR")) {
-            atClient = new ATresponder((byte) 2);
-            new Thread(atClient).start();
-            
-        } else if (args.length == 0) {
-            atClient = new ATresponder((byte) 0);
-            new Thread(atClient).start();
-            
-        } else if (args.length == 1 && args[0].toUpperCase().equals("--HELP")) {
-            System.out
-                    .println("\n*** AT Client ***\n\n"
-                            + "Usage: ATClient [<MODE>]\n\n"
-                            + "<MODE>\tSwitch operation mode:\n"
-                            + "\tER\tSwitch to Explicit Response (ER) and enable modem usage.\n"
-                            + "\tAR\tSwitch to Automatic Response (AR) and reset AT command settings to factory default values.\n"
-                            + "\n"
-                            + "If no <MODE> argument found: Run user emulation with automatic serial port detection (ER operation mode only)\n"
-                            + "\n"
+        if (args.length == 1 && args[0].equalsIgnoreCase("--help")) {
+            System.out.println(
+                    "\n*** AT Client (SIMCom SIM8262E-M2 5G HAT) ***\n\n"
+                            + "Usage: ATClient\n\n"
+                            + "The ATClient runs the SIM Toolkit responder and heartbeat loop against a\n"
+                            + "SIMCom SIM8262E-M2 5G HAT on the first matching USB port (or the port\n"
+                            + "forced via -Dserial.port).\n\n"
+                            + "\t-Dconfig.file=atclient.cfg             # Application config file\n"
                             + "\t-Dlog.file=atclient.log                # Application log file\n"
-                            + "\t-Dlog4j.configurationFile=log4j2.xml   # Location of log4j.xml configuration file\n"
-                            + "\t-Dserial.port=/dev/ttyACM1             # Select specific serial port (no automatic port detection)\n"
-                    );
-
+                            + "\t-Dlog4j.configurationFile=log4j2.xml   # Log4j config file\n"
+                            + "\t-Dserial.port=/dev/simcom_at           # Force a specific serial port\n"
+            );
             System.exit(0);
         }
 
+        ATresponder atClient = new ATresponder((byte) 0);
+        new Thread(atClient).start();
     }
 }

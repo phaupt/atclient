@@ -16,18 +16,15 @@ import java.util.regex.Pattern;
  *   - GET INPUT (PIN submit): AT+STGR=23,"&lt;plaintext_pin&gt;" — SINGLE arg, plaintext in quotes,
  *     no result-code prefix. UCS2-hex with a result-code prefix is REJECTED with ERROR.
  *   - SELECT ITEM / SETUP MENU: AT+STGR=&lt;cmdType&gt;,&lt;item_id&gt; — single arg item id
- *   - After a completed auth, the applet re-emits +STIN: 25 (SET UP MENU). This is
- *     the SIMCom equivalent of PLS8-E's distinct "return-to-main" STK254 event, and
- *     is what {@link #getReturnToMainType()} returns.
+ *   - After a completed auth, the applet re-emits +STIN: 25 (SET UP MENU). This
+ *     is used as the "return to main menu" marker by the core.
  *
  * Command-type numbers observed:
  *   21 DISPLAY TEXT | 23 GET INPUT | 24 SELECT ITEM | 25 SET UP MENU
  *   13 SEND MESSAGE (not fired during standard Mobile-ID auth; included defensively)
  *   20 PLAY TONE (defensive)
  *
- * Text fields in STGI responses are still UCS-2 hex-encoded even in "decoded" mode.
- * The plan's original assumption of plaintext text fields was wrong; UCS2-hex decoding
- * from the PLS8 driver is reused.
+ * Text fields in STGI responses are UCS-2 hex encoded even in "decoded" mode.
  */
 public final class SIMComSIM8262Driver implements ModemDriver {
 
@@ -56,11 +53,8 @@ public final class SIMComSIM8262Driver implements ModemDriver {
     // Network mode code used in buildRATSelectionCommand. Mapping:
     //   "AUTO"   -> AT+CNMP=2
     //   "LTE"    -> AT+CNMP=38
-    //   "NR"     -> AT+CNMP=71
-    //   "LTE_NR" -> AT+CNMP=109   (recommended for Switzerland 2026)
-    //   "A"      -> AT+CNMP=2     (rewardsKey compatibility with PLS8 "A" = auto)
-    //   "7"      -> AT+CNMP=38    (PLS8 "7" == LTE only)
-    //   "2"      -> AT+CNMP=14    (PLS8 "2" == WCDMA only)
+    //   "NR"     -> AT+CNMP=71    (5G NR SA only)
+    //   "LTE_NR" -> AT+CNMP=109   (LTE + NR5G preferred, Swisscom 2026 default)
     //   default  -> AT+CNMP=109
 
     // ---- Identification -----------------------------------------------------
@@ -240,23 +234,13 @@ public final class SIMComSIM8262Driver implements ModemDriver {
     public String buildRATSelectionCommand(String mode) {
         if (mode == null) return "AT+CNMP=109";
         switch (mode.toUpperCase()) {
-            case "AUTO":
-            case "A":
-                return "AT+CNMP=2";
-            case "LTE":
-            case "7":
-                return "AT+CNMP=38";
+            case "AUTO":   return "AT+CNMP=2";
+            case "LTE":    return "AT+CNMP=38";
             case "NR":
-            case "NR5G":
-                return "AT+CNMP=71";
+            case "NR5G":   return "AT+CNMP=71";
             case "LTE_NR":
-            case "LTE+NR":
-                return "AT+CNMP=109";
-            case "WCDMA":
-            case "2":
-                return "AT+CNMP=14";
-            default:
-                return "AT+CNMP=109";
+            case "LTE+NR": return "AT+CNMP=109";
+            default:       return "AT+CNMP=109";
         }
     }
 
@@ -371,12 +355,9 @@ public final class SIMComSIM8262Driver implements ModemDriver {
     }
 
     /**
-     * SIM8262E-M2 is a USB-CDC virtual serial port on Qualcomm X62: commands are framed
+     * SIM8262E-M2 is a USB CDC virtual serial port on Qualcomm X62: commands are framed
      * atomically by the kernel driver and the modem responds within tens of ms. 50 ms
-     * polling is responsive without wasting CPU. The 150 ms pre-send sleep the legacy code
-     * needed for 9600 baud UART is unnecessary here. Each AT round-trip can start
-     * immediately, saving roughly 150 ms per command and roughly 1.5 s across a full
-     * Mobile-ID auth cycle (~10 AT commands).
+     * polling is responsive without wasting CPU. No pre send sleep is needed.
      */
     @Override public int getSerialPollIntervalMillis() { return 50; }
     @Override public int getSerialSendPreSleepMillis() { return 0; }
