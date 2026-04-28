@@ -495,7 +495,15 @@ public class ATresponder extends Thread implements ATCommandSender {
 			// Check if terminal is responding to AT command
 			if (send("AT", 1000, false)) {
 				log.info(serPortStr + " is responding. Success!");
-				Thread.currentThread().setName(ManagementFactory.getRuntimeMXBean().getName() + " " + serPortStr); // Update thread name
+				// Restore the full diagnostic thread name. After a serial-port recovery cycle
+				// (close + reopen) the thread name was reset by close() to a bare pid@host;
+				// here we re-attach the serial port label and, if already learned, the IMSI
+				// so that all subsequent log lines carry the same context as before recovery.
+				String fullThreadName = ManagementFactory.getRuntimeMXBean().getName() + " " + serPortStr;
+				if (imsi != null && !imsi.isEmpty()) {
+					fullThreadName = fullThreadName + " " + imsi;
+				}
+				Thread.currentThread().setName(fullThreadName); // Update thread name
 				return true; // success
 			} else {
 				log.info(serPortStr + " wasn't responding to AT probe. Closing this port cleanly.");
@@ -681,7 +689,26 @@ public class ATresponder extends Thread implements ATCommandSender {
 		String rx;
 		int value;
 		int consecutiveRxFailures = 0;
-		
+
+		// One-time glossary block to make the heartbeat lines readable for non radio specialists.
+		// Emitted once at the start of the steady-state listener, before the first HEARTBEAT line.
+		log.info("GLOSSARY: terms used in the HEARTBEAT lines below (for non radio specialists):");
+		log.info("GLOSSARY:   RSRP is the reference signal strength in dBm. More negative is weaker. "
+				+ "Below minus 110 is poor, around minus 95 is fair, above minus 85 is strong.");
+		log.info("GLOSSARY:   RSRQ is the signal quality in dB (RSRP relative to interference and noise). "
+				+ "Below minus 15 is poor, around minus 10 is fair, above minus 8 is good.");
+		log.info("GLOSSARY:   SINR is the signal to noise ratio in dB. "
+				+ "Negative means the wanted signal is at or below noise and the data rate is low. "
+				+ "Above 10 is excellent, around 0 is workable but slow.");
+		log.info("GLOSSARY:   CSQ is a legacy 0 to 31 scale of overall received power. "
+				+ "99 means not measured. Above 20 is strong, below 10 is weak.");
+		log.info("GLOSSARY:   Registration states (CREG / CEREG / C5GREG): "
+				+ "1 means home registered, 5 means registered while roaming, 2 means searching for a cell, "
+				+ "3 means the network rejected attach, 0 means not registered.");
+		log.info("GLOSSARY:   Bands: n28 is 700 MHz (5G low band, wide reach but limited capacity), "
+				+ "n78 is 3500 MHz (5G mid band, fast but short reach), B3 is 1800 MHz (LTE main), "
+				+ "B7 is 2600 MHz (LTE mid), B20 is 800 MHz (LTE low).");
+
 		// Start endless loop...
 		while (isAlive) {
 
@@ -2046,7 +2073,15 @@ public class ATresponder extends Thread implements ATCommandSender {
 	}
 
 	private void close(boolean closePort) {
-		Thread.currentThread().setName(ManagementFactory.getRuntimeMXBean().getName()); // Update thread name
+		// Keep the IMSI in the thread name even while the serial port is closed.
+		// The serial port label is dropped on purpose since the port is no longer valid,
+		// but the IMSI is a SIM-level identifier that stays meaningful across port recovery
+		// and is useful for log correlation during the close+reopen window.
+		String closingThreadName = ManagementFactory.getRuntimeMXBean().getName();
+		if (imsi != null && !imsi.isEmpty()) {
+			closingThreadName = closingThreadName + " " + imsi;
+		}
+		Thread.currentThread().setName(closingThreadName); // Update thread name
 
 		if (closePort && serPort != null && serPort.isOpen()) {
 			log.debug(serPortStr + " trying to close serial port.");
