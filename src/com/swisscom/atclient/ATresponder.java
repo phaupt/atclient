@@ -154,6 +154,7 @@ public class ATresponder extends Thread implements ATCommandSender {
 	private byte opMode; // Switch: 1=ER, 2=AR
 	
 	private String imsi = null;
+	private String msisdn = null;
 	
 	public volatile static boolean isAlive = true;
 
@@ -503,6 +504,9 @@ public class ATresponder extends Thread implements ATCommandSender {
 				if (imsi != null && !imsi.isEmpty()) {
 					fullThreadName = fullThreadName + " " + imsi;
 				}
+				if (msisdn != null && !msisdn.isEmpty()) {
+					fullThreadName = fullThreadName + " " + msisdn;
+				}
 				Thread.currentThread().setName(fullThreadName); // Update thread name
 				return true; // success
 			} else {
@@ -522,8 +526,6 @@ public class ATresponder extends Thread implements ATCommandSender {
 				return false;
 			}
 
-			send("AT+CNUM"); // MSISDN - which is often not returned with this AT command! :-/
-						
 			if (!send("ATE0")) { // Echo Mode On(1)/Off(0).
 				log.error("Startup initialization failed: no response for ATE0.");
 				return false;
@@ -536,6 +538,7 @@ public class ATresponder extends Thread implements ATCommandSender {
 			send("AT+CMGD=0,4"); // delete all stored short messages
 
 			send("AT+CIMI");   // IMSI
+			send("AT+CNUM");   // MSISDN (best-effort, parsed when supported by firmware)
 			send("AT+CPIN?");  // SIM Card status
 			send("AT+CREG?");  // 2G/3G registration
 			send("AT+CEREG?"); // LTE (EPS) registration
@@ -1297,7 +1300,19 @@ public class ATresponder extends Thread implements ATCommandSender {
 
 							imsi = rx;
 							Thread.currentThread().setName(Thread.currentThread().getName() + " " + imsi);
-							watchdogList.set(1, imsi); // Update IMSI 
+							watchdogList.set(1, imsi); // Update IMSI
+
+						} else if (rx.toUpperCase().startsWith("+CNUM:")) {
+							// +CNUM: "My Number","+41796468195",145
+							// Parse the MSISDN from the second quoted field. The number is
+							// in international format with leading + when type=145; we strip
+							// the + so the thread-name suffix stays compact and stable.
+							String parsedMsisdn = parseMsisdnFromCnum(rx);
+							if (parsedMsisdn != null && !parsedMsisdn.isEmpty() && !parsedMsisdn.equals(msisdn)) {
+								msisdn = parsedMsisdn;
+								Thread.currentThread().setName(Thread.currentThread().getName() + " " + msisdn);
+								log.info("MSISDN: " + msisdn + " (parsed from +CNUM)");
+							}
 
 						} else if (rx.toUpperCase().startsWith("+COPS: ")) {
 							updateStartupAndWatchdogFromCops(rx);
@@ -2021,6 +2036,29 @@ public class ATresponder extends Thread implements ATCommandSender {
 		}
 	}
 
+	/**
+	 * Parse +CNUM response and return MSISDN digits without leading + or quotes.
+	 * Format per 3GPP TS 27.007: +CNUM: <alpha>,<number>,<type>
+	 * Example:                  +CNUM: "My Number","+41796468195",145
+	 * Returns null if the line cannot be parsed or the number is empty.
+	 */
+	private String parseMsisdnFromCnum(String cnumLine) {
+		if (cnumLine == null) return null;
+		int colon = cnumLine.indexOf(':');
+		if (colon < 0) return null;
+		String[] parts = cnumLine.substring(colon + 1).split(",");
+		if (parts.length < 2) return null;
+		String numberField = parts[1].trim();
+		if (numberField.startsWith("\"") && numberField.endsWith("\"") && numberField.length() >= 2) {
+			numberField = numberField.substring(1, numberField.length() - 1);
+		}
+		if (numberField.startsWith("+")) {
+			numberField = numberField.substring(1);
+		}
+		if (numberField.isEmpty() || !numberField.matches("[0-9]+")) return null;
+		return numberField;
+	}
+
 	private Integer parseCsqValue(String csqLine) {
 		if (csqLine == null) {
 			return null;
@@ -2080,6 +2118,9 @@ public class ATresponder extends Thread implements ATCommandSender {
 		String closingThreadName = ManagementFactory.getRuntimeMXBean().getName();
 		if (imsi != null && !imsi.isEmpty()) {
 			closingThreadName = closingThreadName + " " + imsi;
+		}
+		if (msisdn != null && !msisdn.isEmpty()) {
+			closingThreadName = closingThreadName + " " + msisdn;
 		}
 		Thread.currentThread().setName(closingThreadName); // Update thread name
 
