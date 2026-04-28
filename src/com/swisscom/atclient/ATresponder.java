@@ -573,9 +573,30 @@ public class ATresponder extends Thread implements ATCommandSender {
 					if (waitForStartupReadiness(STARTUP_READINESS_MAX_WAIT_MILLIS, STARTUP_READINESS_POLL_MILLIS)) {
 						log.info("SA re-attached after CFUN recovery cycle.");
 					} else {
-						log.error("Startup readiness still not reached after CFUN recovery. Triggering controlled shutdown/recovery.");
-						shutdownAndExit("STARTUP NOT READY");
-						return false;
+						// Continue into listenForRx in degraded SA-search mode instead of shutdownAndExit.
+						// Reasons:
+						//  1. Under simcom.network.mode=nr_only the modem cannot fall back to LTE, so any
+						//     systemd restart loop here just hides observability while SA is marginal.
+						//  2. The heartbeat path inside listenForRx already runs the tiered SA recovery
+						//     (tier 1 AT+COPS=0, tier 2 CFUN cycle + CNMP=71, tier 3 AT+CFUN=1,1) with
+						//     per-tier cooldowns. That is the right place to keep retrying.
+						//  3. Continuous heartbeat telemetry (CSQ, CPSI, C5GREG, RADIOQ) is exactly what
+						//     specialists need to evaluate marginal SA coverage at edge sites.
+						log.warn("Startup readiness still not reached after CFUN recovery. Continuing into listenForRx in "
+								+ "degraded SA-search mode so the heartbeat-path tiered SA recovery and signal/registration "
+								+ "telemetry keep running. This avoids a systemd restart loop that would otherwise mask "
+								+ "observability while SA is marginal.");
+						// Seed SA recovery counters so the heartbeat treats the just-completed CFUN as a
+						// tier-2 recovery action and respects per-tier cooldowns before escalating further.
+						lastSaRecoveryAtMillis = System.currentTimeMillis();
+						lastSaRecoveryTier = 2;
+						saRecoveryConsecutiveMisses = saRecoveryTier2Misses;
+						log.info("SA_RECOVERY: seeded counters at degraded-startup boundary "
+								+ "(consecutiveMisses=" + saRecoveryConsecutiveMisses
+								+ ", lastTier=" + lastSaRecoveryTier
+								+ ", tier-cooldowns sec=" + (saRecoveryCooldownTier1Ms / 1000L)
+								+ "/" + (saRecoveryCooldownTier2Ms / 1000L)
+								+ "/" + (saRecoveryCooldownTier3Ms / 1000L) + ").");
 					}
 				} else {
 					log.error("Startup readiness was not reached in time. Triggering controlled shutdown/recovery.");
