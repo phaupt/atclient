@@ -197,9 +197,12 @@ public final class RadioGlossary {
     }
 
     /**
-     * 3GPP registration stat (TS 27.007 +CREG/+CEREG/+C5GREG). Stat=3 carries an
-     * extra hint because it usually means the subscription is not provisioned for
-     * the RAT (e.g. 5G SA not enabled for the IMSI).
+     * 3GPP registration stat (TS 27.007 +CREG/+CEREG/+C5GREG). Stat=3 (registration
+     * denied) is intentionally non-committal about the cause: in our deployments it
+     * is most often marginal RF coverage at the test location, but it can also be
+     * cell admission control, a subscription / RAT provisioning gap, or a roaming
+     * policy. The reader is expected to correlate with the latest signal levels
+     * and provisioning state to decide which one applies.
      */
     public static String regStatHint(Integer stat) {
         if (stat == null) return "n/a";
@@ -207,7 +210,7 @@ public final class RadioGlossary {
             case 0: return "not-registered (UE is not searching)";
             case 1: return "home-registered";
             case 2: return "searching (no cell found yet)";
-            case 3: return "registration-denied (network rejected attach - check subscription or 5G SA provisioning)";
+            case 3: return "registration-denied (network rejected attach; possible causes: marginal RF at this location, cell admission control, subscription or RAT provisioning gap, or roaming policy)";
             case 4: return "unknown";
             case 5: return "roaming-registered";
             case 6: return "registered for SMS only (home)";
