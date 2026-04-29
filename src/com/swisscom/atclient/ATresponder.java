@@ -989,7 +989,21 @@ public class ATresponder extends Thread implements ATCommandSender {
 		if ("NR5G_NSA".equalsIgnoreCase(lastCpsiMode) || "LTE_NR5G".equalsIgnoreCase(lastCpsiMode)) {
 			sb.append("active (").append(RadioGlossary.cpsiModeHint(lastCpsiMode)).append(")");
 		} else if (forcedNrOnly) {
-			sb.append("not-anchored - forced NR-only via CNMP=71, EN-DC disabled");
+			// Honesty check: if the user pinned the modem to NR-only via simcom.network.mode=nr_only
+			// but the modem currently reports a non-NR mode (LTE, WCDMA, GSM), say so explicitly
+			// instead of claiming forced NR-only is in effect. The tiered SA recovery in the
+			// heartbeat path will re-set CNMP=71 and push the modem back to NR search.
+			boolean modemOnNonNrMode = lastCpsiMode != null
+					&& !"n/a".equalsIgnoreCase(lastCpsiMode)
+					&& !"NO SERVICE".equalsIgnoreCase(lastCpsiMode)
+					&& !lastCpsiMode.toUpperCase().startsWith("NR5G");
+			if (modemOnNonNrMode) {
+				sb.append("MISMATCH - configured nr_only via CNMP=71 but modem currently camped on ")
+					.append(lastCpsiMode)
+					.append("; SA recovery will re-set CNMP=71 to push modem back to NR search");
+			} else {
+				sb.append("not-anchored - forced NR-only via CNMP=71, EN-DC disabled");
+			}
 		} else {
 			sb.append("not-anchored (no EN-DC dual-connectivity reported)");
 		}
@@ -1055,8 +1069,20 @@ public class ATresponder extends Thread implements ATCommandSender {
 
 		switch (chosenTier) {
 			case 1:
-				log.warn("SA_RECOVERY tier=1: AT+COPS=0 network reselection (soft retry toward 5G SA).");
-				send("AT+COPS=0", "OK", RADIO_RESELECTION_TIMEOUT_MILLIS, true);
+				if (simcomStartupRatForced && "NR".equals(simcomStartupRatKeyword)) {
+					// Observed at P51 ICT room: AT+COPS=0 in nr_only mode can land on a
+					// strong LTE inhouse cell despite CNMP=71 already being set, because the
+					// modem firmware briefly accepts any RAT during reselection. We defensively
+					// re-issue the NR-only RAT selection right after AT+COPS=0 so the modem is
+					// pushed back into NR search if it just camped on LTE.
+					log.warn("SA_RECOVERY tier=1: AT+COPS=0 network reselection plus defensive AT+CNMP=71 re-set (nr_only mode).");
+					send("AT+COPS=0", "OK", RADIO_RESELECTION_TIMEOUT_MILLIS, true);
+					String nrOnlyCmd = modemDriver.buildRATSelectionCommand("NR");
+					send(nrOnlyCmd, "OK", 10000, false);
+				} else {
+					log.warn("SA_RECOVERY tier=1: AT+COPS=0 network reselection (soft retry toward 5G SA).");
+					send("AT+COPS=0", "OK", RADIO_RESELECTION_TIMEOUT_MILLIS, true);
+				}
 				break;
 			case 2:
 				log.warn("SA_RECOVERY tier=2: CFUN 0/1 cycle + CNMP=71 (RF cold restart + re-force NR-only).");
